@@ -52,7 +52,7 @@ export default function Dashboard() {
           <div className='text-xs opacity-70'>Fruitful-2 - Hyderabad</div>
         </div>
         <div className='flex gap-6 items-center text-sm'>
-          <span className='font-semibold'>{temp !== null ? temp + 'C' : '--'}</span>
+          <span className='font-semibold'>{temp !== null ? temp + String.fromCharCode(176) + "C" : '--'}</span>
           <span className='text-xs'>{time}</span>
           <span className='text-xs opacity-80'>v2.5.4</span>
         </div>
@@ -69,7 +69,7 @@ export default function Dashboard() {
           </div>
           <div className='bg-white rounded-xl p-4 border border-gray-200'>
             <div className='text-xs text-gray-500 mb-1'>Inner temperature</div>
-            <div className='text-2xl font-medium'>{temp !== null ? temp + 'C' : '--'}</div>
+            <div className='text-2xl font-medium'>{temp !== null ? temp + String.fromCharCode(176) + "C" : '--'}</div>
           </div>
         </div>
         <div className='grid grid-cols-3 gap-3'>
