@@ -113,7 +113,7 @@ export default function Dashboard() {
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">Inner temperature</div>
-            <div className="text-2xl font-medium">{temp !== null ? ${temp}°C : '--'}</div>
+            <div className="text-2xl font-medium">{temp !== null ? temp + '°C' : '--'}</div>
             <div className="text-xs text-gray-400 mt-1">Threshold: &lt;20°C {temp !== null && temp < 20 ? '✓' : '⚠️'}</div>
           </div>
         </div>
