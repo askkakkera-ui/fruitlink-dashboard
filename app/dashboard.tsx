@@ -2,21 +2,16 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
-const MACHINES = [
-  { sn: 'C3B31F38D1C07A76', name: 'Fruitful-2', location: 'Hyderabad' },
-];
+const MACHINES = [{ sn: 'C3B31F38D1C07A76', name: 'Fruitful-2', location: 'Hyderabad' }];
 
 export default function Dashboard() {
   const [time, setTime] = useState('');
-  const [machines, setMachines] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
-  const [telemetry, setTelemetry] = useState<any>(null);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [machines, setMachines] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [telemetry, setTelemetry] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [todayCount, setTodayCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
 
@@ -33,163 +28,121 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (selected) fetchMachineDetail(selected);
-  }, [selected]);
+  useEffect(() => { if (selected) fetchDetail(selected); }, [selected]);
 
   async function fetchMachines() {
     const { data } = await supabase.from('machines').select('*');
-    if (data) setMachines(data);
-    if (data && data.length > 0 && !selected) setSelected(data[0]);
+    if (data) { setMachines(data); if (!selected && data.length > 0) setSelected(data[0]); }
   }
 
-  async function fetchMachineDetail(machine: any) {
-    const { data: tel } = await supabase
-      .from('telemetry').select('*').eq('machine_id', machine.id)
-      .order('ts', { ascending: false }).limit(1).single();
+  async function fetchDetail(m) {
+    const { data: tel } = await supabase.from('telemetry').select('*').eq('machine_id', m.id).order('ts', { ascending: false }).limit(1).single();
     if (tel) setTelemetry(tel);
-
     const today = new Date().toISOString().split('T')[0];
-    const { data: tod } = await supabase.from('orders').select('*')
-      .eq('machine_id', machine.id).gte('created_at', today);
-    if (tod) {
-      setTodayCount(tod.length);
-      setTodayRevenue(tod.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100);
-    }
-
-    const { data: rec } = await supabase.from('orders').select('*')
-      .eq('machine_id', machine.id).order('created_at', { ascending: false }).limit(10);
+    const { data: tod } = await supabase.from('orders').select('*').eq('machine_id', m.id).gte('created_at', today);
+    if (tod) { setTodayCount(tod.length); setTodayRevenue(tod.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100); }
+    const { data: rec } = await supabase.from('orders').select('*').eq('machine_id', m.id).order('created_at', { ascending: false }).limit(10);
     if (rec) setOrders(rec);
   }
 
-  function getMachineInfo(m: any) {
-    const info = MACHINES.find(x => x.sn === m.sn);
-    return info || { name: m.sn, location: '--' };
-  }
+  function getInfo(m) { return MACHINES.find(x => x.sn === m.sn) || { name: m.sn, location: '--' }; }
 
-  function isOnline(m: any) {
+  function isOnline(m) {
     if (!m.last_seen) return false;
     return (Date.now() - new Date(m.last_seen).getTime()) < 10 * 60 * 1000;
   }
 
+  function logout() { document.cookie = 'fl_auth=; max-age=0'; window.location.href = '/login'; }
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="bg-amber-600 text-white px-4 py-3 flex justify-between items-center">
+    <div className='min-h-screen bg-gray-100'>
+      <div className='bg-amber-600 text-white px-4 py-3 flex justify-between items-center'>
         <div>
-          <div className="font-semibold text-lg">Fruitlink</div>
-          <div className="text-xs opacity-70">Operator Dashboard</div>
+          <div className='font-semibold text-lg'>Fruitlink</div>
+          <div className='text-xs opacity-70'>Operator Dashboard</div>
         </div>
-        <div className="flex gap-6 items-center text-sm">
-          <span className="text-xs">{time}</span>
-          <button
-            onClick={() => { document.cookie = 'fl_auth=; max-age=0'; window.location.href = '/login'; }}
-            className="text-xs opacity-80 hover:opacity-100"
-          >Logout</button>
+        <div className='flex gap-6 items-center'>
+          <span className='text-xs'>{time}</span>
+          <button onClick={logout} className='text-xs opacity-80 hover:opacity-100'>Logout</button>
         </div>
       </div>
-
-      <div className="max-w-5xl mx-auto p-4">
-        <div className="text-xs font-medium text-gray-500 uppercase mb-3">Machines</div>
-        <div className="grid grid-cols-1 gap-3 mb-6">
+      <div className='max-w-5xl mx-auto p-4'>
+        <div className='text-xs font-medium text-gray-500 uppercase mb-3'>Machines</div>
+        <div className='grid grid-cols-1 gap-3 mb-6'>
           {machines.map(m => {
-            const info = getMachineInfo(m);
+            const info = getInfo(m);
             const online = isOnline(m);
-            const isSelected = selected?.id === m.id;
+            const isSel = selected && selected.id === m.id;
             return (
-              <div
-                key={m.id}
-                onClick={() => setSelected(m)}
-                className={bg-white rounded-xl p-4 border cursor-pointer transition-all ${isSelected ? 'border-amber-500 shadow-sm' : 'border-gray-200'}}
-              >
-                <div className="flex justify-between items-start">
+              <div key={m.id} onClick={() => setSelected(m)} className={'bg-white rounded-xl p-4 border cursor-pointer ' + (isSel ? 'border-amber-500' : 'border-gray-200')}>
+                <div className='flex justify-between items-start'>
                   <div>
-                    <div className="font-medium text-sm">{info.name}</div>
-                    <div className="text-xs text-gray-400">{info.location} · SN: {m.sn}</div>
+                    <div className='font-medium text-sm'>{info.name}</div>
+                    <div className='text-xs text-gray-400'>{info.location} - SN: {m.sn}</div>
                   </div>
-                  <span className={inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${online ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}}>
-                    <span className={w-1.5 h-1.5 rounded-full inline-block ${online ? 'bg-green-500' : 'bg-red-500'}}></span>
+                  <span className={'inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ' + (online ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100')}>
+                    <span className={'w-1.5 h-1.5 rounded-full inline-block ' + (online ? 'bg-green-500' : 'bg-red-500')}></span>
                     {online ? 'Online' : 'Offline'}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  <div>
-                    <div className="text-xs text-gray-400">Temperature</div>
-                    <div className="text-sm font-medium">{m.status === 'online' ? (telemetry?.inner_temp_c !== undefined ? telemetry.inner_temp_c + String.fromCharCode(176) + 'C' : '--') : '--'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400">Today orders</div>
-                    <div className="text-sm font-medium">{isSelected ? todayCount : '--'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400">Revenue</div>
-                    <div className="text-sm font-medium">Rs {isSelected ? todayRevenue : '--'}</div>
-                  </div>
+                <div className='grid grid-cols-3 gap-3 mt-3'>
+                  <div><div className='text-xs text-gray-400'>Temperature</div><div className='text-sm font-medium'>{isSel && telemetry ? telemetry.inner_temp_c + 'C' : '--'}</div></div>
+                  <div><div className='text-xs text-gray-400'>Today orders</div><div className='text-sm font-medium'>{isSel ? todayCount : '--'}</div></div>
+                  <div><div className='text-xs text-gray-400'>Revenue</div><div className='text-sm font-medium'>Rs {isSel ? todayRevenue : '--'}</div></div>
                 </div>
               </div>
             );
           })}
         </div>
-
         {selected && (
-          <>
-            <div className="text-xs font-medium text-gray-500 uppercase mb-3">
-              {getMachineInfo(selected).name} — Detail
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="text-xs text-gray-500 mb-1">Inner temperature</div>
-                <div className="text-2xl font-medium">{telemetry?.inner_temp_c !== undefined ? telemetry.inner_temp_c + String.fromCharCode(176) + 'C' : '--'}</div>
+          <div>
+            <div className='text-xs font-medium text-gray-500 uppercase mb-3'>{getInfo(selected).name} - Detail</div>
+            <div className='grid grid-cols-2 gap-3 mb-3'>
+              <div className='bg-white rounded-xl p-4 border border-gray-200'>
+                <div className='text-xs text-gray-500 mb-1'>Inner temperature</div>
+                <div className='text-2xl font-medium'>{telemetry ? telemetry.inner_temp_c + 'C' : '--'}</div>
               </div>
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="text-xs text-gray-500 mb-1">Last seen</div>
-                <div className="text-2xl font-medium text-sm">{selected.last_seen ? new Date(selected.last_seen).toLocaleTimeString('en-IN', { hour12: false }) : '--'}</div>
+              <div className='bg-white rounded-xl p-4 border border-gray-200'>
+                <div className='text-xs text-gray-500 mb-1'>Last seen</div>
+                <div className='text-sm font-medium mt-2'>{selected.last_seen ? new Date(selected.last_seen).toLocaleTimeString('en-IN', { hour12: false }) : '--'}</div>
               </div>
             </div>
-
-            <div className="bg-white rounded-xl p-4 border border-gray-200 mb-3">
-              <div className="text-xs font-medium text-gray-500 uppercase mb-3">Stock levels</div>
-              {[['L1', telemetry?.stock_l1], ['L2', telemetry?.stock_l2], ['L3', telemetry?.stock_l3]].map(([label, val]) => (
-                <div key={String(label)} className="flex items-center gap-3 mb-2">
-                  <span className="text-xs text-gray-500 w-6">{label}</span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-amber-500" style={{ width: val ? '80%' : '0%' }}></div>
+            <div className='bg-white rounded-xl p-4 border border-gray-200 mb-3'>
+              <div className='text-xs font-medium text-gray-500 uppercase mb-3'>Stock levels</div>
+              {[['L1', telemetry && telemetry.stock_l1], ['L2', telemetry && telemetry.stock_l2], ['L3', telemetry && telemetry.stock_l3]].map(function(item) {
+                return (
+                  <div key={item[0]} className='flex items-center gap-3 mb-2'>
+                    <span className='text-xs text-gray-500 w-6'>{item[0]}</span>
+                    <div className='flex-1 h-2 bg-gray-100 rounded-full overflow-hidden'>
+                      <div className='h-full rounded-full bg-amber-500' style={{ width: item[1] ? '80%' : '0%' }}></div>
+                    </div>
+                    <span className='text-xs text-gray-400 w-16 text-right'>{item[1] ? 'Available' : 'Empty'}</span>
                   </div>
-                  <span className="text-xs text-gray-400 w-16 text-right">{val ? 'Available' : 'Empty'}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
-
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
-              <div className="text-xs font-medium text-gray-500 uppercase mb-3">Recent orders</div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-gray-400 border-b border-gray-100">
-                    <th className="text-left py-2">Order</th>
-                    <th className="text-left py-2">Time</th>
-                    <th className="text-left py-2">Amount</th>
-                    <th className="text-left py-2">Status</th>
-                  </tr>
-                </thead>
+            <div className='bg-white rounded-xl p-4 border border-gray-200'>
+              <div className='text-xs font-medium text-gray-500 uppercase mb-3'>Recent orders</div>
+              <table className='w-full text-xs'>
+                <thead><tr className='text-gray-400 border-b border-gray-100'>
+                  <th className='text-left py-2'>Order</th>
+                  <th className='text-left py-2'>Time</th>
+                  <th className='text-left py-2'>Amount</th>
+                  <th className='text-left py-2'>Status</th>
+                </tr></thead>
                 <tbody>
-                  {orders.length === 0 ? (
-                    <tr><td colSpan={4} className="py-4 text-center text-gray-400">No orders yet</td></tr>
-                  ) : orders.map(o => (
-                    <tr key={o.id} className="border-b border-gray-50">
-                      <td className="py-2">#{o.order_code}</td>
-                      <td className="py-2">{o.created_at ? new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '--'}</td>
-                      <td className="py-2">Rs {Math.round((o.amount_paise || 0) / 100)}</td>
-                      <td className="py-2">
-                        <span className={o.pay_state === 1 ? 'bg-green-100 text-green-700 px-2 py-0.5 rounded-full' : 'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full'}>
-                          {o.pay_state === 1 ? 'paid' : 'pending'}
-                        </span>
-                      </td>
+                  {orders.length === 0 ? (<tr><td colSpan={4} className='py-4 text-center text-gray-400'>No orders yet</td></tr>) : orders.map(o => (
+                    <tr key={o.id} className='border-b border-gray-50'>
+                      <td className='py-2'>#{o.order_code}</td>
+                      <td className='py-2'>{o.created_at ? new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '--'}</td>
+                      <td className='py-2'>Rs {Math.round((o.amount_paise || 0) / 100)}</td>
+                      <td className='py-2'><span className={o.pay_state === 1 ? 'bg-green-100 text-green-700 px-2 py-0.5 rounded-full' : 'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full'}>{o.pay_state === 1 ? 'paid' : 'pending'}</span></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
