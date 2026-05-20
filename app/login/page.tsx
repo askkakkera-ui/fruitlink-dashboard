@@ -61,10 +61,13 @@ export default function Login() {
         <button
           onClick={handleLogin}
           disabled={loading}
-          className="w-full bg-amber-600 text-white rounded-lg py-2 text-sm font-medium"
+          className="w-full bg-amber-600 text-white rounded-lg py-2 text-sm font-medium mb-3"
         >
           {loading ? 'Logging in...' : 'Login'}
         </button>
+        <div className="text-center text-xs text-gray-400">
+          New operator? <a href="/register" className="text-amber-600">Create account</a>
+        </div>
       </div>
     </div>
   );
