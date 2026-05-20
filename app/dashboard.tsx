@@ -12,7 +12,7 @@ export default function Dashboard() {
   const [temp, setTemp] = useState(null);
   const [status, setStatus] = useState('offline');
   const [lastSeen, setLastSeen] = useState('');
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState([]); 
   const [telemetry, setTelemetry] = useState(null);
   const [todayCount, setTodayCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
