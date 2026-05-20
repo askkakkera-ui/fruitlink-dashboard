@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? match[2] : null;
+}
+
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [machines, setMachines] = useState([]);
@@ -12,11 +17,13 @@ export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [todayCount, setTodayCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
+  const [operatorName, setOperatorName] = useState('');
 
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleString('en-IN', { hour12: false }));
     tick();
     const t = setInterval(tick, 1000);
+    setOperatorName(getCookie('fl_operator_name') || 'Operator');
     return () => clearInterval(t);
   }, []);
 
@@ -29,7 +36,10 @@ export default function Dashboard() {
   useEffect(() => { if (selected) fetchDetail(selected); }, [selected]);
 
   async function fetchMachines() {
-    const { data } = await supabase.from('machines').select('*');
+    const operatorId = getCookie('fl_operator_id');
+    let query = supabase.from('machines').select('*');
+    if (operatorId) query = query.eq('operator_id', operatorId);
+    const { data } = await query;
     if (data) { setMachines(data); if (!selected && data.length > 0) setSelected(data[0]); }
   }
 
@@ -48,14 +58,14 @@ export default function Dashboard() {
     return (Date.now() - new Date(m.last_seen).getTime()) < 10 * 60 * 1000;
   }
 
-  function logout() { document.cookie = 'fl_auth=; max-age=0'; window.location.href = '/login'; }
+  function logout() { document.cookie = 'fl_auth=; max-age=0'; document.cookie = 'fl_operator_id=; max-age=0'; document.cookie = 'fl_operator_name=; max-age=0'; window.location.href = '/login'; }
 
   return (
     <div className='min-h-screen bg-gray-100'>
       <div className='bg-amber-600 text-white px-4 py-3 flex justify-between items-center'>
         <div>
           <div className='font-semibold text-lg'>Fruitlink</div>
-          <div className='text-xs opacity-70'>Operator Dashboard</div>
+          <div className='text-xs opacity-70'>{operatorName}</div>
         </div>
         <div className='flex gap-6 items-center'>
           <span className='text-xs'>{time}</span>
