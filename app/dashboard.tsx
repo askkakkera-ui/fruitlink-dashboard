@@ -4,8 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
-const MACHINES = [{ sn: 'C3B31F38D1C07A76', name: 'Fruitful-2', location: 'Hyderabad' }];
-
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [machines, setMachines] = useState([]);
@@ -45,8 +43,6 @@ export default function Dashboard() {
     if (rec) setOrders(rec);
   }
 
-  function getInfo(m) { return MACHINES.find(x => x.sn === m.sn) || { name: m.sn, location: '--' }; }
-
   function isOnline(m) {
     if (!m.last_seen) return false;
     return (Date.now() - new Date(m.last_seen).getTime()) < 10 * 60 * 1000;
@@ -71,15 +67,14 @@ export default function Dashboard() {
         <div className='text-xs font-medium text-gray-500 uppercase mb-3'>Machines</div>
         <div className='grid grid-cols-1 gap-3 mb-6'>
           {machines.map(m => {
-            const info = getInfo(m);
             const online = isOnline(m);
             const isSel = selected && selected.id === m.id;
             return (
               <div key={m.id} onClick={() => setSelected(m)} className={'bg-white rounded-xl p-4 border cursor-pointer ' + (isSel ? 'border-amber-500' : 'border-gray-200')}>
                 <div className='flex justify-between items-start'>
                   <div>
-                    <div className='font-medium text-sm'>{info.name}</div>
-                    <div className='text-xs text-gray-400'>{info.location} - SN: {m.sn}</div>
+                    <div className='font-medium text-sm'>{m.display_name || m.sn}</div>
+                    <div className='text-xs text-gray-400'>{m.location || '--'} - SN: {m.sn}</div>
                   </div>
                   <span className={'inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ' + (online ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100')}>
                     <span className={'w-1.5 h-1.5 rounded-full inline-block ' + (online ? 'bg-green-500' : 'bg-red-500')}></span>
@@ -97,7 +92,7 @@ export default function Dashboard() {
         </div>
         {selected && (
           <div>
-            <div className='text-xs font-medium text-gray-500 uppercase mb-3'>{getInfo(selected).name} - Detail</div>
+            <div className='text-xs font-medium text-gray-500 uppercase mb-3'>{selected.display_name || selected.sn} - Detail</div>
             <div className='grid grid-cols-2 gap-3 mb-3'>
               <div className='bg-white rounded-xl p-4 border border-gray-200'>
                 <div className='text-xs text-gray-500 mb-1'>Inner temperature</div>
