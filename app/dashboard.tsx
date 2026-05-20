@@ -63,6 +63,7 @@ export default function Dashboard() {
         </div>
         <div className='flex gap-6 items-center'>
           <span className='text-xs'>{time}</span>
+          <a href='/orders' className='text-xs opacity-80 hover:opacity-100'>Orders</a>
           <button onClick={logout} className='text-xs opacity-80 hover:opacity-100'>Logout</button>
         </div>
       </div>
