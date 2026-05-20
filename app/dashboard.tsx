@@ -4,10 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 
 const SN = 'C3B31F38D1C07A76';
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 );
-
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [temp, setTemp] = useState(null);
