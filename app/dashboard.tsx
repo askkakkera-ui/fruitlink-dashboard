@@ -40,7 +40,13 @@ export default function Dashboard() {
     let query = supabase.from('machines').select('*');
     if (operatorId) query = query.eq('operator_id', operatorId);
     const { data } = await query;
-    if (data) { setMachines(data); if (!selected && data.length > 0) setSelected(data[0]); }
+    if (data) {
+      setMachines(data);
+      if (!selected && data.length > 0) {
+        const online = data.find(m => m.status === 'online');
+        setSelected(online || data[0]);
+      }
+    }
   }
 
   async function fetchDetail(m) {
@@ -77,7 +83,7 @@ export default function Dashboard() {
             const online = isOnline(m);
             const isSel = selected && selected.id === m.id;
             return (
-              <div key={m.id} onClick={() => setSelected(m)} className={'bg-white rounded-xl p-4 border cursor-pointer ' + (isSel ? 'border-amber-500' : 'border-gray-200')}>
+              <div key={m.id} onClick={() => { setSelected(m); setTelemetry(null); }} className={'bg-white rounded-xl p-4 border cursor-pointer ' + (isSel ? 'border-amber-500' : 'border-gray-200')}>
                 <div className='flex justify-between items-start'>
                   <div>
                     <div className='font-medium text-sm'>{m.display_name || m.sn}</div>
