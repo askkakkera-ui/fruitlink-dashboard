@@ -6,6 +6,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
+const MACHINE = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/machine.jpg';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +37,10 @@ export default function Login() {
         <div style={{position:'absolute',top:'-80px',left:'-80px',width:'400px',height:'400px',borderRadius:'50%',border:'50px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'absolute',bottom:'-60px',right:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'relative',zIndex:2}}>
-          <img src={LOGO} alt="Fruitlink Technologies" style={{width:'280px',objectFit:'contain'}}/>
+          <img src={LOGO} alt="Fruitlink Technologies" style={{width:'280px',objectFit:'contain',mixBlendMode:'multiply'}}/>
+        </div>
+        <div style={{position:'absolute',right:'-20px',top:'50%',transform:'translateY(-55%)',zIndex:2,width:'380px'}}>
+          <img src={MACHINE} alt="Fruitful Vending Machine" style={{width:'100%',objectFit:'contain',filter:'drop-shadow(0 20px 40px rgba(0,0,0,0.25))'}}/>
         </div>
         <div style={{position:'relative',zIndex:2}}>
           <div style={{color:'#fff',fontSize:'28px',fontWeight:600,lineHeight:1.3,marginBottom:'1rem'}}>Smart Vending.<br/>Real-time Control.<br/>Everywhere.</div>
@@ -54,7 +58,7 @@ export default function Login() {
       <div style={{width:'420px',background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'3rem 2.5rem'}}>
         <div style={{width:'100%',maxWidth:'340px'}}>
           <div style={{textAlign:'center',marginBottom:'2rem'}}>
-            <img src={LOGO} alt="Fruitlink" style={{width:'220px',objectFit:'contain',marginBottom:'1rem'}}/>
+            <img src={LOGO} alt="Fruitlink" style={{width:'280px',objectFit:'contain',marginBottom:'0.5rem',mixBlendMode:'multiply'}}/>
             <div style={{fontSize:'20px',fontWeight:600,color:'#D45A00'}}>Welcome back</div>
             <div style={{fontSize:'13px',color:'#999',marginTop:'4px'}}>Sign in to your operator account</div>
           </div>
