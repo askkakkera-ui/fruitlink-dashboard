@@ -45,7 +45,7 @@ export default function Orders() {
     const headers = 'Order Code,Date,Time,Amount,Pay Type,Status';
     const rows = orders.map(o => {
       const d = new Date(o.created_at);
-      return o.order_code + ',' + d.toLocaleDateString('en-IN') + ',' + d.toLocaleTimeString('en-IN', { hour12: false }) + ',Rs ' + Math.round((o.amount_paise || 0) / 100) + ',' + o.pay_type + ',' + (o.pay_state === 1 ? 'paid' : 'pending');
+      return o.order_code + ',' + d.toLocaleDateString('en-IN') + ',' + d.toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' }) + ',Rs ' + Math.round((o.amount_paise || 0) / 100) + ',' + o.pay_type + ',' + (o.pay_state === 1 ? 'paid' : 'pending');
     });
     const csv = [headers, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -128,7 +128,7 @@ export default function Orders() {
                   <tr key={o.id} className="border-b border-gray-50">
                     <td className="py-2">#{o.order_code}</td>
                     <td className="py-2">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
-                    <td className="py-2">{new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="py-2">{new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}</td>
                     <td className="py-2">Rs {Math.round((o.amount_paise || 0) / 100)}</td>
                     <td className="py-2">{o.pay_type || 'upi'}</td>
                     <td className="py-2">
