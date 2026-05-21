@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import Image from 'next/image';
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -37,7 +36,7 @@ export default function Login() {
         <div style={{position:'absolute',top:'-80px',left:'-80px',width:'400px',height:'400px',borderRadius:'50%',border:'50px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'absolute',bottom:'-60px',right:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'relative',zIndex:2}}>
-          <Image src="/logo.png" alt="Fruitlink Technologies" width={280} height={100} style={{objectFit:'contain',filter:'brightness(0) invert(1)',opacity:0.95}}/>
+          <img src="/logo.png" alt="Fruitlink Technologies" style={{width:'260px',objectFit:'contain',filter:'brightness(0) invert(1)',opacity:0.95}}/>
         </div>
         <div style={{position:'relative',zIndex:2}}>
           <div style={{color:'#fff',fontSize:'28px',fontWeight:600,lineHeight:1.3,marginBottom:'1rem'}}>Smart Vending.<br/>Real-time Control.<br/>Everywhere.</div>
@@ -56,9 +55,7 @@ export default function Login() {
       <div style={{width:'420px',background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'3rem 2.5rem'}}>
         <div style={{width:'100%',maxWidth:'340px'}}>
           <div style={{textAlign:'center',marginBottom:'2rem'}}>
-            <div style={{width:'72px',height:'72px',borderRadius:'50%',background:'#FFF4EC',border:'2px solid #F5820D',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 1rem',overflow:'hidden'}}>
-              <Image src="/logo.png" alt="Fruitlink" width={56} height={56} style={{objectFit:'contain'}}/>
-            </div>
+            <img src="/logo.png" alt="Fruitlink" style={{width:'200px',objectFit:'contain',marginBottom:'1rem'}}/>
             <div style={{fontSize:'20px',fontWeight:600,color:'#D45A00'}}>Welcome back</div>
             <div style={{fontSize:'13px',color:'#999',marginTop:'4px'}}>Sign in to your operator account</div>
           </div>
@@ -69,7 +66,7 @@ export default function Login() {
               placeholder="you@example.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              style={{width:'100%',border:'1px solid #E5E5E5',borderRadius:'8px',padding:'11px 14px',fontSize:'14px',outline:'none',boxSizing:'border-box',background:'#FAFAFA'}}
+              style={{width:'100%',border:'1px solid #E5E5E5',borderRadius:'8px',padding:'11px 14px',fontSize:'14px',outline:'none',boxSizing:'border-box' as any,background:'#FAFAFA'}}
               onFocus={e=>{e.target.style.borderColor='#F5820D';e.target.style.background='#fff'}}
               onBlur={e=>{e.target.style.borderColor='#E5E5E5';e.target.style.background='#FAFAFA'}}
             />
@@ -82,7 +79,7 @@ export default function Login() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              style={{width:'100%',border:'1px solid #E5E5E5',borderRadius:'8px',padding:'11px 14px',fontSize:'14px',outline:'none',boxSizing:'border-box',background:'#FAFAFA'}}
+              style={{width:'100%',border:'1px solid #E5E5E5',borderRadius:'8px',padding:'11px 14px',fontSize:'14px',outline:'none',boxSizing:'border-box' as any,background:'#FAFAFA'}}
               onFocus={e=>{e.target.style.borderColor='#F5820D';e.target.style.background='#fff'}}
               onBlur={e=>{e.target.style.borderColor='#E5E5E5';e.target.style.background='#FAFAFA'}}
             />
@@ -91,9 +88,7 @@ export default function Login() {
           <button
             onClick={handleLogin}
             disabled={loading}
-            style={{width:'100%',background:loading?'#E8A87C':'#F5820D',color:'#fff',border:'none',borderRadius:'8px',padding:'13px',fontSize:'15px',fontWeight:500,cursor:loading?'not-allowed':'pointer',marginTop:'0.75rem',transition:'background 0.2s'}}
-            onMouseOver={e=>{if(!loading)(e.target as HTMLButtonElement).style.background='#D45A00'}}
-            onMouseOut={e=>{if(!loading)(e.target as HTMLButtonElement).style.background='#F5820D'}}
+            style={{width:'100%',background:loading?'#E8A87C':'#F5820D',color:'#fff',border:'none',borderRadius:'8px',padding:'13px',fontSize:'15px',fontWeight:500,cursor:loading?'not-allowed':'pointer',marginTop:'0.75rem'}}
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
