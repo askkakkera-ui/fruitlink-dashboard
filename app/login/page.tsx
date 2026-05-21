@@ -33,32 +33,34 @@ export default function Login() {
   }
   return (
     <div style={{display:'flex',minHeight:'100vh',fontFamily:'sans-serif'}}>
-      <div style={{flex:1,background:'linear-gradient(135deg,#E8650A 0%,#BF4F00 100%)',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:'3rem',position:'relative',overflow:'hidden'}}>
+      <div style={{flex:1,background:'linear-gradient(135deg,#E8650A 0%,#BF4F00 100%)',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:'3rem',position:'relative'}}>
         <div style={{position:'absolute',top:'-80px',left:'-80px',width:'400px',height:'400px',borderRadius:'50%',border:'50px solid rgba(255,255,255,0.06)'}}/>
-        <div style={{position:'absolute',bottom:'-60px',right:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
+        <div style={{position:'absolute',bottom:'-60px',left:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'relative',zIndex:2}}>
-          <img src={LOGO} alt="Fruitlink Technologies" style={{width:'280px',objectFit:'contain',mixBlendMode:'multiply'}}/>
+          <img src={LOGO} alt="Fruitlink Technologies" style={{width:'240px',objectFit:'contain',background:'transparent'}}/>
         </div>
-        <div style={{position:'absolute',right:'-20px',top:'50%',transform:'translateY(-55%)',zIndex:2,width:'380px'}}>
-          <img src={MACHINE} alt="Fruitful Vending Machine" style={{width:'100%',objectFit:'contain',filter:'drop-shadow(0 20px 40px rgba(0,0,0,0.25))'}}/>
-        </div>
-        <div style={{position:'relative',zIndex:2}}>
-          <div style={{color:'#fff',fontSize:'28px',fontWeight:600,lineHeight:1.3,marginBottom:'1rem'}}>Smart Vending.<br/>Real-time Control.<br/>Everywhere.</div>
-          <div style={{color:'rgba(255,255,255,0.75)',fontSize:'14px',lineHeight:1.7,marginBottom:'2rem'}}>Monitor your fresh juice machines, track orders,<br/>manage alerts — all in one place.</div>
-          <div style={{display:'flex',gap:'1rem'}}>
-            {[['24/7','Monitoring'],['24','Alert types'],['Live','Telemetry']].map(([n,l])=>(
-              <div key={l} style={{background:'rgba(255,255,255,0.12)',borderRadius:'10px',padding:'0.75rem 1rem',textAlign:'center',minWidth:'80px'}}>
-                <div style={{color:'#fff',fontSize:'18px',fontWeight:600}}>{n}</div>
-                <div style={{color:'rgba(255,255,255,0.7)',fontSize:'11px',marginTop:'3px'}}>{l}</div>
-              </div>
-            ))}
+        <div style={{position:'relative',zIndex:2,display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'1rem'}}>
+          <div style={{flex:1}}>
+            <div style={{color:'#fff',fontSize:'28px',fontWeight:600,lineHeight:1.3,marginBottom:'1rem'}}>Smart Vending.<br/>Real-time Control.<br/>Everywhere.</div>
+            <div style={{color:'rgba(255,255,255,0.75)',fontSize:'14px',lineHeight:1.7,marginBottom:'2rem'}}>Monitor your fresh juice machines,<br/>track orders and manage alerts.</div>
+            <div style={{display:'flex',gap:'1rem'}}>
+              {[['24/7','Monitoring'],['24','Alert types'],['Live','Telemetry']].map(([n,l])=>(
+                <div key={l} style={{background:'rgba(255,255,255,0.12)',borderRadius:'10px',padding:'0.75rem 1rem',textAlign:'center',minWidth:'80px'}}>
+                  <div style={{color:'#fff',fontSize:'18px',fontWeight:600}}>{n}</div>
+                  <div style={{color:'rgba(255,255,255,0.7)',fontSize:'11px',marginTop:'3px'}}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{width:'320px',flexShrink:0}}>
+            <img src={MACHINE} alt="Fruitful Vending Machine" style={{width:'100%',objectFit:'contain',filter:'drop-shadow(0 10px 30px rgba(0,0,0,0.3))',marginBottom:'-3rem'}}/>
           </div>
         </div>
       </div>
       <div style={{width:'420px',background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'3rem 2.5rem'}}>
         <div style={{width:'100%',maxWidth:'340px'}}>
           <div style={{textAlign:'center',marginBottom:'2rem'}}>
-            <img src={LOGO} alt="Fruitlink" style={{width:'280px',objectFit:'contain',marginBottom:'0.5rem',mixBlendMode:'multiply'}}/>
+            <img src={LOGO} alt="Fruitlink" style={{width:'240px',objectFit:'contain',marginBottom:'0.5rem'}}/>
             <div style={{fontSize:'20px',fontWeight:600,color:'#D45A00'}}>Welcome back</div>
             <div style={{fontSize:'13px',color:'#999',marginTop:'4px'}}>Sign in to your operator account</div>
           </div>
