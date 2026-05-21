@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const PASSWORD = 'fruitlink2026';
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/api/forgot-password', '/api/reset-password'];
 
 export function middleware(request: NextRequest) {
   const auth = request.cookies.get('fl_auth')?.value;
@@ -14,4 +14,4 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: ['/((?!_next|favicon.ico).*)'],
-}
+};
