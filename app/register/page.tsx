@@ -7,10 +7,20 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
+function validatePassword(password: string) {
+  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password)) return 'Must have at least one uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Must have at least one lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Must have at least one number';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Must have at least one special character';
+  return '';
+}
+
 export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -18,7 +28,9 @@ export default function Register() {
 
   async function handleRegister() {
     if (!name || !email || !password) { setError('Please fill all required fields'); return; }
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    const pwdError = validatePassword(password);
+    if (pwdError) { setError(pwdError); return; }
+    if (password !== confirm) { setError('Passwords do not match'); return; }
     setLoading(true);
     setError('');
 
@@ -26,10 +38,7 @@ export default function Register() {
     if (existing) { setError('Email already registered'); setLoading(false); return; }
 
     const { error: err } = await supabase.from('operators').insert({
-      name: name,
-      email: email,
-      password_hash: password,
-      phone: phone,
+      name, email, password_hash: password, phone,
     });
 
     if (err) { setError('Registration failed: ' + err.message); setLoading(false); return; }
@@ -80,9 +89,17 @@ export default function Register() {
         />
         <input
           type="password"
-          placeholder="Password * (min 6 chars)"
+          placeholder="Password *"
           value={password}
           onChange={e => setPassword(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-1 outline-none"
+        />
+        <div className="text-xs text-gray-400 mb-3 px-1">Min 8 chars, uppercase, lowercase, number, special char</div>
+        <input
+          type="password"
+          placeholder="Confirm password *"
+          value={confirm}
+          onChange={e => setConfirm(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleRegister()}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 outline-none"
         />

@@ -65,8 +65,9 @@ export default function Login() {
         >
           {loading ? 'Logging in...' : 'Login'}
         </button>
-        <div className="text-center text-xs text-gray-400">
-          New operator? <a href="/register" className="text-amber-600">Create account</a>
+        <div className="flex justify-between text-xs text-gray-400">
+          <a href="/forgot-password" className="text-amber-600">Forgot password?</a>
+          <a href="/register" className="text-amber-600">Create account</a>
         </div>
       </div>
     </div>
