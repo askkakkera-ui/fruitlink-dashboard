@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [operatorName, setOperatorName] = useState('');
 
   useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleString('en-IN', { hour12: false }));
+    const tick = () => setTime(new Date().toLocaleString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', timeZone: 'Asia/Kolkata', timeZone: 'Asia/Kolkata' }));
     tick();
     const t = setInterval(tick, 1000);
     setOperatorName(getCookie('fl_operator_name') || 'Operator');
@@ -110,7 +110,7 @@ export default function Dashboard() {
               </div>
               <div className='bg-white rounded-xl p-4 border border-gray-200'>
                 <div className='text-xs text-gray-500 mb-1'>Last seen</div>
-                <div className='text-sm font-medium mt-2'>{selected.last_seen ? new Date(selected.last_seen).toLocaleTimeString('en-IN', { hour12: false }) : '--'}</div>
+                <div className='text-sm font-medium mt-2'>{selected.last_seen ? new Date(selected.last_seen).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', timeZone: 'Asia/Kolkata', timeZone: 'Asia/Kolkata' }) : '--'}</div>
               </div>
             </div>
             <div className='bg-white rounded-xl p-4 border border-gray-200 mb-3'>
@@ -140,7 +140,7 @@ export default function Dashboard() {
                   {orders.length === 0 ? (<tr><td colSpan={4} className='py-4 text-center text-gray-400'>No orders yet</td></tr>) : orders.map(o => (
                     <tr key={o.id} className='border-b border-gray-50'>
                       <td className='py-2'>#{o.order_code}</td>
-                      <td className='py-2'>{o.created_at ? new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '--'}</td>
+                      <td className='py-2'>{o.created_at ? new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', timeZone: 'Asia/Kolkata', timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }) : '--'}</td>
                       <td className='py-2'>Rs {Math.round((o.amount_paise || 0) / 100)}</td>
                       <td className='py-2'><span className={o.pay_state === 1 ? 'bg-green-100 text-green-700 px-2 py-0.5 rounded-full' : 'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full'}>{o.pay_state === 1 ? 'paid' : 'pending'}</span></td>
                     </tr>
