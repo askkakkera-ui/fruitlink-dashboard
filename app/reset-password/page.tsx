@@ -1,18 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
 
 function validatePassword(password: string) {
   if (password.length < 8) return 'Password must be at least 8 characters';
-  if (!/[A-Z]/.test(password)) return 'Password must have at least one uppercase letter';
-  if (!/[a-z]/.test(password)) return 'Password must have at least one lowercase letter';
-  if (!/[0-9]/.test(password)) return 'Password must have at least one number';
-  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must have at least one special character';
+  if (!/[A-Z]/.test(password)) return 'Must have at least one uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Must have at least one lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Must have at least one number';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Must have at least one special character';
   return '';
 }
 
@@ -30,16 +24,19 @@ export default function ResetPassword() {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('token') || '';
     setToken(t);
-    if (t) validateToken(t);
+    if (t) checkToken(t);
+    else { setError('No token provided'); setChecking(false); }
   }, []);
 
-  async function validateToken(t: string) {
-    const { data } = await supabase.from('password_reset_tokens').select('*').eq('token', t).eq('used', false).single();
-    if (data && new Date(data.expires_at) > new Date()) {
-      setTokenValid(true);
-    } else {
-      setError('This reset link is invalid or has expired. Please request a new one.');
-    }
+  async function checkToken(t: string) {
+    const res = await fetch('/api/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'validate', token: t })
+    });
+    const data = await res.json();
+    if (data.valid) setTokenValid(true);
+    else setError('This reset link is invalid or has expired. Please request a new one.');
     setChecking(false);
   }
 
@@ -50,14 +47,14 @@ export default function ResetPassword() {
     setLoading(true);
     setError('');
 
-    const { data: tokenData } = await supabase.from('password_reset_tokens').select('operator_id').eq('token', token).single();
-    if (!tokenData) { setError('Invalid token'); setLoading(false); return; }
-
-    await supabase.from('operators').update({ password_hash: password }).eq('id', tokenData.operator_id);
-    await supabase.from('password_reset_tokens').update({ used: true }).eq('token', token);
-
-    setDone(true);
-    setLoading(false);
+    const res = await fetch('/api/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset', token, password })
+    });
+    const data = await res.json();
+    if (data.success) setDone(true);
+    else { setError(data.error || 'Something went wrong'); setLoading(false); }
   }
 
   if (checking) {
@@ -77,7 +74,7 @@ export default function ResetPassword() {
         <div className="bg-white rounded-xl p-8 border border-gray-200 w-80 text-center">
           <div className="text-2xl font-semibold text-amber-600 mb-2">Fruitlink</div>
           <div className="text-green-600 font-medium mb-2">Password reset!</div>
-          <div className="text-xs text-gray-400 mb-4">Your password has been updated. You can now login.</div>
+          <div className="text-xs text-gray-400 mb-4">Your password has been updated successfully.</div>
           <a href="/login" className="text-amber-600 text-sm font-medium">Go to Login</a>
         </div>
       </div>
@@ -104,7 +101,7 @@ export default function ResetPassword() {
           <div className="text-xs text-gray-400 mt-1">Set new password</div>
         </div>
         <div className="text-xs text-gray-400 mb-3 bg-gray-50 p-2 rounded-lg">
-          Password must be at least 8 characters with uppercase, lowercase, number and special character.
+          Min 8 chars with uppercase, lowercase, number and special character.
         </div>
         <input
           type="password"
