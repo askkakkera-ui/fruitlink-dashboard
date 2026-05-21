@@ -1,10 +1,34 @@
-'use client';
+[13:39, 21/05/2026] FRUITFUL GLOBAL: 'use client';
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  async function handleLogin() {
+    setLoading(true);
+    setError('');
+    const { data, error } = await supabase
+      .from('operators')
+      .select('id, name, email, password_hash')
+      .eq('email', email)
+      .eq('password_hash', password)
+      .single();
+    if (error || !data) {
+      setError('Invalid em…
+[13:40, 21/05/2026] FRUITFUL GLOBAL: 'use client';
+import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
+const LOGO = 'https://raw.githubusercontent.com/askkakkera-ui/fruitlink-dashboard/main/public/logo.png';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,12 +55,11 @@ export default function Login() {
   }
   return (
     <div style={{display:'flex',minHeight:'100vh',fontFamily:'sans-serif'}}>
-      {/* Left panel */}
       <div style={{flex:1,background:'linear-gradient(135deg,#E8650A 0%,#BF4F00 100%)',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:'3rem',position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',top:'-80px',left:'-80px',width:'400px',height:'400px',borderRadius:'50%',border:'50px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'absolute',bottom:'-60px',right:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'relative',zIndex:2}}>
-          <img src="/logo.png" alt="Fruitlink Technologies" style={{width:'260px',objectFit:'contain',filter:'brightness(0) invert(1)',opacity:0.95}}/>
+          <img src={LOGO} alt="Fruitlink Technologies" style={{width:'280px',objectFit:'contain'}}/>
         </div>
         <div style={{position:'relative',zIndex:2}}>
           <div style={{color:'#fff',fontSize:'28px',fontWeight:600,lineHeight:1.3,marginBottom:'1rem'}}>Smart Vending.<br/>Real-time Control.<br/>Everywhere.</div>
@@ -51,11 +74,10 @@ export default function Login() {
           </div>
         </div>
       </div>
-      {/* Right panel */}
       <div style={{width:'420px',background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'3rem 2.5rem'}}>
         <div style={{width:'100%',maxWidth:'340px'}}>
           <div style={{textAlign:'center',marginBottom:'2rem'}}>
-            <img src="/logo.png" alt="Fruitlink" style={{width:'200px',objectFit:'contain',marginBottom:'1rem'}}/>
+            <img src={LOGO} alt="Fruitlink" style={{width:'220px',objectFit:'contain',marginBottom:'1rem'}}/>
             <div style={{fontSize:'20px',fontWeight:600,color:'#D45A00'}}>Welcome back</div>
             <div style={{fontSize:'13px',color:'#999',marginTop:'4px'}}>Sign in to your operator account</div>
           </div>
