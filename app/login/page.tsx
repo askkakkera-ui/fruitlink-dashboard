@@ -1,10 +1,5 @@
 'use client';
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
 const MACHINE = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/machine.jpg';
 export default function Login() {
@@ -15,21 +10,26 @@ export default function Login() {
   async function handleLogin() {
     setLoading(true);
     setError('');
-    const { data, error } = await supabase
-      .from('operators')
-      .select('id, name, email, password_hash')
-      .eq('email', email)
-      .eq('password_hash', password)
-      .single();
-    if (error || !data) {
-      setError('Invalid email or password');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Invalid email or password');
+        setLoading(false);
+        return;
+      }
+      document.cookie = 'fl_auth=fruitlink2026; path=/; max-age=86400';
+      document.cookie = 'fl_operator_id=' + data.id + '; path=/; max-age=86400';
+      document.cookie = 'fl_operator_name=' + data.name + '; path=/; max-age=86400';
+      window.location.href = '/';
+    } catch(e) {
+      setError('Login failed. Please try again.');
       setLoading(false);
-      return;
     }
-    document.cookie = 'fl_auth=fruitlink2026; path=/; max-age=86400';
-    document.cookie = 'fl_operator_id=' + data.id + '; path=/; max-age=86400';
-    document.cookie = 'fl_operator_name=' + data.name + '; path=/; max-age=86400';
-    window.location.href = '/';
   }
   return (
     <div style={{display:'flex',minHeight:'100vh',fontFamily:'sans-serif'}}>
