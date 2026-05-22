@@ -233,7 +233,7 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                {['Severity','Machine','Alert','Message','Time','Status'].map(h => (
+                {['Severity','Machine','Alert & Description','Time','Status'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12 }}>{h}</th>
                 ))}
               </tr>
@@ -245,8 +245,7 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
                     <span style={{ background: SEVERITY_BG[a.severity] || '#f3f4f6', color: SEVERITY_COLOR[a.severity] || '#666', padding: '3px 10px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>{a.severity}</span>
                   </td>
                   <td style={{ padding: '10px 14px' }}><div style={{ fontWeight: 600, color: '#1a1f2e' }}>{getMachine(a.machine_id).display_name || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{getMachine(a.machine_id).sn || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#aaa' }}>{getMachine(a.machine_id).location || '--'}</div></td>
-                  <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace', fontSize: 12 }}>{a.alert_type}</td>
-                  <td style={{ padding: '10px 14px', color: '#555', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.message}</td>
+                  <td style={{ padding: '10px 14px' }}><div style={{ fontFamily: 'monospace', fontSize: 11, color: '#6366f1', fontWeight: 600 }}>{a.alert_type}</div><div style={{ fontSize: 13, color: '#374151', marginTop: 3 }}>{a.message}</div></td>
                   <td style={{ padding: '10px 14px', color: '#888', whiteSpace: 'nowrap' }}>{fmtTime(a.created_at)}</td>
                   <td style={{ padding: '10px 14px' }}>
                     {a.resolved_at ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Resolved</span> : <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 12 }}>● Active</span>}
