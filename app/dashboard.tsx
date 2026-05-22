@@ -149,12 +149,11 @@ const SEVERITY_BG: Record<string, string> = {
 }
 
 function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
-  const { useState: useS, useEffect: useE } = React;
-  const [alerts, setAlerts] = useS<any[]>([])
-  const [machines, setMachines] = useS<any[]>([])
-  const [loading, setLoading] = useS(true)
-  const [filter, setFilter] = useS<'all'|'active'|'resolved'>('active')
-  const [severityFilter, setSeverityFilter] = useS('all')
+  const [alerts, setAlerts] = useState<any[]>([])
+  const [machines, setMachines] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all'|'active'|'resolved'>('active')
+  const [severityFilter, setSeverityFilter] = useState('all')
 
   const fetchAlerts = async () => {
     const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
@@ -168,7 +167,7 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
     setLoading(false)
   }
 
-  useE(() => { fetchAlerts() }, [])
+  useEffect(() => { fetchAlerts() }, [])
 
   const getMachineName = (id: string) => machines.find((m: any) => m.id === id)?.display_name || id.slice(0,8)
 
