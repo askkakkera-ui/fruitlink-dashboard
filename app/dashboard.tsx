@@ -348,6 +348,209 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
 }
 
 
+function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
+  const [operators, setOperators] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAdd, setShowAdd] = useState(false)
+  const [editOp, setEditOp] = useState<any>(null)
+  const [delOp, setDelOp] = useState<any>(null)
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
+
+  const fetchOperators = async () => {
+    setLoading(true)
+    const res = await fetch(supabaseUrl + '/rest/v1/operators?select=id,name,email,role,state,country,created_at&order=created_at.desc', { headers: { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey } })
+    const data = await res.json()
+    setOperators(Array.isArray(data) ? data : [])
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchOperators() }, [])
+
+  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' }); setEditOp(null); setShowAdd(true); setMsg('') }
+  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India' }); setEditOp(op); setShowAdd(true); setMsg('') }
+
+  const saveOperator = async () => {
+    setSaving(true); setMsg('')
+    try {
+      if (editOp) {
+        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country }
+        if (form.password) {
+          const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: form.password }) })
+          if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
+        }
+        await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + editOp.id, { method: 'PATCH', headers, body: JSON.stringify(body) })
+        setMsg('✓ Operator updated')
+      } else {
+        const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: form.password }) })
+        const { hash } = await hashRes.json()
+        await fetch(supabaseUrl + '/rest/v1/operators', { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country }) })
+        setMsg('✓ Operator added')
+      }
+      await fetchOperators()
+      setTimeout(() => { setShowAdd(false); setMsg('') }, 1000)
+    } catch(e: any) { setMsg('Error: ' + e.message) }
+    setSaving(false)
+  }
+
+  const deleteOperator = async () => {
+    if (!delOp) return
+    await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + delOp.id, { method: 'DELETE', headers })
+    setDelOp(null)
+    fetchOperators()
+  }
+
+  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: '#0284c7' }
+  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: '#f0f9ff' }
+
+  return (
+    <div style={{ padding: '28px 32px', background: '#f8fafc', minHeight: '100vh' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5 }}>Operators</h2>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>{operators.length} operator{operators.length !== 1 ? 's' : ''} registered</p>
+        </div>
+        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f97316', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+          + Add Operator
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        {[
+          { label: 'Total Operators', value: operators.length, icon: '👥', color: '#0284c7', bg: '#f0f9ff' },
+          { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, icon: '👑', color: '#7c3aed', bg: '#f5f3ff' },
+          { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, icon: '🧑‍💼', color: '#16a34a', bg: '#f0fdf4' },
+        ].map(s => (
+          <div key={s.label} style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '18px 22px', boxShadow: '0 1px 3px #0000000a' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 24 }}>{s.icon}</span>
+              <span style={{ fontSize: 30, fontWeight: 800, color: s.color }}>{s.value}</span>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 13, color: '#64748b', fontWeight: 600 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>Loading...</div>
+      ) : (
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px #0000000a' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '13px 18px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {operators.map((op, i) => (
+                <tr key={op.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                  <td style={{ padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #f97316, #ea580c)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+                        {(op.name || op.email).charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{op.name || '—'}</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{op.id.slice(0, 8)}...</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 18px', color: '#374151' }}>{op.email}</td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <span style={{ background: ROLE_BG[op.role] || '#f8fafc', color: ROLE_COLOR[op.role] || '#555', padding: '4px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {op.role === 'super_admin' ? '👑 Super Admin' : '🧑‍💼 Operator'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <div style={{ fontSize: 13, color: '#374151' }}>{op.state || '—'}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{op.country || '—'}</div>
+                  </td>
+                  <td style={{ padding: '14px 18px', color: '#94a3b8', fontSize: 12 }}>
+                    {op.created_at ? new Date(op.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                  </td>
+                  <td style={{ padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => openEdit(op)} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>✏️ Edit</button>
+                      <button onClick={() => setDelOp(op)} style={{ background: '#fef2f2', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#dc2626', cursor: 'pointer' }}>🗑 Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showAdd && (
+        <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 460, boxShadow: '0 20px 60px #0002' }}>
+            <h3 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{editOp ? 'Edit Operator' : 'Add New Operator'}</h3>
+            {[
+              { label: 'Full Name', key: 'name', type: 'text', placeholder: 'e.g. Ravi Kumar' },
+              { label: 'Email', key: 'email', type: 'email', placeholder: 'ravi@fruitlink.in', disabled: !!editOp },
+              { label: editOp ? 'New Password (leave blank to keep)' : 'Password', key: 'password', type: 'password', placeholder: '••••••••' },
+            ].map(f => (
+              <div key={f.key} style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{f.label}</label>
+                <input type={f.type} value={(form as any)[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                  placeholder={f.placeholder} disabled={f.disabled}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: f.disabled ? '#f8fafc' : '#fff', color: '#0f172a' }} />
+              </div>
+            ))}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Role</label>
+                <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', background: '#fff', color: '#0f172a' }}>
+                  <option value="operator">Operator</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>State</label>
+                <input value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} placeholder="Telangana"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: '#0f172a' }} />
+              </div>
+            </div>
+            {msg && <div style={{ marginBottom: 12, padding: '8px 14px', borderRadius: 8, background: msg.startsWith('✓') ? '#f0fdf4' : '#fef2f2', color: msg.startsWith('✓') ? '#16a34a' : '#dc2626', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowAdd(false)} style={{ padding: '10px 20px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+              <button onClick={saveOperator} disabled={saving} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#f97316', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+                {saving ? 'Saving...' : editOp ? 'Update' : 'Add Operator'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      {delOp && (
+        <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 380, boxShadow: '0 20px 60px #0002', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🗑</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Delete Operator?</h3>
+            <p style={{ margin: '0 0 24px', color: '#64748b', fontSize: 14 }}>This will permanently delete <b>{delOp.name || delOp.email}</b>. This action cannot be undone.</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setDelOp(null)} style={{ padding: '10px 24px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={deleteOperator} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [machines, setMachines] = useState([]);
@@ -413,8 +616,9 @@ export default function Dashboard() {
 
   const renderPage = () => {
     if (activeKey === 'fleet') return <FleetMap machines={machines} />;
+    if (activeKey === 'operators-list') return <OperatorsPage supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL || ''} supabaseKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''} />
     if (activeKey === 'alerts') return <AlertsPage supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL || ''} supabaseKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''} />
-    if (activeKey === 'operators-list' || activeKey === 'settings') return (
+    if (activeKey === 'settings') return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, gap: 16 }}>
         <div style={{ fontSize: 52, opacity: 0.2 }}>...</div>
         <div style={{ fontSize: 20, fontWeight: 800, color: '#6b7280' }}>{getPageLabel()}</div>
