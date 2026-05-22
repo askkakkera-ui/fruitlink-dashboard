@@ -473,7 +473,7 @@ export default function Dashboard() {
 
   const renderPage = () => {
     if (activeKey === 'fleet') return <FleetMap machines={machines} />;
-    if (activeKey === 'alerts' || activeKey === 'operators-list' || activeKey === 'settings') return (
+    if (activeKey === 'operators-list' || activeKey === 'settings') return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, gap: 16 }}>
         <div style={{ fontSize: 52, opacity: 0.2 }}>...</div>
         <div style={{ fontSize: 20, fontWeight: 800, color: '#6b7280' }}>{getPageLabel()}</div>
