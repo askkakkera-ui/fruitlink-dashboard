@@ -348,6 +348,92 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
 }
 
 
+
+function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: { op: any, supabaseUrl: string, supabaseKey: string, onClose: () => void }) {
+  const [machines, setMachines] = useState<any[]>([])
+  const [assigned, setAssigned] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
+
+  useEffect(() => {
+    const load = async () => {
+      const [mRes, aRes] = await Promise.all([
+        fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location', { headers }),
+        fetch(supabaseUrl + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + op.id, { headers }),
+      ])
+      const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
+      setMachines(Array.isArray(mData) ? mData : [])
+      setAssigned(Array.isArray(aData) ? aData.map((r: any) => r.machine_id) : [])
+    }
+    load()
+  }, [])
+
+  const toggle = (mid: string) => setAssigned(prev => prev.includes(mid) ? prev.filter(x => x !== mid) : [...prev, mid])
+
+  const save = async () => {
+    setSaving(true); setMsg('')
+    try {
+      // Delete all current assignments for this operator
+      await fetch(supabaseUrl + '/rest/v1/machine_operators?operator_id=eq.' + op.id, { method: 'DELETE', headers })
+      // Insert new assignments
+      if (assigned.length > 0) {
+        await fetch(supabaseUrl + '/rest/v1/machine_operators', {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'return=minimal' },
+          body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id })))
+        })
+      }
+      setMsg('✓ Machines assigned!')
+      setTimeout(onClose, 800)
+    } catch(e: any) { setMsg('Error: ' + e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 480, boxShadow: '0 20px 60px #0002', maxHeight: '80vh', overflow: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Assign Machines</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>to {op.name || op.email}</p>
+          </div>
+          <button onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 18, color: '#64748b' }}>✕</button>
+        </div>
+        {machines.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No machines found</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {machines.map((m: any) => {
+              const isChecked = assigned.includes(m.id)
+              return (
+                <div key={m.id} onClick={() => toggle(m.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: '1.5px solid ' + (isChecked ? '#f97316' : '#e2e8f0'), background: isChecked ? '#fff7ed' : '#fff', cursor: 'pointer', transition: 'all 0.15s' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 6, border: '2px solid ' + (isChecked ? '#f97316' : '#cbd5e1'), background: isChecked ? '#f97316' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {isChecked && <span style={{ color: '#fff', fontSize: 13, fontWeight: 800 }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>{m.display_name}</div>
+                    <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginTop: 1 }}>{m.sn}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>📍 {m.location || '—'}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {msg && <div style={{ marginTop: 12, padding: '8px 14px', borderRadius: 8, background: msg.startsWith('✓') ? '#f0fdf4' : '#fef2f2', color: msg.startsWith('✓') ? '#16a34a' : '#dc2626', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#f97316', color: '#fff', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+            {saving ? 'Saving...' : 'Save Assignment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -357,6 +443,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [assignOp, setAssignOp] = useState<any>(null)
 
   const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
 
@@ -478,6 +565,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
                   </td>
                   <td style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setAssignOp(op)} style={{ background: '#eff6ff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}>🖥 Machines</button>
                       <button onClick={() => openEdit(op)} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>✏️ Edit</button>
                       <button onClick={() => setDelOp(op)} style={{ background: '#fef2f2', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#dc2626', cursor: 'pointer' }}>🗑 Delete</button>
                     </div>
@@ -533,6 +621,8 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
       )}
 
       {/* Delete Confirm */}
+      {assignOp && <AssignMachinesModal op={assignOp} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} onClose={() => setAssignOp(null)} />}
+
       {delOp && (
         <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 380, boxShadow: '0 20px 60px #0002', textAlign: 'center' }}>
