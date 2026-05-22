@@ -142,10 +142,31 @@ const NAV = [
 
 
 const SEVERITY_COLOR: Record<string, string> = {
-  CRITICAL: '#dc2626', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e',
+  CRITICAL: '#dc2626', HIGH: '#ea580c', MEDIUM: '#d97706', LOW: '#16a34a',
 }
 const SEVERITY_BG: Record<string, string> = {
-  CRITICAL: '#fef2f2', HIGH: '#fff7ed', MEDIUM: '#fefce8', LOW: '#f0fdf4',
+  CRITICAL: '#fff1f2', HIGH: '#fff7ed', MEDIUM: '#fffbeb', LOW: '#f0fdf4',
+}
+const SEVERITY_ICON: Record<string, string> = {
+  CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢',
+}
+const ALERT_LABELS: Record<string, string> = {
+  machine_offline: 'Machine Offline',
+  temperature_high: 'High Temperature',
+  temperature_low: 'Low Temperature',
+  temperature_stop: 'Temp — Stop Selling',
+  stock_empty_l1: 'Layer 1 Empty',
+  stock_empty_l2: 'Layer 2 Empty',
+  stock_empty_l3: 'Layer 3 Empty',
+  stock_low_l1: 'Layer 1 Low Stock',
+  stock_low_l2: 'Layer 2 Low Stock',
+  stock_low_l3: 'Layer 3 Low Stock',
+  door_open: 'Door Open',
+  vend_failure: 'Vend Failure',
+  cup_empty: 'Cups Empty',
+  film_empty: 'Film Empty',
+  cooling_off: 'Cooling Off',
+  no_orders_4h: 'No Orders (4h)',
 }
 
 function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
@@ -156,6 +177,7 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
   const [severityFilter, setSeverityFilter] = useState('all')
 
   const fetchAlerts = async () => {
+    setLoading(true)
     const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
     const [alertRes, machineRes] = await Promise.all([
       fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=200', { headers }),
@@ -169,7 +191,7 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
 
   useEffect(() => { fetchAlerts() }, [])
 
-  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {}
+  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
 
   const filtered = alerts.filter((a: any) => {
     if (filter === 'active' && a.resolved_at) return false
@@ -179,86 +201,152 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
   })
 
   const counts: any = {
-    all: alerts.length,
-    active: alerts.filter((a: any) => !a.resolved_at).length,
-    resolved: alerts.filter((a: any) => a.resolved_at).length,
     CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
     HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
     MEDIUM: alerts.filter((a: any) => !a.resolved_at && a.severity === 'MEDIUM').length,
+    LOW: alerts.filter((a: any) => !a.resolved_at && a.severity === 'LOW').length,
+    active: alerts.filter((a: any) => !a.resolved_at).length,
+    resolved: alerts.filter((a: any) => a.resolved_at).length,
   }
 
-  const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const fmtTime = (t: string) => {
+    const d = new Date(t)
+    return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  }
 
-  if (loading) return <div style={{ padding: 40, color: '#888' }}>Loading alerts...</div>
+  const timeAgo = (t: string) => {
+    const diff = Date.now() - new Date(t).getTime()
+    const m = Math.floor(diff / 60000)
+    if (m < 60) return m + 'm ago'
+    const h = Math.floor(m / 60)
+    if (h < 24) return h + 'h ago'
+    return Math.floor(h / 24) + 'd ago'
+  }
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+    <div style={{ padding: '28px 32px', background: '#f8fafc', minHeight: '100vh' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1f2e' }}>Alerts</h2>
-          <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{counts.active} active alerts</div>
+          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5 }}>Alert Center</h2>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>
+            {counts.active} active alert{counts.active !== 1 ? 's' : ''} across {machines.length} machine{machines.length !== 1 ? 's' : ''}
+          </p>
         </div>
-        <button onClick={fetchAlerts} style={{ background: '#f97316', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>↻ Refresh</button>
+        <button onClick={fetchAlerts} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1a1f2e', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 13, letterSpacing: 0.2 }}>
+          <span style={{ fontSize: 15 }}>↻</span> Refresh
+        </button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
-        {(['CRITICAL','HIGH','MEDIUM'] as const).map(s => (
-          <div key={s} style={{ background: SEVERITY_BG[s], border: '1px solid ' + SEVERITY_COLOR[s] + '33', borderRadius: 10, padding: '14px 18px', cursor: 'pointer', borderLeft: '4px solid ' + SEVERITY_COLOR[s] }}
-            onClick={() => setSeverityFilter(severityFilter === s ? 'all' : s)}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: SEVERITY_COLOR[s] }}>{counts[s]}</div>
-            <div style={{ fontSize: 12, color: '#666', fontWeight: 600, marginTop: 2 }}>{s} (Active)</div>
+
+      {/* Severity summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
+        {(['CRITICAL','HIGH','MEDIUM','LOW'] as const).map(s => (
+          <div key={s} onClick={() => setSeverityFilter(severityFilter === s ? 'all' : s)}
+            style={{ background: severityFilter === s ? SEVERITY_BG[s] : '#fff', border: '1.5px solid ' + (severityFilter === s ? SEVERITY_COLOR[s] : '#e2e8f0'), borderRadius: 14, padding: '16px 20px', cursor: 'pointer', transition: 'all 0.15s', boxShadow: severityFilter === s ? '0 4px 12px ' + SEVERITY_COLOR[s] + '22' : '0 1px 3px #0000000a' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 22 }}>{SEVERITY_ICON[s]}</span>
+              <span style={{ fontSize: 28, fontWeight: 800, color: counts[s] > 0 ? SEVERITY_COLOR[s] : '#cbd5e1' }}>{counts[s]}</span>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: SEVERITY_COLOR[s], textTransform: 'uppercase', letterSpacing: 0.8 }}>{s}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Active alerts</div>
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' as const }}>
-        {(['active','resolved','all'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            style={{ padding: '6px 16px', borderRadius: 20, border: '1px solid #e5e7eb', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              background: filter === f ? '#1a1f2e' : '#fff', color: filter === f ? '#fff' : '#555' }}>
-            {f === 'active' ? 'Active (' + counts.active + ')' : f === 'resolved' ? 'Resolved (' + counts.resolved + ')' : 'All (' + counts.all + ')'}
+
+      {/* Filter tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: '#fff', borderRadius: 12, padding: 6, border: '1px solid #e2e8f0', width: 'fit-content', boxShadow: '0 1px 3px #0000000a' }}>
+        {([['active', '● Active', counts.active], ['resolved', '✓ Resolved', counts.resolved], ['all', 'All', counts.active + counts.resolved]] as const).map(([f, label, count]) => (
+          <button key={f} onClick={() => setFilter(f as any)}
+            style={{ padding: '7px 18px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.15s',
+              background: filter === f ? '#1a1f2e' : 'transparent',
+              color: filter === f ? '#fff' : '#64748b' }}>
+            {label} <span style={{ opacity: 0.7, fontWeight: 400, fontSize: 12 }}>({count})</span>
           </button>
         ))}
-        {severityFilter !== 'all' && (
-          <button onClick={() => setSeverityFilter('all')}
-            style={{ padding: '6px 16px', borderRadius: 20, border: '1px solid ' + SEVERITY_COLOR[severityFilter], background: SEVERITY_BG[severityFilter], color: SEVERITY_COLOR[severityFilter], fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-            {severityFilter} ✕
-          </button>
-        )}
       </div>
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#aaa', fontSize: 15 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>No alerts found
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>⟳</div>
+          <div style={{ fontSize: 14 }}>Loading alerts...</div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 80, background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>All clear!</div>
+          <div style={{ fontSize: 14, color: '#64748b' }}>No alerts match your current filters.</div>
         </div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px #0000000a' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                {['Severity','Machine','Alert & Description','Time','Status'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12 }}>{h}</th>
+              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                {[['Severity', '10%'], ['Machine & Location', '22%'], ['Alert & Description', '38%'], ['Time', '15%'], ['Status', '15%']].map(([h, w]) => (
+                  <th key={h} style={{ padding: '13px 18px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, width: w }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a: any, i: number) => (
-                <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '10px 14px' }}>
-                    <span style={{ background: SEVERITY_BG[a.severity] || '#f3f4f6', color: SEVERITY_COLOR[a.severity] || '#666', padding: '3px 10px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>{a.severity}</span>
-                  </td>
-                  <td style={{ padding: '10px 14px' }}><div style={{ fontWeight: 600, color: '#1a1f2e' }}>{getMachine(a.machine_id).display_name || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{getMachine(a.machine_id).sn || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#aaa' }}>{getMachine(a.machine_id).location || '--'}</div></td>
-                  <td style={{ padding: '10px 14px' }}><div style={{ fontFamily: 'monospace', fontSize: 11, color: '#6366f1', fontWeight: 600 }}>{a.alert_type}</div><div style={{ fontSize: 13, color: '#374151', marginTop: 3 }}>{a.message}</div></td>
-                  <td style={{ padding: '10px 14px', color: '#888', whiteSpace: 'nowrap' }}>{fmtTime(a.created_at)}</td>
-                  <td style={{ padding: '10px 14px' }}>
-                    {a.resolved_at ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Resolved</span> : <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 12 }}>● Active</span>}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((a: any, i: number) => {
+                const m = getMachine(a.machine_id)
+                const isActive = !a.resolved_at
+                return (
+                  <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#fafbfc', transition: 'background 0.1s' }}>
+                    {/* Severity */}
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: SEVERITY_BG[a.severity] || '#f8fafc', border: '1px solid ' + (SEVERITY_COLOR[a.severity] || '#e2e8f0') + '44', borderRadius: 8, padding: '4px 10px' }}>
+                        <span style={{ fontSize: 10 }}>{SEVERITY_ICON[a.severity] || '⚪'}</span>
+                        <span style={{ fontWeight: 700, fontSize: 11, color: SEVERITY_COLOR[a.severity] || '#666', letterSpacing: 0.5 }}>{a.severity}</span>
+                      </div>
+                    </td>
+                    {/* Machine */}
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{m.display_name || '—'}</div>
+                      <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginTop: 2, fontWeight: 600 }}>{m.sn || a.machine_id.slice(0,12)}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>📍 {m.location || '—'}</div>
+                    </td>
+                    {/* Alert & Description */}
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ display: 'inline-block', background: '#f1f5f9', borderRadius: 6, padding: '2px 8px', fontFamily: 'monospace', fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 5 }}>{a.alert_type}</div>
+                      <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 500, lineHeight: 1.4 }}>
+                        {ALERT_LABELS[a.alert_type] || a.alert_type.replace(/_/g, ' ')}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>{a.message}</div>
+                    </td>
+                    {/* Time */}
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{timeAgo(a.created_at)}</div>
+                    </td>
+                    {/* Status */}
+                    <td style={{ padding: '14px 18px' }}>
+                      {isActive ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '5px 12px' }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc2626', display: 'inline-block', animation: 'pulse 2s infinite' }}></span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>Active</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '5px 12px' }}>
+                          <span style={{ fontSize: 12 }}>✓</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>Resolved</span>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
+          <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', fontSize: 12, color: '#94a3b8' }}>
+            Showing {filtered.length} of {alerts.length} alerts
+          </div>
         </div>
       )}
     </div>
   )
 }
+
 
 export default function Dashboard() {
   const [time, setTime] = useState('');
