@@ -140,6 +140,274 @@ const NAV = [
   { label: 'Settings', icon: '⊗', key: 'settings' },
 ];
 
+
+const SEVERITY_COLOR: Record<string, string> = {
+  CRITICAL: '#dc2626', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e',
+}
+const SEVERITY_BG: Record<string, string> = {
+  CRITICAL: '#fef2f2', HIGH: '#fff7ed', MEDIUM: '#fefce8', LOW: '#f0fdf4',
+}
+
+function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
+  const [alerts, setAlerts] = React.useState<any[]>([])
+  const [machines, setMachines] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<'all'|'active'|'resolved'>('active')
+  const [severityFilter, setSeverityFilter] = React.useState('all')
+
+  const fetchAlerts = async () => {
+    const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
+    const [alertRes, machineRes] = await Promise.all([
+      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=200', { headers }),
+      fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn', { headers }),
+    ])
+    const [alertData, machineData] = await Promise.all([alertRes.json(), machineRes.json()])
+    setAlerts(Array.isArray(alertData) ? alertData : [])
+    setMachines(Array.isArray(machineData) ? machineData : [])
+    setLoading(false)
+  }
+
+  React.useEffect(() => { fetchAlerts() }, [])
+
+  const getMachineName = (id: string) => machines.find(m => m.id === id)?.display_name || id.slice(0,8)
+
+  const filtered = alerts.filter(a => {
+    if (filter === 'active' && a.resolved_at) return false
+    if (filter === 'resolved' && !a.resolved_at) return false
+    if (severityFilter !== 'all' && a.severity !== severityFilter) return false
+    return true
+  })
+
+  const counts = {
+    all: alerts.length,
+    active: alerts.filter(a => !a.resolved_at).length,
+    resolved: alerts.filter(a => a.resolved_at).length,
+    CRITICAL: alerts.filter(a => !a.resolved_at && a.severity === 'CRITICAL').length,
+    HIGH: alerts.filter(a => !a.resolved_at && a.severity === 'HIGH').length,
+    MEDIUM: alerts.filter(a => !a.resolved_at && a.severity === 'MEDIUM').length,
+  }
+
+  const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+  if (loading) return <div style={{ padding: 40, color: '#888' }}>Loading alerts...</div>
+
+  return (
+    <div style={{ padding: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1f2e' }}>Alerts</h2>
+          <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{counts.active} active alerts</div>
+        </div>
+        <button onClick={fetchAlerts} style={{ background: '#f97316', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>↻ Refresh</button>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+        {(['CRITICAL','HIGH','MEDIUM'] as const).map(s => (
+          <div key={s} style={{ background: SEVERITY_BG[s], border: '1px solid ' + SEVERITY_COLOR[s] + '33', borderRadius: 10, padding: '14px 18px', cursor: 'pointer', borderLeft: '4px solid ' + SEVERITY_COLOR[s] }}
+            onClick={() => setSeverityFilter(severityFilter === s ? 'all' : s)}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: SEVERITY_COLOR[s] }}>{counts[s]}</div>
+            <div style={{ fontSize: 12, color: '#666', fontWeight: 600, marginTop: 2 }}>{s} (Active)</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {(['active','resolved','all'] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{ padding: '6px 16px', borderRadius: 20, border: '1px solid #e5e7eb', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              background: filter === f ? '#1a1f2e' : '#fff', color: filter === f ? '#fff' : '#555' }}>
+            {f === 'active' ? `Active (${counts.active})` : f === 'resolved' ? `Resolved (${counts.resolved})` : `All (${counts.all})`}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {severityFilter !== 'all' && (
+          <button onClick={() => setSeverityFilter('all')}
+            style={{ padding: '6px 16px', borderRadius: 20, border: '1px solid ' + SEVERITY_COLOR[severityFilter], background: SEVERITY_BG[severityFilter], color: SEVERITY_COLOR[severityFilter], fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            {severityFilter} ✕
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#aaa', fontSize: 15 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
+          No alerts found
+        </div>
+      ) : (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                {['Severity','Machine','Alert','Message','Time','Status'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a, i) => (
+                <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <td style={{ padding: '10px 14px' }}>
+                    <span style={{ background: SEVERITY_BG[a.severity] || '#f3f4f6', color: SEVERITY_COLOR[a.severity] || '#666', padding: '3px 10px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>
+                      {a.severity}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 14px', fontWeight: 600, color: '#1a1f2e' }}>{getMachineName(a.machine_id)}</td>
+                  <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace', fontSize: 12 }}>{a.alert_type}</td>
+                  <td style={{ padding: '10px 14px', color: '#555', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.message}</td>
+                  <td style={{ padding: '10px 14px', color: '#888', whiteSpace: 'nowrap' }}>{fmtTime(a.created_at)}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    {a.resolved_at
+                      ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Resolved</span>
+                      : <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 12 }}>● Active</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+const SEVERITY_COLOR: Record<string, string> = {
+  CRITICAL: '#dc2626', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e',
+}
+const SEVERITY_BG: Record<string, string> = {
+  CRITICAL: '#fef2f2', HIGH: '#fff7ed', MEDIUM: '#fefce8', LOW: '#f0fdf4',
+}
+
+function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
+  const [alerts, setAlerts] = React.useState<any[]>([])
+  const [machines, setMachines] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<'all'|'active'|'resolved'>('active')
+  const [severityFilter, setSeverityFilter] = React.useState('all')
+
+  const fetchAlerts = async () => {
+    const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
+    const [alertRes, machineRes] = await Promise.all([
+      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=200', { headers }),
+      fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn', { headers }),
+    ])
+    const [alertData, machineData] = await Promise.all([alertRes.json(), machineRes.json()])
+    setAlerts(Array.isArray(alertData) ? alertData : [])
+    setMachines(Array.isArray(machineData) ? machineData : [])
+    setLoading(false)
+  }
+
+  React.useEffect(() => { fetchAlerts() }, [])
+
+  const getMachineName = (id: string) => machines.find(m => m.id === id)?.display_name || id.slice(0,8)
+
+  const filtered = alerts.filter(a => {
+    if (filter === 'active' && a.resolved_at) return false
+    if (filter === 'resolved' && !a.resolved_at) return false
+    if (severityFilter !== 'all' && a.severity !== severityFilter) return false
+    return true
+  })
+
+  const counts = {
+    all: alerts.length,
+    active: alerts.filter(a => !a.resolved_at).length,
+    resolved: alerts.filter(a => a.resolved_at).length,
+    CRITICAL: alerts.filter(a => !a.resolved_at && a.severity === 'CRITICAL').length,
+    HIGH: alerts.filter(a => !a.resolved_at && a.severity === 'HIGH').length,
+    MEDIUM: alerts.filter(a => !a.resolved_at && a.severity === 'MEDIUM').length,
+  }
+
+  const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+  if (loading) return <div style={{ padding: 40, color: '#888' }}>Loading alerts...</div>
+
+  return (
+    <div style={{ padding: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1f2e' }}>Alerts</h2>
+          <div style={{ color: '#888', fontSize: 13, marginTop: 2 }}>{counts.active} active alerts</div>
+        </div>
+        <button onClick={fetchAlerts} style={{ background: '#f97316', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>↻ Refresh</button>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+        {(['CRITICAL','HIGH','MEDIUM'] as const).map(s => (
+          <div key={s} style={{ background: SEVERITY_BG[s], border: '1px solid ' + SEVERITY_COLOR[s] + '33', borderRadius: 10, padding: '14px 18px', cursor: 'pointer', borderLeft: '4px solid ' + SEVERITY_COLOR[s] }}
+            onClick={() => setSeverityFilter(severityFilter === s ? 'all' : s)}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: SEVERITY_COLOR[s] }}>{counts[s]}</div>
+            <div style={{ fontSize: 12, color: '#666', fontWeight: 600, marginTop: 2 }}>{s} (Active)</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {(['active','resolved','all'] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{ padding: '6px 16px', borderRadius: 20, border: '1px solid #e5e7eb', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              background: filter === f ? '#1a1f2e' : '#fff', color: filter === f ? '#fff' : '#555' }}>
+            {f === 'active' ? `Active (${counts.active})` : f === 'resolved' ? `Resolved (${counts.resolved})` : `All (${counts.all})`}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {severityFilter !== 'all' && (
+          <button onClick={() => setSeverityFilter('all')}
+            style={{ padding: '6px 16px', borderRadius: 20, border: '1px solid ' + SEVERITY_COLOR[severityFilter], background: SEVERITY_BG[severityFilter], color: SEVERITY_COLOR[severityFilter], fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            {severityFilter} ✕
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#aaa', fontSize: 15 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>✓</div>
+          No alerts found
+        </div>
+      ) : (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                {['Severity','Machine','Alert','Message','Time','Status'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a, i) => (
+                <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <td style={{ padding: '10px 14px' }}>
+                    <span style={{ background: SEVERITY_BG[a.severity] || '#f3f4f6', color: SEVERITY_COLOR[a.severity] || '#666', padding: '3px 10px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>
+                      {a.severity}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 14px', fontWeight: 600, color: '#1a1f2e' }}>{getMachineName(a.machine_id)}</td>
+                  <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace', fontSize: 12 }}>{a.alert_type}</td>
+                  <td style={{ padding: '10px 14px', color: '#555', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.message}</td>
+                  <td style={{ padding: '10px 14px', color: '#888', whiteSpace: 'nowrap' }}>{fmtTime(a.created_at)}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    {a.resolved_at
+                      ? <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Resolved</span>
+                      : <span style={{ color: '#dc2626', fontWeight: 600, fontSize: 12 }}>● Active</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [machines, setMachines] = useState([]);
