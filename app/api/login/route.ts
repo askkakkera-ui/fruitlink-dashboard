@@ -8,13 +8,13 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
     if (!email || !password) return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
-    const res = await fetch(SUPABASE_URL + '/rest/v1/operators?email=eq.' + encodeURIComponent(email) + '&select=id,name,email,password_hash,role,state,country&limit=1', { headers });
+    const res = await fetch(SUPABASE_URL + '/rest/v1/operators?email=eq.' + encodeURIComponent(email) + '&select=id,name,email,password_hash,role&limit=1', { headers });
     const data = await res.json();
     if (!data || data.length === 0) return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     const operator = data[0];
     const valid = await bcrypt.compare(password, operator.password_hash);
     if (!valid) return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
-    return NextResponse.json({ success: true, id: operator.id, name: operator.name, email: operator.email, role: operator.role || 'operator', state: operator.state || '', country: operator.country || 'India' });
+    return NextResponse.json({ success: true, id: operator.id, name: operator.name, email: operator.email, role: operator.role || 'operator', state: '', country: 'India' });
   } catch(e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
