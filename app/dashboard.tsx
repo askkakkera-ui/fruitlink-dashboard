@@ -244,7 +244,7 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
                   <td style={{ padding: '10px 14px' }}>
                     <span style={{ background: SEVERITY_BG[a.severity] || '#f3f4f6', color: SEVERITY_COLOR[a.severity] || '#666', padding: '3px 10px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>{a.severity}</span>
                   </td>
-                  <td style={{ padding: '10px 14px' }}><div style={{ fontWeight: 600, color: '#1a1f2e' }}>{getMachine(a.machine_id).display_name || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{getMachine(a.machine_id).location || '--'}</div></td>
+                  <td style={{ padding: '10px 14px' }}><div style={{ fontWeight: 600, color: '#1a1f2e' }}>{getMachine(a.machine_id).display_name || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{getMachine(a.machine_id).sn || a.machine_id.slice(0,8)}</div><div style={{ fontSize: 11, color: '#aaa' }}>{getMachine(a.machine_id).location || '--'}</div></td>
                   <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace', fontSize: 12 }}>{a.alert_type}</td>
                   <td style={{ padding: '10px 14px', color: '#555', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.message}</td>
                   <td style={{ padding: '10px 14px', color: '#888', whiteSpace: 'nowrap' }}>{fmtTime(a.created_at)}</td>
