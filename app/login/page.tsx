@@ -25,6 +25,9 @@ export default function Login() {
       document.cookie = 'fl_auth=fruitlink2026; path=/; max-age=86400';
       document.cookie = 'fl_operator_id=' + data.id + '; path=/; max-age=86400';
       document.cookie = 'fl_operator_name=' + data.name + '; path=/; max-age=86400';
+      document.cookie = 'fl_role=' + data.role + '; path=/; max-age=86400';
+      document.cookie = 'fl_state=' + data.state + '; path=/; max-age=86400';
+      document.cookie = 'fl_country=' + data.country + '; path=/; max-age=86400';
       window.location.href = '/';
     } catch(e) {
       setError('Login failed. Please try again.');
