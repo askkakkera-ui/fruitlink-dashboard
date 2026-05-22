@@ -9,15 +9,83 @@ function getCookie(name) {
   return match ? match[2] : null;
 }
 
+function TempChart({ data }) {
+  if (!data || data.length < 2) return <div className='text-xs text-gray-400 text-center py-4'>No data yet</div>;
+  const W = 600; const H = 120; const pad = { t:10, r:10, b:30, l:36 };
+  const iW = W - pad.l - pad.r; const iH = H - pad.t - pad.b;
+  const vals = data.map(d => d.inner_temp_c).filter(v => v !== null && v !== undefined);
+  if (vals.length < 2) return <div className='text-xs text-gray-400 text-center py-4'>No data yet</div>;
+  const mn = Math.min(...vals); const mx = Math.max(...vals);
+  const range = mx - mn || 1;
+  const filtered = data.filter(d => d.inner_temp_c !== null);
+  const pts = filtered.map((d, i) => {
+    const x = pad.l + (i / (filtered.length - 1)) * iW;
+    const y = pad.t + iH - ((d.inner_temp_c - mn) / range) * iH;
+    return x + ',' + y;
+  }).join(' ');
+  const ticks = [mn, Math.round((mn + mx) / 2), mx];
+  return (
+    <svg viewBox={'0 0 ' + W + ' ' + H} className='w-full' style={{height:120}}>
+      {ticks.map((t, i) => {
+        const y = pad.t + iH - ((t - mn) / range) * iH;
+        return <g key={i}><line x1={pad.l} y1={y} x2={W - pad.r} y2={y} stroke='#f3f4f6' strokeWidth='1'/><text x={pad.l - 4} y={y + 4} textAnchor='end' fontSize='9' fill='#9ca3af'>{t}C</text></g>;
+      })}
+      <polyline points={pts} fill='none' stroke='#f59e0b' strokeWidth='2' strokeLinejoin='round'/>
+      {filtered.filter((_, i) => i % Math.max(1, Math.ceil(filtered.length / 6)) === 0).map((d, i) => {
+        const idx = filtered.indexOf(d);
+        const x = pad.l + (idx / (filtered.length - 1)) * iW;
+        const label = new Date(d.ts).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+        return <text key={i} x={x} y={H - 4} textAnchor='middle' fontSize='9' fill='#9ca3af'>{label}</text>;
+      })}
+    </svg>
+  );
+}
+
+function StockChart({ data }) {
+  if (!data || data.length < 2) return <div className='text-xs text-gray-400 text-center py-4'>No data yet</div>;
+  const W = 600; const H = 80; const pad = { t:8, r:10, b:24, l:10 };
+  const iW = W - pad.l - pad.r; const iH = H - pad.t - pad.b;
+  const levels = [
+    { key: 'stock_l1', color: '#f59e0b', label: 'L1' },
+    { key: 'stock_l2', color: '#10b981', label: 'L2' },
+    { key: 'stock_l3', color: '#3b82f6', label: 'L3' },
+  ];
+  return (
+    <div>
+      <svg viewBox={'0 0 ' + W + ' ' + H} className='w-full' style={{height:80}}>
+        {levels.map(lv => {
+          const pts = data.map((d, i) => {
+            const x = pad.l + (i / (data.length - 1)) * iW;
+            const y = pad.t + (d[lv.key] ? 2 : iH);
+            return x + ',' + y;
+          }).join(' ');
+          return <polyline key={lv.key} points={pts} fill='none' stroke={lv.color} strokeWidth='2' strokeLinejoin='round' opacity='0.8'/>;
+        })}
+        {data.filter((_, i) => i % Math.max(1, Math.ceil(data.length / 6)) === 0).map((d, i) => {
+          const idx = data.indexOf(d);
+          const x = pad.l + (idx / (data.length - 1)) * iW;
+          const label = new Date(d.ts).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+          return <text key={i} x={x} y={H - 2} textAnchor='middle' fontSize='9' fill='#9ca3af'>{label}</text>;
+        })}
+      </svg>
+      <div className='flex gap-4 mt-1'>
+        {levels.map(lv => <div key={lv.key} className='flex items-center gap-1'><div style={{width:8,height:8,borderRadius:2,background:lv.color}}></div><span className='text-xs text-gray-400'>{lv.label}</span></div>)}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [machines, setMachines] = useState([]);
   const [selected, setSelected] = useState(null);
   const [telemetry, setTelemetry] = useState(null);
+  const [telHistory, setTelHistory] = useState([]);
   const [orders, setOrders] = useState([]);
   const [todayCount, setTodayCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [operatorName, setOperatorName] = useState('');
+  const [chartRange, setChartRange] = useState('24h');
 
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' }));
@@ -33,7 +101,8 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => { if (selected) fetchDetail(selected); }, [selected]);
+  useEffect(() => { if (selected) { fetchDetail(selected); fetchHistory(selected, chartRange); } }, [selected]);
+  useEffect(() => { if (selected) fetchHistory(selected, chartRange); }, [chartRange]);
 
   async function fetchMachines() {
     const operatorId = getCookie('fl_operator_id');
@@ -57,6 +126,13 @@ export default function Dashboard() {
     if (tod) { setTodayCount(tod.length); setTodayRevenue(tod.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100); }
     const { data: rec } = await supabase.from('orders').select('*').eq('machine_id', m.id).order('created_at', { ascending: false }).limit(10);
     if (rec) setOrders(rec);
+  }
+
+  async function fetchHistory(m, range) {
+    const hours = range === '6h' ? 6 : range === '12h' ? 12 : 24;
+    const since = new Date(Date.now() - hours * 3600000).toISOString();
+    const { data } = await supabase.from('telemetry').select('ts, inner_temp_c, stock_l1, stock_l2, stock_l3').eq('machine_id', m.id).gte('ts', since).order('ts', { ascending: true }).limit(200);
+    if (data) setTelHistory(data);
   }
 
   function isOnline(m) { return m.status === 'online'; }
@@ -83,7 +159,7 @@ export default function Dashboard() {
             const online = isOnline(m);
             const isSel = selected && selected.id === m.id;
             return (
-              <div key={m.id} onClick={() => { setSelected(m); setTelemetry(null); }} className={'bg-white rounded-xl p-4 border cursor-pointer ' + (isSel ? 'border-amber-500' : 'border-gray-200')}>
+              <div key={m.id} onClick={() => { setSelected(m); setTelemetry(null); setTelHistory([]); }} className={'bg-white rounded-xl p-4 border cursor-pointer ' + (isSel ? 'border-amber-500' : 'border-gray-200')}>
                 <div className='flex justify-between items-start'>
                   <div>
                     <div className='font-medium text-sm'>{m.display_name || m.sn}</div>
@@ -129,6 +205,23 @@ export default function Dashboard() {
                   </div>
                 );
               })}
+            </div>
+            <div className='bg-white rounded-xl p-4 border border-gray-200 mb-3'>
+              <div className='flex justify-between items-center mb-3'>
+                <div className='text-xs font-medium text-gray-500 uppercase'>Temperature History</div>
+                <div className='flex gap-1'>
+                  {['6h','12h','24h'].map(r => (
+                    <button key={r} onClick={() => setChartRange(r)} className={'text-xs px-2 py-0.5 rounded ' + (chartRange === r ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500')}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <TempChart data={telHistory} />
+            </div>
+            <div className='bg-white rounded-xl p-4 border border-gray-200 mb-3'>
+              <div className='text-xs font-medium text-gray-500 uppercase mb-3'>Stock History</div>
+              <StockChart data={telHistory} />
             </div>
             <div className='bg-white rounded-xl p-4 border border-gray-200'>
               <div className='text-xs font-medium text-gray-500 uppercase mb-3'>Recent orders</div>
