@@ -150,6 +150,7 @@ export default function Dashboard() {
   const [todayCount, setTodayCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [operatorName, setOperatorName] = useState('');
+  const [userRole, setUserRole] = useState('');
   const [chartRange, setChartRange] = useState('24h');
   const [activeKey, setActiveKey] = useState('console');
   const [expandedKeys, setExpandedKeys] = useState(['equipment']);
@@ -161,6 +162,7 @@ export default function Dashboard() {
     const tick = () => setTime(new Date().toLocaleString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' }));
     tick(); const t = setInterval(tick, 1000);
     setOperatorName(getCookie('fl_operator_name') || 'Operator');
+    setUserRole(getCookie('fl_role') || 'operator');
     return () => clearInterval(t);
   }, []);
 
@@ -170,8 +172,12 @@ export default function Dashboard() {
 
   async function fetchMachines() {
     const operatorId = getCookie('fl_operator_id');
+    const role = getCookie('fl_role') || 'operator';
+    const state = getCookie('fl_state') || '';
     let query = supabase.from('machines').select('*');
-    if (operatorId) query = query.eq('operator_id', operatorId);
+    if (role === 'super_admin') { /* sees all */ }
+    else if (role === 'state_admin' && state) query = query.eq('state', state);
+    else if (operatorId) query = query.eq('operator_id', operatorId);
     const { data } = await query;
     if (data) { setMachines(data); if (!selected && data.length > 0) { const online = data.find(m => m.status === 'online'); setSelected(online || data[0]); } }
   }
