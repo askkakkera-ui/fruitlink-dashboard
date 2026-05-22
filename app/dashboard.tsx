@@ -55,7 +55,7 @@ function FleetMap({ machines }) {
   const [scriptLoaded, setScriptLoaded] = useState(false);
 
   useEffect(() => {
-    if (window.mapboxgl) { setScriptLoaded(true); return; }
+    if ((window as any).mapboxgl) { setScriptLoaded(true); return; }
     if (document.querySelector('script[src*="mapbox-gl"]')) { setScriptLoaded(true); return; }
     const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://cdn.jsdelivr.net/npm/mapbox-gl@3.3.0/dist/mapbox-gl.css'; document.head.appendChild(link);
     const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/mapbox-gl@3.3.0/dist/mapbox-gl.js'; script.onload = () => setScriptLoaded(true); document.head.appendChild(script);
@@ -63,7 +63,7 @@ function FleetMap({ machines }) {
 
   useEffect(() => {
     if (!scriptLoaded || !mapRef.current || mapInstanceRef.current) return;
-    const mapboxgl = window.mapboxgl;
+    const mapboxgl = (window as any).mapboxgl;
     mapboxgl.accessToken = MAPBOX_TOKEN;
     const map = new mapboxgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.53, 17.47], zoom: 10.5 });
     mapInstanceRef.current = map;
