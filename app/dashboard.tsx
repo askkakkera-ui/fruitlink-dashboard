@@ -326,7 +326,7 @@ export default function Dashboard() {
 
   const renderPage = () => {
     if (activeKey === 'fleet') return <FleetMap machines={machines} />;
-    if (activeKey === 'alerts') return <AlertsPage supabaseUrl={SUPABASE_URL} supabaseKey={SUPABASE_ANON_KEY} />
+    if (activeKey === 'alerts') return <AlertsPage supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL || ''} supabaseKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''} />
     if (activeKey === 'operators-list' || activeKey === 'settings') return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, gap: 16 }}>
         <div style={{ fontSize: 52, opacity: 0.2 }}>...</div>
