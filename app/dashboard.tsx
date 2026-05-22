@@ -674,13 +674,18 @@ export default function Dashboard() {
   async function fetchMachines() {
     const operatorId = getCookie('fl_operator_id');
     const role = getCookie('fl_role') || 'operator';
-    const state = getCookie('fl_state') || '';
-    let query = supabase.from('machines').select('*');
-    if (role === 'super_admin') { /* sees all */ }
-    else if (role === 'state_admin' && state) query = query.eq('state', state);
-    else if (operatorId) query = query.eq('operator_id', operatorId);
-    const { data } = await query;
-    if (data) { setMachines(data); if (!selected && data.length > 0) { const online = data.find(m => m.status === 'online'); setSelected(online || data[0]); } }
+    if (role === 'super_admin') {
+      const { data } = await supabase.from('machines').select('*');
+      if (data) { setMachines(data); if (data.length > 0 && !selected) { const online = data.find(m => m.status === 'online'); setSelected(online || data[0]); } }
+    } else if (operatorId) {
+      const { data: asgn } = await supabase.from('machine_operators').select('machine_id').eq('operator_id', operatorId);
+      const ids = (asgn || []).map((a) => a.machine_id);
+      if (ids.length === 0) { setMachines([]); return; }
+      const { data } = await supabase.from('machines').select('*').in('id', ids);
+      if (data) { setMachines(data); if (data.length > 0 && !selected) { const online = data.find(m => m.status === 'online'); setSelected(online || data[0]); } }
+    } else {
+      setMachines([]);
+    }
   }
 
   async function fetchDetail(m) {
