@@ -313,7 +313,7 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#f8f9fb', fontFamily: "'DM Sans', system-ui, sans-serif", overflow: 'hidden' }}>
-      <style>{@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');}</style>
+      <link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap' />
       <div style={{ width: collapsed ? 68 : 260, background: '#fff', borderRight: '1.5px solid #e8eaed', display: 'flex', flexDirection: 'column', transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)', overflow: 'hidden', flexShrink: 0, boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}>
         <div style={{ padding: collapsed ? '16px 0' : '14px 14px', borderBottom: '1.5px solid #e8eaed', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 10, minHeight: 70 }}>
           <img src='/logo.png' alt='Fruitlink' style={{ height: collapsed ? 32 : 38, width: 'auto', flexShrink: 0, objectFit: 'contain' }} />
