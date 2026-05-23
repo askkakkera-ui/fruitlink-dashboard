@@ -74,7 +74,7 @@ function Pill({ children, color, bg }: any) {
 
 function SectionLabel({ children }: any) {
   return (
-    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: C.textSide3, padding: '12px 16px 4px', textTransform: 'uppercase' as const }}>{children}</div>
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: C.textSide3, padding: '12px 16px 4px', textTransform: 'uppercase' as const }}>{children}</div>
   )
 }
 
@@ -115,8 +115,8 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
             boxShadow: '0 2px 8px #f9731640',
           }}>F</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>FRUITLINK</div>
-            <div style={{ fontSize: 9, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>FRUITLINK</div>
+            <div style={{ fontSize: 10.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff12', borderRadius: 8, padding: '6px 10px' }}>
@@ -139,12 +139,12 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
                   padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                   background: isActive ? C.activeGlow : 'transparent',
                   color: isActive ? C.orange : C.textSide2,
-                  fontSize: 13, fontWeight: isActive ? 600 : 400,
+                  fontSize: 14.5, fontWeight: isActive ? 600 : 400,
                   transition: 'all 0.15s', marginBottom: 1,
                   borderLeft: isActive ? `3px solid ${C.orange}` : '3px solid transparent',
                   paddingLeft: isActive ? 9 : 12,
                 }}>
-                  <span style={{ fontSize: 13, opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
+                  <span style={{ fontSize: 16, opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
                   <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
                   {item.badge && <Badge color={C.orange}>{item.badge}</Badge>}
                   {item.alertDot && alertCount > 0 && (
@@ -166,8 +166,8 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
             fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
           }}>{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
-            <div style={{ fontSize: 10, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
+            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
           </div>
           <button onClick={onLogout} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textSide3, fontSize: 16, padding: 2 }} title="Logout">⏻</button>
         </div>
