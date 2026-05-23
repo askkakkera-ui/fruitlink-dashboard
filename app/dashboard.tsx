@@ -926,7 +926,11 @@ function FleetMapPage({ machines }: { machines: any[] }) {
       const el = document.createElement('div')
       el.style.cssText = 'width:36px;height:36px;border-radius:50%;background:' + (online ? C.green : C.red) + ';border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;'
       el.textContent = 'F'
-      const popup = new mgl.Popup({ offset: 20, closeButton: false }).setHTML('<b>' + m.display_name + '</b><br><small>' + (m.location||'') + '</small><br><small style="color:' + (online ? '#16a34a' : '#dc2626') + '">' + (online ? 'Online' : 'Offline') + '</small>' + (m.inner_temp_c != null ? '<br><small>Temp: ' + m.inner_temp_c + 'C</small>' : ''))
+      el.title = m.display_name + ' — click to open in Google Maps'
+      el.addEventListener('click', () => {
+        window.open('https://www.google.com/maps?q=' + co.lat + ',' + co.lng + '&z=17', '_blank')
+      })
+      const popup = new mgl.Popup({ offset: 20, closeButton: false }).setHTML('<b>' + m.display_name + '</b><br><small>' + (m.location||'') + '</small><br><small style="color:' + (online ? '#16a34a' : '#dc2626') + '">' + (online ? 'Online' : 'Offline') + '</small>' + (m.inner_temp_c != null ? '<br><small>Temp: ' + m.inner_temp_c + 'C</small>' : '') + '<br><small style="color:#3b82f6;cursor:pointer" onclick="window.open(\"https://www.google.com/maps?q=' + co.lat + ',' + co.lng + '&z=17\",\"_blank\")">📍 Open in Google Maps</small>')
       new mgl.Marker({ element: el }).setLngLat([co.lng, co.lat]).setPopup(popup).addTo(map)
     })
     map.addControl(new mgl.NavigationControl(), 'bottom-right')
@@ -960,7 +964,10 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                     </div>
                     <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
                   </div>
-                  <div style={{ fontSize: 12, color: C.text2, marginBottom: 10 }}>Location: {m.location || '--'}, {m.state}</div>
+                  <div style={{ fontSize: 12, color: C.text2, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>📍 {m.location || '--'}, {m.state}</span>
+                    {(() => { const co = getCoords(m); return co ? <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng + '&z=17'} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none' }}>Open Maps →</a> : null })()}
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
                     {[
                       { label: 'Temperature', value: temp != null ? temp + 'C' : '--', color: tempColor },
