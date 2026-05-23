@@ -1855,47 +1855,6 @@ function CooldownsSection({ showSaved }: any) {
               </div>
             </div>
           </div>
-          <div key={m.id} style={{ background: C.surface, border: '2px solid ' + (online ? C.green + '50' : C.red + '50'), borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
-            <div style={{ height: 4, background: online ? C.green : C.red }} />
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' as const }}>
-                {/* Left: machine info */}
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                  <div style={{ width: 52, height: 52, borderRadius: 12, background: online ? C.greenBg : C.redBg, border: '2px solid ' + (online ? C.green + '50' : C.red + '50'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🖥</div>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 5 }}>{m.display_name}</div>
-                    <div style={{ fontSize: 13, color: C.text2, fontFamily: 'monospace', marginBottom: 4 }}>SN: {m.sn}</div>
-                    <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>📍 {m.location}, {m.state}</div>
-                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>
-                      <Dot color={online ? C.green : C.red} pulse={online} size={6} />&nbsp;{online ? 'Online' : 'Offline'}
-                    </Pill>
-                  </div>
-                </div>
-                {/* Right: plan + buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                  <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>Current Plan</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: P.color }}>{P.icon} {P.name}</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                    {Object.entries(PLANS).map(([key, pp]: any) => key !== plan && (
-                      <button key={key} onClick={() => handleUpgrade(m.id, key)} disabled={upgrading === m.id}
-                        style={{ padding: '8px 18px', borderRadius: 9, border: '2px solid ' + pp.color, background: key === 'professional' ? pp.color : 'transparent', color: key === 'professional' ? '#fff' : pp.color, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: upgrading === m.id ? 0.6 : 1, whiteSpace: 'nowrap' as const }}>
-                        {key === 'starter' ? '↓ Downgrade' : '↑ Upgrade'} → {pp.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {/* Included features */}
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid ' + C.border }}>
-                <div style={{ fontSize: 12, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 10 }}>Included in {P.name}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8 }}>
-                  {P.features.map((f: string, i: number) => (
-                    <div key={i} style={{ fontSize: 12, color: C.text, background: C.surface2, border: '1px solid ' + C.border2, borderRadius: 7, padding: '5px 12px' }}>✓ {f}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
 export default function Dashboard() {
   const [active, setActive] = useState('console')
   const [machines, setMachines] = useState<any[]>([])
