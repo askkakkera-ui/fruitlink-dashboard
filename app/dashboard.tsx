@@ -16,22 +16,22 @@ const C = {
   surface2:  '#1c2333',
   border:    '#2a3649',
   border2:   '#374461',
-  text:      '#e8eaf6',
-  text2:     '#8892b8',
-  text3:     '#5a6090',
-  textSide:  '#c8cde8',
-  textSide2: '#8892b8',
-  textSide3: '#5a6090',
+  text:      '#f0f2ff',
+  text2:     '#b0b8d8',
+  text3:     '#7a84a8',
+  textSide:  '#e0e4f8',
+  textSide2: '#a8b0d0',
+  textSide3: '#7a84a8',
   green:     '#22c55e',
-  greenBg:   '#16a34a22',
+  greenBg:   '#16a34a30',
   red:       '#f87171',
-  redBg:     '#dc262622',
+  redBg:     '#dc262630',
   amber:     '#fbbf24',
-  amberBg:   '#d9770622',
+  amberBg:   '#d9770630',
   blue:      '#60a5fa',
-  blueBg:    '#2563eb22',
+  blueBg:    '#2563eb30',
   orange:    '#f97316',
-  orangeBg:  '#f9731622',
+  orangeBg:  '#f9731630',
 }
 
 function getCookie(name: string): string {
@@ -54,7 +54,7 @@ function Dot({ color, pulse = false, size = 7 }: { color: string; pulse?: boolea
 function Badge({ children, color = C.orange, bg }: any) {
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+      fontSize: 12, fontWeight: 700, letterSpacing: '0.08em',
       padding: '2px 8px', borderRadius: 10,
       background: bg || color + '18', color,
       textTransform: 'uppercase' as const,
@@ -120,13 +120,13 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
           }}>F</div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>FRUITLINK</div>
-            <div style={{ fontSize: 10.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
+            <div style={{ fontSize: 12.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff12', borderRadius: 8, padding: '6px 10px' }}>
           <Dot color={C.green} pulse size={6} />
           <span style={{ fontSize: 11, color: C.textSide, fontWeight: 500 }}>Online</span>
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.textSide3 }}>System OK</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: C.textSide3 }}>System OK</span>
         </div>
       </div>
 
@@ -152,7 +152,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
                   <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
                   {item.badge && <Badge color={C.orange}>{item.badge}</Badge>}
                   {item.alertDot && alertCount > 0 && (
-                    <span style={{ background: C.red, color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10 }}>{alertCount}</span>
+                    <span style={{ background: C.red, color: '#fff', fontSize: 12, fontWeight: 700, padding: '1px 7px', borderRadius: 10 }}>{alertCount}</span>
                   )}
                 </button>
               )
@@ -219,7 +219,7 @@ function StatCard({ label, value, sub, color, icon, pct }: any) {
     }}>
       <div style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.9 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>{label}</div>
         <div style={{ width: 32, height: 32, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
       </div>
       <div style={{ fontSize: 36, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
@@ -253,7 +253,7 @@ function MachineCard({ machine }: { machine: any }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>{machine.display_name}</div>
-            <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', letterSpacing: '0.03em' }}>{machine.sn}</div>
+            <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', letterSpacing: '0.03em' }}>{machine.sn}</div>
           </div>
           {online ? (
             <Pill color={C.green} bg={C.greenBg}><Dot color={C.green} pulse size={5} /> Online</Pill>
@@ -270,9 +270,9 @@ function MachineCard({ machine }: { machine: any }) {
               borderRadius: 10, padding: '10px 6px', textAlign: 'center',
               borderTop: `2px solid ${online ? (has ? C.green : C.red) : C.border2}`,
             }}>
-              <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
+              <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
               <div style={{ fontSize: 17, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: online ? (has ? C.green : C.red) : C.text3 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: online ? (has ? C.green : C.red) : C.text3 }}>
                 {online ? (has ? 'Stocked' : 'Empty') : '—'}
               </div>
             </div>
@@ -288,9 +288,9 @@ function MachineCard({ machine }: { machine: any }) {
             { label: 'App Version', value: machine.app_version ? `v${machine.app_version}` : '—', color: C.blue, sub: 'JW Intell' },
           ].map(f => (
             <div key={f.label} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 10px' }}>
-              <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+              <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
-              {f.sub && <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{f.sub}</div>}
+              {f.sub && <div style={{ fontSize: 12, color: C.text3, marginTop: 1 }}>{f.sub}</div>}
             </div>
           ))}
         </div>
@@ -461,8 +461,8 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
             borderTop: `3px solid ${SEVERITY_COLOR[s]}`,
           }}>
             <div style={{ fontSize: 26, fontWeight: 800, color: counts[s] > 0 ? SEVERITY_COLOR[s] : C.border2, letterSpacing: '-0.02em', marginBottom: 4 }}>{counts[s]}</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: SEVERITY_COLOR[s], textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{s}</div>
-            <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>Active alerts</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: SEVERITY_COLOR[s], textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{s}</div>
+            <div style={{ fontSize: 12, color: C.text3, marginTop: 2 }}>Active alerts</div>
           </div>
         ))}
       </div>
@@ -504,7 +504,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                    <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 1 }}>{m.location} · {m.sn}</div>
+                    <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 1 }}>{m.location} · {m.sn}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ background: C.redBg, color: C.red, fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>{machAlerts.length} alert{machAlerts.length !== 1 ? 's' : ''}</span>
@@ -518,7 +518,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                       <thead>
                         <tr style={{ background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
                           {['Severity', 'Alert', 'Time', 'Status'].map((h, i) => (
-                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -529,7 +529,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                               <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
-                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 10, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
+                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 12, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
@@ -688,11 +688,11 @@ function OrdersPage() {
                 const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 4 : 2)
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    {d.revenue > 0 && <div style={{ fontSize: 9, color: C.text3, fontWeight: 600 }}>{fmtAmt(d.revenue)}</div>}
+                    {d.revenue > 0 && <div style={{ fontSize: 11, color: C.text3, fontWeight: 600 }}>{fmtAmt(d.revenue)}</div>}
                     <div style={{ width: '100%', height: h, background: d.revenue > 0 ? C.orange : C.border, borderRadius: '4px 4px 0 0', transition: 'height .4s', position: 'relative' as const }}>
-                      {d.cups > 0 && <div style={{ position: 'absolute' as const, top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 9, color: C.orange, fontWeight: 700 }}>{d.cups}🥤</div>}
+                      {d.cups > 0 && <div style={{ position: 'absolute' as const, top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: C.orange, fontWeight: 700 }}>{d.cups}🥤</div>}
                     </div>
-                    <div style={{ fontSize: 10, color: C.text3, textAlign: 'center', fontWeight: 500 }}>{d.day}</div>
+                    <div style={{ fontSize: 12, color: C.text3, textAlign: 'center', fontWeight: 500 }}>{d.day}</div>
                   </div>
                 )
               })}
@@ -713,12 +713,12 @@ function OrdersPage() {
                       <div style={{ width: 28, height: 28, borderRadius: 8, background: C.orangeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🖥</div>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.display_name}</div>
-                        <div style={{ fontSize: 10, color: C.text3 }}>{m.orders} orders · {m.cups} cups</div>
+                        <div style={{ fontSize: 12, color: C.text3 }}>{m.orders} orders · {m.cups} cups</div>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 16, fontWeight: 800, color: C.green }}>{fmtAmt(m.revenue)}</div>
-                      <div style={{ fontSize: 10, color: C.text3 }}>{pct.toFixed(1)}% of total</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>{pct.toFixed(1)}% of total</div>
                     </div>
                   </div>
                   <div style={{ height: 6, background: C.border, borderRadius: 3 }}>
@@ -751,7 +751,7 @@ function OrdersPage() {
                 <thead>
                   <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
                     {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map(h => (
-                      <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                      <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: C.text2 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -765,18 +765,18 @@ function OrdersPage() {
                         <td style={{ padding: '12px 16px' }}><div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.blue }}>{o.order_code}</div></td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '--'}</div>
-                          <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
+                          <div style={{ fontSize: 12, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
                         </td>
                         <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
                         <td style={{ padding: '12px 16px' }}>
                           <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
-                          <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>{o.pay_type?.toUpperCase()}</div>
+                          <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.pay_type?.toUpperCase()}</div>
                         </td>
                         <td style={{ padding: '12px 16px' }}><Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill></td>
                         <td style={{ padding: '12px 16px', fontWeight: 600, color: C.text }}>{o.cup_num || '--'}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ fontSize: 12, color: C.text }}>{fmtTime(o.created_at)}</div>
-                          <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{fmtAgo(o.created_at)}</div>
+                          <div style={{ fontSize: 12, color: C.text3, marginTop: 1 }}>{fmtAgo(o.created_at)}</div>
                         </td>
                       </tr>
                     )
@@ -831,7 +831,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                       <div style={{ width: 44, height: 44, borderRadius: 12, background: online ? C.greenBg : C.surface2, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🖥</div>
                       <div>
                         <div style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{m.display_name}</div>
-                        <div style={{ fontSize: 11, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+                        <div style={{ fontSize: 11, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
                         <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>📍 {m.location || '--'} · {m.state}</div>
                       </div>
                     </div>
@@ -843,9 +843,9 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr) 2fr 2fr 2fr', gap: 10 }}>
                     {layers.map((has: boolean, i: number) => (
                       <div key={i} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px', textAlign: 'center', borderTop: '2px solid ' + (online ? (has ? C.green : C.red) : C.border2) }}>
-                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
+                        <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
                         <div style={{ fontSize: 18, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: online ? (has ? C.green : C.red) : C.text3 }}>{online ? (has ? 'Stocked' : 'Empty') : '--'}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: online ? (has ? C.green : C.red) : C.text3 }}>{online ? (has ? 'Stocked' : 'Empty') : '--'}</div>
                       </div>
                     ))}
                     {[
@@ -854,9 +854,9 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                       { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text, sub: online ? 'Active' : 'Disconnected' },
                     ].map(f => (
                       <div key={f.label} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                        <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
-                        {f.sub && <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>{f.sub}</div>}
+                        {f.sub && <div style={{ fontSize: 12, color: C.text3, marginTop: 2 }}>{f.sub}</div>}
                       </div>
                     ))}
                   </div>
@@ -867,7 +867,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                       { label: 'Cooling', value: m.cooling_state === true ? 'Active' : m.cooling_state === false ? 'Off' : '--' },
                     ].map(f => (
                       <div key={f.label}>
-                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                        <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{f.value}</div>
                       </div>
                     ))}
@@ -960,7 +960,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                      <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+                      <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
                     </div>
                     <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
                   </div>
@@ -976,7 +976,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                       { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
                     ].map(f => (
                       <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 9px' }}>
-                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                        <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: f.color }}>{f.value}</div>
                       </div>
                     ))}
@@ -1135,7 +1135,7 @@ function AdsPage({ machines }: { machines: any[] }) {
                   <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>
                     {machine ? machine.display_name : 'All Machines'} · {ad.start_time} – {ad.end_time} · {ad.days}
                   </div>
-                  <div style={{ fontSize: 10, color: C.blue, marginTop: 2, fontFamily: 'monospace' }}>{ad.media_url?.slice(0,50)}...</div>
+                  <div style={{ fontSize: 12, color: C.blue, marginTop: 2, fontFamily: 'monospace' }}>{ad.media_url?.slice(0,50)}...</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <Pill color={ad.active ? C.green : C.text3} bg={ad.active ? C.greenBg : C.surface2}>{ad.active ? 'Active' : 'Paused'}</Pill>
@@ -1256,7 +1256,7 @@ function LoyaltyPage() {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
                 {['Customer', 'Phone', 'Points', 'Status', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: C.text2 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1274,7 +1274,7 @@ function LoyaltyPage() {
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: 12, color: C.text2 }}>{c.phone}</td>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontSize: 18, fontWeight: 800, color: eligible ? C.green : C.text }}>{c.points || 0}</div>
-                      <div style={{ fontSize: 10, color: C.text3 }}>pts</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>pts</div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <Pill color={eligible ? C.green : C.amber} bg={eligible ? C.greenBg : C.amberBg}>{eligible ? 'Eligible to redeem' : (config.redeem_threshold - (c.points || 0)) + ' pts to go'}</Pill>
@@ -1458,7 +1458,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: C.text3, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1472,7 +1472,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
                       </div>
                       <div>
                         <div style={{ fontWeight: 600, color: C.text }}>{op.name || '—'}</div>
-                        <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{op.id.slice(0, 8)}...</div>
+                        <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace' }}>{op.id.slice(0, 8)}...</div>
                       </div>
                     </div>
                   </td>
@@ -1484,7 +1484,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
                   </td>
                   <td style={{ padding: '13px 16px' }}>
                     <div style={{ fontSize: 13, color: C.text }}>{op.state || '—'}</div>
-                    <div style={{ fontSize: 10, color: C.text3 }}>{op.country}</div>
+                    <div style={{ fontSize: 12, color: C.text3 }}>{op.country}</div>
                   </td>
                   <td style={{ padding: '13px 16px', color: C.text3, fontSize: 12 }}>
                     {op.created_at ? new Date(op.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -1615,7 +1615,7 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.display_name}</div>
-              <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{m.sn} · {m.location}</div>
+              <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace' }}>{m.sn} · {m.location}</div>
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 12, color: C.text2 }}>Maintenance mode</span>
@@ -1703,7 +1703,7 @@ function ThresholdsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSavi
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</label>
                 <input type="number" value={thresholds[m.id]?.[f.key] ?? ''} onChange={e => setThresholds({ ...thresholds, [m.id]: { ...thresholds[m.id], [f.key]: +e.target.value } })}
                   style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
-                <div style={{ fontSize: 10, color: C.text3, marginTop: 3 }}>{f.desc}</div>
+                <div style={{ fontSize: 12, color: C.text3, marginTop: 3 }}>{f.desc}</div>
               </div>
             ))}
           </div>
@@ -1745,7 +1745,7 @@ function NotificationsSection({ operatorId, SB_URL, SB_KEY, showSaved, showErr, 
               <input type="checkbox" checked={val} onChange={e => setAlerts({ ...alerts, [key]: e.target.checked })} style={{ width: 16, height: 16, accentColor: C.orange }} />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{key.replace(/_/g, ' ').replace(/\w/g, l => l.toUpperCase())}</div>
-                <div style={{ fontSize: 10, color: C.text3 }}>{val ? 'Enabled' : 'Disabled'}</div>
+                <div style={{ fontSize: 12, color: C.text3 }}>{val ? 'Enabled' : 'Disabled'}</div>
               </div>
             </label>
           ))}
@@ -1787,7 +1787,7 @@ function CooldownsSection({ showSaved }: any) {
           <thead>
             <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
               {['Alert Type', 'Severity', 'Cooldown'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.text3, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -1796,7 +1796,7 @@ function CooldownsSection({ showSaved }: any) {
               <tr key={c.type} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? C.surface : C.surface2 }}>
                 <td style={{ padding: '10px 16px' }}>
                   <div style={{ fontWeight: 600, color: C.text }}>{c.label}</div>
-                  <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{c.type}</div>
+                  <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace' }}>{c.type}</div>
                 </td>
                 <td style={{ padding: '10px 16px' }}>
                   <span style={{ background: SEV_BG[c.severity], color: SEV_COLOR[c.severity], padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{c.severity}</span>
@@ -1899,7 +1899,7 @@ function BillingSection({ role }: any) {
                 <span style={{ fontSize: 16 }}>{p.icon}</span>
                 <span style={{ fontSize: 14, fontWeight: 800, color: key === 'professional' ? '#fff' : C.text }}>{p.name}</span>
               </div>
-              {key === 'professional' && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 8px' }}>POPULAR</span>}
+              {key === 'professional' && <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 8px' }}>POPULAR</span>}
             </div>
             {/* Price */}
             <div style={{ padding: '12px 16px 0', borderBottom: '1px solid ' + C.border }}>
@@ -1935,7 +1935,7 @@ function BillingSection({ role }: any) {
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>🖥</div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                    <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn} · {m.location}, {m.state}</div>
+                    <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn} · {m.location}, {m.state}</div>
                     <div style={{ marginTop: 4 }}><Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill></div>
                   </div>
                 </div>
@@ -1952,9 +1952,9 @@ function BillingSection({ role }: any) {
               {/* Feature pills */}
               <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border }}>
                 {P.features.slice(0,3).map((f: string, i: number) => (
-                  <div key={i} style={{ fontSize: 10, color: C.text3, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 6, padding: '3px 8px' }}>{f}</div>
+                  <div key={i} style={{ fontSize: 12, color: C.text3, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 6, padding: '3px 8px' }}>{f}</div>
                 ))}
-                <div style={{ fontSize: 10, color: P.color, background: P.bg, borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>+{P.features.length - 3} more features</div>
+                <div style={{ fontSize: 12, color: P.color, background: P.bg, borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>+{P.features.length - 3} more features</div>
               </div>
             </div>
           </div>
@@ -2006,7 +2006,7 @@ function SettingsPage() {
         <div style={{ width: 200, flexShrink: 0, overflowY: 'auto' as const }}>
           {navItems.map(group => (
             <div key={group.group} style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{group.group}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{group.group}</div>
               {group.items.map(item => (
                 <button key={item.key} onClick={() => { if (item.key === 'danger' && settingsRole !== 'super_admin') return; setActiveSection(item.key) }} style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2,
@@ -2146,12 +2146,12 @@ function LocationsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSavin
           <div style={{ fontWeight: 600, fontSize: 13, color: C.text, marginBottom: 10 }}>{m.display_name}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const }}>Location</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const }}>Location</label>
               <input value={m.location || ''} onChange={e => setMachines(machines.map(x => x.id === m.id ? { ...x, location: e.target.value } : x))}
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 12, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const }}>State</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const }}>State</label>
               <input value={m.state || ''} onChange={e => setMachines(machines.map(x => x.id === m.id ? { ...x, state: e.target.value } : x))}
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 12, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
             </div>
