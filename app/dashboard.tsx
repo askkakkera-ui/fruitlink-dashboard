@@ -88,6 +88,8 @@ const NAV_ITEMS = [
   { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
   { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
+  { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
+  { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
 ]
 
@@ -964,6 +966,321 @@ function FleetMapPage({ machines }: { machines: any[] }) {
 }
 
 
+
+function AdsPage({ machines }: { machines: any[] }) {
+  const [ads, setAds] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ machine_id: 'all', title: '', media_url: '', media_type: 'image', start_time: '00:00', end_time: '23:59', days: ['mon','tue','wed','thu','fri','sat','sun'], active: true })
+  const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+
+  const loadAds = () => {
+    fetch(SB_URL + '/rest/v1/ads?select=*&order=created_at.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      .then(r => r.json()).then(d => { setAds(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => { setAds([]); setLoading(false) })
+  }
+  useEffect(() => { loadAds() }, [])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await fetch(SB_URL + '/rest/v1/ads', {
+        method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ ...form, machine_id: form.machine_id === 'all' ? null : form.machine_id, days: form.days.join(',') })
+      })
+      setShowForm(false)
+      setForm({ machine_id: 'all', title: '', media_url: '', media_type: 'image', start_time: '00:00', end_time: '23:59', days: ['mon','tue','wed','thu','fri','sat','sun'], active: true })
+      loadAds()
+    } catch(e) { alert('Save failed — make sure the ads table exists in Supabase') }
+    setSaving(false)
+  }
+
+  const toggleAd = async (id: string, active: boolean) => {
+    await fetch(SB_URL + '/rest/v1/ads?id=eq.' + id, { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ active: !active }) })
+    loadAds()
+  }
+
+  const deleteAd = async (id: string) => {
+    await fetch(SB_URL + '/rest/v1/ads?id=eq.' + id, { method: 'DELETE', headers })
+    loadAds()
+  }
+
+  const DAYS = ['mon','tue','wed','thu','fri','sat','sun']
+  const DAY_LABELS: any = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' }
+
+  return (
+    <div style={{ padding: '22px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Ad Manager</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Schedule ads by machine, time, and day</div>
+        </div>
+        <button onClick={() => setShowForm(!showForm)} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Ad</button>
+      </div>
+
+      {/* Create Ad Form */}
+      {showForm && (
+        <div style={{ background: C.surface, border: '1px solid ' + C.orange + '60', borderRadius: 14, padding: '20px 24px', marginBottom: 22 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 18 }}>New Ad Campaign</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Title</label>
+              <input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Summer Promo Ad"
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Machine</label>
+              <select value={form.machine_id} onChange={e => setForm({...form, machine_id: e.target.value})}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2 }}>
+                <option value="all">All Machines</option>
+                {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Media URL (JPEG / MP4)</label>
+              <input value={form.media_url} onChange={e => setForm({...form, media_url: e.target.value})} placeholder="https://..."
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Media Type</label>
+              <select value={form.media_type} onChange={e => setForm({...form, media_type: e.target.value})}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2 }}>
+                <option value="image">Image (JPEG/PNG)</option>
+                <option value="video">Video (MP4)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Start Time</label>
+              <input type="time" value={form.start_time} onChange={e => setForm({...form, start_time: e.target.value})}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>End Time</label>
+              <input type="time" value={form.end_time} onChange={e => setForm({...form, end_time: e.target.value})}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>Active Days</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {DAYS.map(d => {
+                const on = form.days.includes(d)
+                return (
+                  <button key={d} onClick={() => setForm({...form, days: on ? form.days.filter(x => x !== d) : [...form.days, d]})}
+                    style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid ' + (on ? C.orange : C.border), background: on ? C.orange : C.surface2, color: on ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    {DAY_LABELS[d]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={save} disabled={saving || !form.title || !form.media_url} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Saving...' : 'Save Ad'}
+            </button>
+            <button onClick={() => setShowForm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text2, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Supabase table notice */}
+      <div style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', marginBottom: 18, fontSize: 12, color: C.text2 }}>
+        <b style={{ color: C.text }}>Setup required:</b> Create an <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>ads</code> table in Supabase with columns:
+        <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace', marginLeft: 6 }}>id, machine_id, title, media_url, media_type, start_time, end_time, days, active, created_at</code>
+      </div>
+
+      {/* Ad list */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading ads...</div>
+      ) : ads.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: '1px solid ' + C.border }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🎬</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No ads scheduled yet</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Create your first ad campaign to monetize the machine screen</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {ads.map((ad: any) => {
+            const machine = machines.find((m: any) => m.id === ad.machine_id)
+            return (
+              <div key={ad.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 10, background: C.orangeBg, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                  {ad.media_type === 'video' ? '🎥' : '🖼'}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{ad.title}</div>
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>
+                    {machine ? machine.display_name : 'All Machines'} · {ad.start_time} – {ad.end_time} · {ad.days}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.blue, marginTop: 2, fontFamily: 'monospace' }}>{ad.media_url?.slice(0,50)}...</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <Pill color={ad.active ? C.green : C.text3} bg={ad.active ? C.greenBg : C.surface2}>{ad.active ? 'Active' : 'Paused'}</Pill>
+                  <div onClick={() => toggleAd(ad.id, ad.active)} style={{ width: 36, height: 20, borderRadius: 10, background: ad.active ? C.orange : C.border2, cursor: 'pointer', position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute' as const, top: 2, left: ad.active ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+                  </div>
+                  <button onClick={() => deleteAd(ad.id)} style={{ background: C.redBg, color: C.red, border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Delete</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+function LoyaltyPage() {
+  const [customers, setCustomers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ phone: '', name: '', points: 0 })
+  const [config, setConfig] = useState({ points_per_cup: 10, redeem_threshold: 100, redeem_discount_pct: 10 })
+  const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+
+  const loadCustomers = () => {
+    fetch(SB_URL + '/rest/v1/loyalty?select=*&order=points.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      .then(r => r.json()).then(d => { setCustomers(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => { setCustomers([]); setLoading(false) })
+  }
+  useEffect(() => { loadCustomers() }, [])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await fetch(SB_URL + '/rest/v1/loyalty', {
+        method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ phone: form.phone, name: form.name, points: form.points, joined_at: new Date().toISOString() })
+      })
+      setShowForm(false)
+      setForm({ phone: '', name: '', points: 0 })
+      loadCustomers()
+    } catch { alert('Save failed — make sure the loyalty table exists in Supabase') }
+    setSaving(false)
+  }
+
+  const addPoints = async (id: string, current: number, add: number) => {
+    await fetch(SB_URL + '/rest/v1/loyalty?id=eq.' + id, { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ points: current + add }) })
+    loadCustomers()
+  }
+
+  const filtered = customers.filter((c: any) => !search || c.phone?.includes(search) || c.name?.toLowerCase().includes(search.toLowerCase()))
+  const totalPoints = customers.reduce((s: number, c: any) => s + (c.points || 0), 0)
+  const eligible = customers.filter((c: any) => c.points >= config.redeem_threshold).length
+
+  return (
+    <div style={{ padding: '22px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Loyalty Programme</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{customers.length} enrolled customers · {config.points_per_cup} pts per cup</div>
+        </div>
+        <button onClick={() => setShowForm(!showForm)} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ Add Customer</button>
+      </div>
+
+      {/* Config cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
+        {[
+          { label: 'Points per Cup', value: config.points_per_cup, color: C.orange, icon: '⭐', pct: 100 },
+          { label: 'Redeem Threshold', value: config.redeem_threshold + ' pts', color: C.blue, icon: '🎁', pct: 70 },
+          { label: 'Eligible to Redeem', value: eligible, color: C.green, icon: '✅', pct: customers.length > 0 ? (eligible/customers.length)*100 : 0 },
+        ].map(s => <StatCard key={s.label} {...s} sub="" />)}
+      </div>
+
+      {/* Add customer form */}
+      {showForm && (
+        <div style={{ background: C.surface, border: '1px solid ' + C.orange + '60', borderRadius: 14, padding: '20px 24px', marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16 }}>Add Customer</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 14 }}>
+            {[['Phone Number', 'phone', 'tel', '+91 9xxxxxxxxx'], ['Customer Name', 'name', 'text', 'Name'], ['Starting Points', 'points', 'number', '0']].map(([label, key, type, placeholder]) => (
+              <div key={key}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>{label}</label>
+                <input type={type} value={(form as any)[key]} onChange={e => setForm({...form, [key]: type === 'number' ? +e.target.value : e.target.value})} placeholder={placeholder}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={save} disabled={saving || !form.phone} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>Save</button>
+            <button onClick={() => setShowForm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text2, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Setup notice */}
+      <div style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', marginBottom: 18, fontSize: 12, color: C.text2 }}>
+        <b style={{ color: C.text }}>Setup required:</b> Create a <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>loyalty</code> table in Supabase with columns:
+        <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace', marginLeft: 6 }}>id, phone, name, points, joined_at, last_order_at</code>
+      </div>
+
+      {/* Search */}
+      <div style={{ marginBottom: 16 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by phone or name..."
+          style={{ width: '100%', maxWidth: 320, padding: '9px 14px', borderRadius: 10, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+      </div>
+
+      {/* Customer list */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading customers...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: '1px solid ' + C.border }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⭐</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No loyalty customers yet</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Add customers and reward them for repeat purchases</div>
+        </div>
+      ) : (
+        <div style={{ background: C.surface, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
+                {['Customer', 'Phone', 'Points', 'Status', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((c: any, i: number) => {
+                const eligible = c.points >= config.redeem_threshold
+                return (
+                  <tr key={c.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? C.surface : C.surface2 }}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: C.orangeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: C.orange }}>{(c.name || 'C')[0].toUpperCase()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{c.name || 'Customer'}</div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: 12, color: C.text2 }}>{c.phone}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: eligible ? C.green : C.text }}>{c.points || 0}</div>
+                      <div style={{ fontSize: 10, color: C.text3 }}>pts</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Pill color={eligible ? C.green : C.amber} bg={eligible ? C.greenBg : C.amberBg}>{eligible ? 'Eligible to redeem' : (config.redeem_threshold - (c.points || 0)) + ' pts to go'}</Pill>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => addPoints(c.id, c.points, config.points_per_cup)} style={{ background: C.orangeBg, color: C.orange, border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>+{config.points_per_cup}</button>
+                        {eligible && <button onClick={() => addPoints(c.id, c.points, -config.redeem_threshold)} style={{ background: C.greenBg, color: C.green, border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Redeem</button>}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding: '10px 16px', borderTop: '1px solid ' + C.border, background: C.surface2, fontSize: 11, color: C.text3 }}>
+            {filtered.length} customers · {totalPoints} total points outstanding
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ComingSoon({ label }: { label: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
@@ -1797,6 +2114,8 @@ export default function Dashboard() {
     operators: role === 'super_admin'
       ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    ads: <AdsPage machines={machines} />,
+    loyalty: <LoyaltyPage />,
     settings: <SettingsPage />,
     machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
     map: <FleetMapPage machines={machines} />,
