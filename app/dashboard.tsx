@@ -1830,19 +1830,22 @@ function BillingSection({ role }: any) {
   return (
     <div>
       <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 2 }}>Billing & Plans</div>
-      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage subscription plan per machine · Pricing TBD</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage subscription plan per machine</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 26 }}>
         {Object.entries(PLANS).map(([key, p]: any) => (
           <div key={key} style={{ background: C.surface, border: '2px solid ' + (key === 'professional' ? C.orange : C.border), borderRadius: 14, overflow: 'hidden' }}>
             <div style={{ background: key === 'professional' ? C.orange : C.surface2, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ fontSize: 16 }}>{p.icon}</span><span style={{ fontSize: 14, fontWeight: 800, color: key === 'professional' ? '#fff' : C.text }}>{p.name}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontSize: 16 }}>{p.icon}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: key === 'professional' ? '#fff' : C.text }}>{p.name}</span>
+              </div>
               {key === 'professional' && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 8px' }}>POPULAR</span>}
             </div>
             <div style={{ padding: '12px 16px' }}>
-              <div style={{ fontSize: 12, color: p.color, fontWeight: 700, marginBottom: 10 }}>Pricing TBD · per machine · per month</div>
+              <div style={{ fontSize: 12, color: p.color, fontWeight: 700, marginBottom: 10 }}>Pricing TBD per machine/month</div>
               {p.features.map((f: string, i: number) => (
                 <div key={i} style={{ display: 'flex', gap: 7, fontSize: 12, color: C.text2, marginBottom: 5 }}>
-                  <span style={{ color: p.color, fontWeight: 700 }}>✓</span><span>{f}</span>
+                  <span style={{ color: p.color, fontWeight: 700 }}>checkmark</span><span>{f}</span>
                 </div>
               ))}
             </div>
@@ -1850,306 +1853,33 @@ function BillingSection({ role }: any) {
         ))}
       </div>
       <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Your Machines</div>
-      {loading ? <div style={{ color: C.text3 }}>Loading...</div> : machines.map((m: any) => (
+      {loading ? (
+        <div style={{ color: C.text3 }}>Loading...</div>
+      ) : machines.map((m: any) => (
         <div key={m.id} style={{ background: C.surface, border: '2px solid ' + (m.status === 'online' ? C.green + '50' : C.red + '50'), borderRadius: 14, marginBottom: 14, overflow: 'hidden' }}>
           <div style={{ height: 4, background: m.status === 'online' ? C.green : C.red }} />
           <div style={{ padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 16 }}>
             <div style={{ display: 'flex', gap: 14 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🖥</div>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>computer</div>
               <div>
                 <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 4 }}>{m.display_name}</div>
                 <div style={{ fontSize: 13, color: C.text2, fontFamily: 'monospace', marginBottom: 4 }}>SN: {m.sn}</div>
-                <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>📍 {m.location}, {m.state}</div>
-                <Pill color={m.status === 'online' ? C.green : C.red} bg={m.status === 'online' ? C.greenBg : C.redBg}>
-                  <Dot color={m.status === 'online' ? C.green : C.red} pulse={m.status === 'online'} size={6} />&nbsp;{m.status === 'online' ? 'Online' : 'Offline'}
-                </Pill>
+                <div style={{ fontSize: 13, color: C.text2 }}>location {m.location}, {m.state}</div>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 8 }}>
-              <div style={{ fontSize: 12, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const }}>Current Plan</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>🟢 Starter</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>Starter Plan</div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.orange, background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>↑ Professional</button>
-                <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.blue, background: 'transparent', color: C.blue, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>↑ Enterprise</button>
+                <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.orange, background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Upgrade to Professional</button>
+                <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.blue, background: 'transparent', color: C.blue, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Upgrade to Enterprise</button>
               </div>
             </div>
           </div>
         </div>
       ))}
-      <div style={{ marginTop: 12, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
-        <b style={{ color: C.text }}>💳 Payment Integration:</b> Razorpay subscription billing activates once pricing is confirmed.
-      </div>
     </div>
   )
 }
-
-export default function Dashboard() {
-  const [active, setActive] = useState('console')
-  const [machines, setMachines] = useState<any[]>([])
-  const [alerts, setAlerts] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const [role, setRole] = useState('operator')
-  const [name, setName] = useState('Admin')
-  const [operatorId, setOperatorId] = useState('')
-  useEffect(() => {
-    setRole(getCookie('fl_role') || 'operator')
-    setName(getCookie('fl_operator_name') || 'Admin')
-    setOperatorId(getCookie('fl_operator_id') || '')
-  }, [])
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
-    let machineIds: string[] = []
-    if (role !== 'super_admin' && operatorId) {
-      const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id', { headers })
-      const moData = await moRes.json()
-      machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
-    }
-    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&id=eq.none' : '')
-    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
-
-    const [mRes, aRes] = await Promise.all([
-      fetch(SB_URL + '/rest/v1/machines?select=*&order=created_at.asc' + idFilter, { headers }),
-      fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
-    ])
-    const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
-
-    // Fetch latest telemetry per machine individually
-    const enriched: any[] = []
-    if (Array.isArray(mData)) {
-      for (const m of mData) {
-        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=ts.desc&limit=1', { headers })
-        const tData = await tRes.json()
-        const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
-        enriched.push({ ...m, ...tel })
-      }
-    }
-
-    setMachines(enriched)
-    setAlerts(Array.isArray(aData) ? aData : [])
-    setLoading(false)
-  }, [role, operatorId])
-
-  useEffect(() => { fetchData() }, [fetchData])
-
-  const handleLogout = () => {
-    document.cookie.split(';').forEach(c => {
-      document.cookie = c.split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
-    })
-    window.location.href = '/login'
-  }
-
-  const activeAlertCount = alerts.filter(a => !a.resolved_at).length
-
-  const pages: Record<string, React.ReactElement> = {
-    console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
-    alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
-    operators: role === 'super_admin'
-      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    ads: <AdsPage machines={machines} />,
-    loyalty: <LoyaltyPage />,
-    settings: <SettingsPage />,
-    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
-    map: <FleetMapPage machines={machines} />,
-    orders: <OrdersPage />,
-  }
-
-  return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: ${C.bg}; }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
-        @keyframes fl-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-      `}</style>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar active={active} setActive={setActive} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <TopBar active={active} />
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {pages[active] || <ComingSoon label={active} />}
-          </div>
-        </div>
-      </div>
-    </>
-  )
-}
-export default function Dashboard() {
-  const [active, setActive] = useState('console')
-  const [machines, setMachines] = useState<any[]>([])
-  const [alerts, setAlerts] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const [role, setRole] = useState('operator')
-  const [name, setName] = useState('Admin')
-  const [operatorId, setOperatorId] = useState('')
-  useEffect(() => {
-    setRole(getCookie('fl_role') || 'operator')
-    setName(getCookie('fl_operator_name') || 'Admin')
-    setOperatorId(getCookie('fl_operator_id') || '')
-  }, [])
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
-    let machineIds: string[] = []
-    if (role !== 'super_admin' && operatorId) {
-      const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id', { headers })
-      const moData = await moRes.json()
-      machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
-    }
-    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&id=eq.none' : '')
-    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
-
-    const [mRes, aRes] = await Promise.all([
-      fetch(SB_URL + '/rest/v1/machines?select=*&order=created_at.asc' + idFilter, { headers }),
-      fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
-    ])
-    const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
-
-    // Fetch latest telemetry per machine individually
-    const enriched: any[] = []
-    if (Array.isArray(mData)) {
-      for (const m of mData) {
-        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=ts.desc&limit=1', { headers })
-        const tData = await tRes.json()
-        const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
-        enriched.push({ ...m, ...tel })
-      }
-    }
-
-    setMachines(enriched)
-    setAlerts(Array.isArray(aData) ? aData : [])
-    setLoading(false)
-  }, [role, operatorId])
-
-  useEffect(() => { fetchData() }, [fetchData])
-
-  const handleLogout = () => {
-    document.cookie.split(';').forEach(c => {
-      document.cookie = c.split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
-    })
-    window.location.href = '/login'
-  }
-
-  const activeAlertCount = alerts.filter(a => !a.resolved_at).length
-
-  const pages: Record<string, React.ReactElement> = {
-    console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
-    alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
-    operators: role === 'super_admin'
-      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    ads: <AdsPage machines={machines} />,
-    loyalty: <LoyaltyPage />,
-    settings: <SettingsPage />,
-    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
-    map: <FleetMapPage machines={machines} />,
-    orders: <OrdersPage />,
-  }
-
-  return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: ${C.bg}; }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
-        @keyframes fl-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-      `}</style>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar active={active} setActive={setActive} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <TopBar active={active} />
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {pages[active] || <ComingSoon label={active} />}
-          </div>
-        </div>
-      </div>
-    </>
-  )
-}function BillingSection({ role }: any) {
-  const [machines, setMachines] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const PLANS: any = {
-    starter: { name: 'Starter', color: C.green, bg: C.greenBg, icon: '🟢', features: ['Live Console + Machine List + Fleet Map','Revenue & P&L Analytics','17 WhatsApp alert types','Remote machine config','UPI + NFC payments (0% MDR)','Up to 2 operators'] },
-    professional: { name: 'Professional', color: C.orange, bg: C.orangeBg, icon: '⭐', features: ['Everything in Starter','Ad Content Manager','Loyalty Programme','Operators Management + RBAC','Up to 10 operators'] },
-    enterprise: { name: 'Enterprise', color: C.blue, bg: C.blueBg, icon: '🏢', features: ['Everything in Professional','White-label dashboard','REST API + Webhooks','SAML SSO','Dedicated infrastructure','Unlimited operators'] },
-  }
-
-  useEffect(() => {
-    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location,state', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
-      .then(r => r.json()).then(d => { setMachines(Array.isArray(d) ? d : []); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
-
-  return (
-    <div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 2 }}>Billing & Plans</div>
-      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage subscription plan per machine · Pricing TBD</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 26 }}>
-        {Object.entries(PLANS).map(([key, p]: any) => (
-          <div key={key} style={{ background: C.surface, border: '2px solid ' + (key === 'professional' ? C.orange : C.border), borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ background: key === 'professional' ? C.orange : C.surface2, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ fontSize: 16 }}>{p.icon}</span><span style={{ fontSize: 14, fontWeight: 800, color: key === 'professional' ? '#fff' : C.text }}>{p.name}</span></div>
-              {key === 'professional' && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 8px' }}>POPULAR</span>}
-            </div>
-            <div style={{ padding: '12px 16px' }}>
-              <div style={{ fontSize: 12, color: p.color, fontWeight: 700, marginBottom: 12 }}>Pricing TBD · per machine · per month</div>
-              {p.features.map((f: string, i: number) => (
-                <div key={i} style={{ display: 'flex', gap: 7, fontSize: 12, color: C.text2, marginBottom: 6 }}>
-                  <span style={{ color: p.color, fontWeight: 700 }}>✓</span><span>{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Your Machines</div>
-      {loading ? <div style={{ color: C.text3 }}>Loading...</div> : machines.map((m: any) => (
-        <div key={m.id} style={{ background: C.surface, border: '2px solid ' + (m.status === 'online' ? C.green + '50' : C.red + '50'), borderRadius: 14, marginBottom: 14, overflow: 'hidden' }}>
-          <div style={{ height: 4, background: m.status === 'online' ? C.green : C.red }} />
-          <div style={{ padding: '18px 22px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 16 }}>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🖥</div>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 4 }}>{m.display_name}</div>
-                  <div style={{ fontSize: 13, color: C.text2, fontFamily: 'monospace', marginBottom: 4 }}>SN: {m.sn}</div>
-                  <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>📍 {m.location}, {m.state}</div>
-                  <Pill color={m.status === 'online' ? C.green : C.red} bg={m.status === 'online' ? C.greenBg : C.redBg}>
-                    <Dot color={m.status === 'online' ? C.green : C.red} pulse={m.status === 'online'} size={6} />&nbsp;{m.status === 'online' ? 'Online' : 'Offline'}
-                  </Pill>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 8 }}>
-                <div style={{ fontSize: 12, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const }}>Current Plan</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>🟢 Starter</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.orange, background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>↑ Professional</button>
-                  <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.blue, background: 'transparent', color: C.blue, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>↑ Enterprise</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
-      <div style={{ marginTop: 12, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
-        <b style={{ color: C.text }}>💳 Payment Integration:</b> Razorpay subscription billing activates once pricing is confirmed.
-      </div>
-    </div>
-  )
-}
-
 
 export default function Dashboard() {
   const [active, setActive] = useState('console')
