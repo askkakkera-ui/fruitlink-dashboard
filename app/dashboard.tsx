@@ -1038,7 +1038,7 @@ export default function Dashboard() {
     const [mRes, aRes, tRes] = await Promise.all([
       fetch(SB_URL + '/rest/v1/machines?select=*&order=created_at.asc' + idFilter, { headers }),
       fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
-      fetch(SB_URL + '/rest/v1/telemetry?select=machine_id,inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state&order=created_at.desc&limit=10', { headers }),
+      fetch(SB_URL + '/rest/v1/telemetry?select=machine_id,inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state&order=created_at.desc&limit=20', { headers }),
     ])
     const [mData, aData, tData] = await Promise.all([mRes.json(), aRes.json(), tRes.json()])
 
