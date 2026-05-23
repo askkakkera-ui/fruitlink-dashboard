@@ -1814,6 +1814,62 @@ function CooldownsSection({ showSaved }: any) {
   )
 }
 
+function SettingsPage() {
+  const [saved, setSaved] = useState(false)
+  const [err, setErr] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [active, setActive] = useState('machine_config')
+  const role = getCookie('fl_role') || 'operator'
+  const operatorId = getCookie('fl_operator_id') || ''
+
+  const showSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+  const showErr = () => { setErr(true); setTimeout(() => setErr(false), 3000) }
+
+  const tabs = [
+    { id: 'machine_config', label: 'Machine Config', icon: '⚙️' },
+    { id: 'thresholds', label: 'Thresholds', icon: '🌡️' },
+    { id: 'notifications', label: 'Notifications', icon: '🔔' },
+    { id: 'cooldowns', label: 'Alert Cooldowns', icon: '⏱️' },
+    { id: 'billing', label: 'Billing', icon: '💳' },
+    ...(role === 'super_admin' ? [{ id: 'danger', label: 'Danger Zone', icon: '⚠️' }] : []),
+  ]
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 900 }}>
+      {saved && <div style={{ position: 'fixed', top: 20, right: 24, background: C.green, color: '#fff', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, zIndex: 9999 }}>✓ Saved!</div>}
+      {err && <div style={{ position: 'fixed', top: 20, right: 24, background: C.red, color: '#fff', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, zIndex: 9999 }}>✗ Error saving</div>}
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 18 }}>Settings</div>
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 24, flexWrap: 'wrap' as const }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setActive(t.id)}
+            style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid ' + (active === t.id ? C.orange : C.border), background: active === t.id ? C.orange : C.surface, color: active === t.id ? '#fff' : C.text2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+      {active === 'machine_config' && <MachineConfigSection SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
+      {active === 'thresholds' && <ThresholdsSection SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
+      {active === 'notifications' && <NotificationsSection operatorId={operatorId} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
+      {active === 'cooldowns' && <CooldownsSection showSaved={showSaved} />}
+      {active === 'billing' && <BillingSection role={role} />}
+      {active === 'danger' && role === 'super_admin' && (
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.red, marginBottom: 16 }}>⚠️ Danger Zone</div>
+          <div style={{ background: C.surface, border: '1px solid ' + C.red + '40', borderRadius: 12, padding: 20 }}>
+            <div style={{ fontSize: 13, color: C.text2, marginBottom: 12 }}>Destructive actions. Cannot be undone.</div>
+            <button onClick={() => { if (confirm('Clear ALL alerts from database?')) { fetch(SB_URL + '/rest/v1/alerts', { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, Prefer: 'return=minimal' } }).then(() => showSaved()).catch(() => showErr()) } }}
+              style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              🗑️ Clear All Alerts
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 function BillingSection({ role }: any) {
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
