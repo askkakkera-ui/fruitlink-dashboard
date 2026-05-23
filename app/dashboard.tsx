@@ -332,7 +332,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
   return (
     <div style={{ padding: '24px 28px' }}>
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
         {stats.map(s => <StatCard key={s.label} {...s} />)}
       </div>
 
@@ -450,7 +450,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
       </div>
 
       {/* Severity cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
         {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map(s => (
           <div key={s} onClick={() => setSevFilter(sevFilter === s ? 'all' : s)} style={{
             background: sevFilter === s ? SEVERITY_BG[s] : C.surface,
@@ -607,7 +607,7 @@ function OrdersPage() {
         <div style={{ fontSize: 13, color: C.text2 }}>{totalOrders} total orders across all machines</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
         {[
           { label: 'Total Orders', value: totalOrders, color: C.blue, icon: '🧾', pct: 100 },
           { label: 'Total Revenue', value: fmtAmount(totalRevenue), color: C.green, icon: '₹', pct: paid > 0 ? (paid/totalOrders)*100 : 0 },
@@ -1140,7 +1140,7 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
         const c: Record<string, any> = {}
         d.forEach((m: any) => {
           c[m.id] = {
-            price_200ml: 80, price_250ml: 100, price_355ml: 120, price_400ml: 150,
+            price_200ml: 80, price_250ml: 100, price_300ml: 120,
             default_volume: 250, max_daily_cups: 200, maintenance_mode: false
           }
         })
@@ -1183,8 +1183,8 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 10 }}>Cup Pricing (₹)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-              {[['200ml', 'price_200ml'], ['250ml', 'price_250ml'], ['355ml', 'price_355ml'], ['400ml', 'price_400ml']].map(([label, key]) => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+              {[['200ml', 'price_200ml'], ['250ml', 'price_250ml'], ['300ml', 'price_300ml']].map(([label, key]) => (
                 <div key={key}>
                   <label style={{ display: 'block', fontSize: 11, color: C.text2, marginBottom: 4, fontWeight: 600 }}>{label}</label>
                   <div style={{ position: 'relative' as const }}>
@@ -1202,7 +1202,7 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
               <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 6 }}>Default Cup Size</label>
               <select value={config[m.id]?.default_volume ?? 250} onChange={e => setConfig({ ...config, [m.id]: { ...config[m.id], default_volume: +e.target.value } })}
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2 }}>
-                {[200, 250, 355, 400].map(v => <option key={v} value={v}>{v}ml</option>)}
+                {[200, 250, 300].map(v => <option key={v} value={v}>{v}ml</option>)}
               </select>
             </div>
             <div>
