@@ -1772,6 +1772,9 @@ function CooldownsSection({ showSaved }: any) {
     { type: 'vend_failure', label: 'Vend Failure', hours: 0.5, severity: 'HIGH' },
     { type: 'cup_empty', label: 'Cups Empty', hours: 2, severity: 'HIGH' },
     { type: 'film_empty', label: 'Film Empty', hours: 2, severity: 'HIGH' },
+    { type: 'waste_bin_full', label: 'Waste Bin Full', hours: 4, severity: 'HIGH' },
+    { type: 'power_loss', label: 'Power Loss', hours: 0.5, severity: 'CRITICAL' },
+    { type: 'unusual_access', label: 'Unusual Cabinet Access', hours: 1, severity: 'HIGH' },
   ]
   const SEV_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue }
   const SEV_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg }
