@@ -1312,7 +1312,7 @@ function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
-  const operatorId = getCookie('fl_operator_id') || ''
+  const [operatorId, setOperatorId] = useState('')
   const [name, setName] = useState('Admin')
   const [role, setRole] = useState('operator')
   const [state, setState] = useState('Telangana')
@@ -1320,6 +1320,7 @@ function SettingsPage() {
     setName(getCookie('fl_operator_name') || 'Admin')
     setRole(getCookie('fl_role') || 'operator')
     setState(getCookie('fl_state') || 'Telangana')
+    setOperatorId(getCookie('fl_operator_id') || '')
   }, [])
   const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
   const SB_URL2 = SB_URL
