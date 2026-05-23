@@ -640,7 +640,7 @@ function OrdersPage() {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map((h, i) => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1017,7 +1017,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1242,7 +1242,7 @@ function CooldownsSection({ showSaved }: any) {
           <thead>
             <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
               {['Alert Type', 'Severity', 'Cooldown'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
               ))}
             </tr>
           </thead>
