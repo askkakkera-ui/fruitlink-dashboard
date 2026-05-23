@@ -6,9 +6,9 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ─── Design Tokens ───────────────────────────────────────────────
 const C = {
-  sidebar:   '#3d4268',
-  sidebarB:  '#343a5e',
-  sidebarT:  '#454d78',
+  sidebar:   '#1c2333',
+  sidebarB:  '#161b27',
+  sidebarT:  '#2a3649',
   active:    '#f97316',
   activeGlow:'#f9731620',
   bg:        '#f0f2f7',
