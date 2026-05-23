@@ -404,6 +404,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
 function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
   const [sevFilter, setSevFilter] = useState('all')
+  const [expandedM, setExpandedM] = useState<Record<string, boolean>>({})
   const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
   const SEVERITY_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg, LOW: C.greenBg }
   const ALERT_LABELS: any = {
@@ -477,7 +478,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
         ))}
       </div>
 
-      {/* Table */}
+      {/* Grouped by Machine */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading alerts...</div>
       ) : filtered.length === 0 ? (
@@ -487,51 +488,73 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
           <div style={{ fontSize: 13, color: C.text2 }}>No alerts match your current filters.</div>
         </div>
       ) : (
-        <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
-                {['Severity', 'Machine', 'Alert', 'Time', 'Status'].map((h, i) => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em', width: ['10%','20%','40%','15%','15%'][i] }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a: any, i: number) => {
-                const m = getMachine(a.machine_id)
-                return (
-                  <tr key={a.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
-                    <td style={{ padding: '13px 16px' }}>
-                      <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
-                    </td>
-                    <td style={{ padding: '13px 16px' }}>
-                      <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '—'}</div>
-                      <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn?.slice(0, 10) || a.machine_id?.slice(0, 10)}...</div>
-                    </td>
-                    <td style={{ padding: '13px 16px' }}>
-                      <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 10, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
-                      <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
-                    </td>
-                    <td style={{ padding: '13px 16px' }}>
-                      <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
-                      <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
-                    </td>
-                    <td style={{ padding: '13px 16px' }}>
-                      {!a.resolved_at ? (
-                        <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
-                      ) : (
-                        <Pill color={C.green} bg={C.greenBg}>✓ Resolved</Pill>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, background: C.surface2, fontSize: 11, color: C.text3 }}>
-            Showing {filtered.length} of {alerts.length} alerts
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {machines.map((m: any) => {
+            const machAlerts = filtered.filter((a: any) => a.machine_id === m.id)
+            if (machAlerts.length === 0) return null
+            const isOpen = expandedM[m.id] !== false
+            return (
+              <div key={m.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+                {/* Machine header — click to expand/collapse */}
+                <div onClick={() => setExpandedM(prev => ({ ...prev, [m.id]: !isOpen }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: C.surface2, borderBottom: isOpen ? `1px solid ${C.border}` : 'none', userSelect: 'none' as const }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 16 }}>{m.status === 'online' ? '🟢' : '🔴'}</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                    <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 1 }}>{m.location} · {m.sn}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ background: C.redBg, color: C.red, fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>{machAlerts.length} alert{machAlerts.length !== 1 ? 's' : ''}</span>
+                    <span style={{ fontSize: 16, color: C.text3, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+                  </div>
+                </div>
+                {/* Alert rows */}
+                {isOpen && (
+                  <div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
+                          {['Severity', 'Alert', 'Time', 'Status'].map((h, i) => (
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {machAlerts.map((a: any, i: number) => (
+                          <tr key={a.id} style={{ borderBottom: i < machAlerts.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                            <td style={{ padding: '12px 16px' }}>
+                              <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 10, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
+                              <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
+                              <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              {!a.resolved_at ? (
+                                <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
+                              ) : (
+                                <Pill color={C.green} bg={C.greenBg}>✓ Resolved</Pill>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ padding: '8px 16px', borderTop: `1px solid ${C.border}`, background: C.surface2, fontSize: 11, color: C.text3 }}>
+                      Showing {machAlerts.length} alert{machAlerts.length !== 1 ? 's' : ''} for {m.display_name}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
