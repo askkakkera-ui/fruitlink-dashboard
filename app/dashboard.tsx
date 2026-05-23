@@ -764,6 +764,107 @@ function FleetMapPage({ machines }: { machines: any[] }) {
   )
 }
 
+function MachinesPage({ machines, loading, fetchData }: any) {
+  const fmtTime = (t: string) => { if (!t) return '—'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Machine List</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{machines.length} machines registered · {machines.filter((m: any) => m.status === 'online').length} online</div>
+        </div>
+        <button onClick={fetchData} style={{ background: C.sidebar, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>↻ Refresh</button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+        {[
+          { label: 'Total Machines', value: machines.length, color: C.blue, icon: '🖥', pct: 100 },
+          { label: 'Online', value: machines.filter((m: any) => m.status === 'online').length, color: C.green, icon: '📡', pct: machines.length > 0 ? (machines.filter((m: any) => m.status === 'online').length / machines.length) * 100 : 0 },
+          { label: 'Offline', value: machines.filter((m: any) => m.status === 'offline').length, color: C.red, icon: '📴', pct: machines.length > 0 ? (machines.filter((m: any) => m.status === 'offline').length / machines.length) * 100 : 0 },
+        ].map(s => <StatCard key={s.label} {...s} sub="" />)}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading machines...</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {machines.map((m: any) => {
+            const online = m.status === 'online'
+            const temp = m.inner_temp_c
+            const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
+            const layers = [m.stock_l1, m.stock_l2, m.stock_l3]
+            return (
+              <div key={m.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+                <div style={{ height: 4, background: online ? C.green : C.border2 }} />
+                <div style={{ padding: '18px 22px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: online ? C.greenBg : C.surface2, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🖥</div>
+                      <div>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>{m.display_name}</div>
+                        <div style={{ fontSize: 11, color: C.text3, fontFamily: 'monospace', marginTop: 3 }}>{m.sn}</div>
+                        <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>📍 {m.location || '—'} · {m.state}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>
+                        <Dot color={online ? C.green : C.red} pulse={online} size={5} />
+                        {online ? 'Online' : 'Offline'}
+                      </Pill>
+                      {m.app_version && <Badge color={C.blue}>v{m.app_version}</Badge>}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr) 2fr 2fr 2fr', gap: 10 }}>
+                    {layers.map((has: boolean, i: number) => (
+                      <div key={i} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px', textAlign: 'center', borderTop: `2px solid ${online ? (has ? C.green : C.red) : C.border2}` }}>
+                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
+                        <div style={{ fontSize: 18, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: online ? (has ? C.green : C.red) : C.text3 }}>
+                          {online ? (has ? 'Stocked' : 'Empty') : '—'}
+                        </div>
+                      </div>
+                    ))}
+                    {[
+                      { label: 'Temperature', value: temp != null ? temp + '°C' : '—', color: tempColor, sub: temp != null ? (temp > 12 ? 'High ⚠️' : temp < 3 ? 'Low ⚠️' : 'Normal ✓') : '' },
+                      { label: 'Cup Tray', value: m.cup_present === true ? 'Present ✓' : m.cup_present === false ? 'Missing ⚠️' : '—', color: m.cup_present ? C.green : m.cup_present === false ? C.red : C.text3, sub: '' },
+                      { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text, sub: online ? 'Active now' : 'Disconnected' },
+                    ].map(f => (
+                      <div key={f.label} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
+                        {f.sub && <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>{f.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      {[
+                        { label: 'Machine ID', value: m.id.slice(0,8) + '...' },
+                        { label: 'Scale Weight', value: m.scale_weight_g != null ? m.scale_weight_g + 'g' : '—' },
+                        { label: 'Cooling', value: m.cooling_state === true ? 'Active' : m.cooling_state === false ? 'Off' : '—' },
+                      ].map(f => (
+                        <div key={f.label}>
+                          <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: f.label === 'Machine ID' ? 'monospace' : 'inherit' }}>{f.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Badge color={m.machine_halted ? C.red : C.green}>{m.machine_halted ? 'Halted' : 'Running'}</Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ComingSoon({ label }: { label: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
@@ -1300,7 +1401,7 @@ export default function Dashboard() {
       ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     settings: <SettingsPage />,
-    machines: <ComingSoon label="Machine Management" />,
+    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
   }
