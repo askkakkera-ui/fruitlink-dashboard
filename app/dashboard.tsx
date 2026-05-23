@@ -136,7 +136,7 @@ const NAV = [
   { label: 'Console', icon: '⊡', key: 'console', badge: 'live' },
   { label: 'Equipment Management', icon: '⊞', key: 'equipment', children: [{ label: 'Machine List', key: 'machines', icon: '▣' }, { label: 'Fleet Map', key: 'fleet', icon: '◎' }, { label: 'Alerts', key: 'alerts', icon: '!' }] },
   { label: 'Order Management', icon: '⊟', key: 'orders', children: [{ label: 'Orders List', key: 'orders-list', icon: '▤' }] },
-  { label: 'Operator Management', icon: '⊕', key: 'operators', children: [{ label: 'Operators', key: 'operators-list', icon: '▥' }] },
+  ...(getCookie('fl_role') === 'super_admin' ? [{ label: 'Operator Management', icon: '⊕', key: 'operators', children: [{ label: 'Operators', key: 'operators-list', icon: '▥' }] }] : []),
   { label: 'Settings', icon: '⊗', key: 'settings' },
 ];
 
@@ -1144,7 +1144,7 @@ export default function Dashboard() {
 
   const renderPage = () => {
     if (activeKey === 'fleet') return <FleetMap machines={machines} />;
-    if (activeKey === 'operators-list') return <OperatorsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
+    if (activeKey === 'operators-list') return getCookie('fl_role') === 'super_admin' ? <OperatorsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' /> : <div style={{padding:'60px',textAlign:'center',color:'#94a3b8',fontSize:14}}>Access restricted to Super Admins only.</div>
     if (activeKey === 'alerts') return <AlertsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
     if (activeKey === 'settings') return <SettingsPage />
     if (activeKey === 'settings_old') return (
