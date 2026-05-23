@@ -6,9 +6,10 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', proces
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 const MACHINE_COORDS = { 'C3B31F38D1C07A76': { lat: 17.4363, lng: 78.4439 }, '9E3D050CEF2EEC7B': { lat: 17.5006, lng: 78.6199 } };
 
-function getCookie(name) {
+function getCookie(name: string): string {
+  if (typeof document === 'undefined') return '';
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return match ? match[2] : null;
+  return match ? match[2] : '';
 }
 
 function TempChart({ data }) {
