@@ -567,17 +567,25 @@ function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
 
+  const [uRole] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || 'operator') : 'operator')
+  const [uOpId] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '')
   useEffect(() => {
-    const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
-    Promise.all([
-      fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=200', { headers }).then(r => r.json()),
-      fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location', { headers }).then(r => r.json()),
-    ]).then(([o, m]) => {
-      setOrders(Array.isArray(o) ? o : [])
-      setMachines(Array.isArray(m) ? m : [])
+    const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    const load = async () => {
+      const ms = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location', { headers: h }).then(r => r.json()).then(d => Array.isArray(d) ? d : [])
+      setMachines(ms)
+      let ids: string[] = ms.map((m: any) => m.id)
+      if (uRole !== 'super_admin' && uOpId) {
+        const mo = await fetch(SB_URL + '/rest/v1/machine_operators?operator_id=eq.' + uOpId + '&select=machine_id', { headers: h }).then(r => r.json())
+        ids = Array.isArray(mo) ? mo.map((r: any) => r.machine_id) : []
+      }
+      const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
+      const os = await fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=200' + f, { headers: h }).then(r => r.json())
+      setOrders(Array.isArray(os) ? os : [])
       setLoading(false)
-    })
-  }, [])
+    }
+    load()
+  }, [uRole, uOpId])
 
   const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -687,6 +695,27 @@ function OrdersPage() {
   )
 }
 
+function TempSparkline({ machineId }: { machineId: string }) {
+  const [temps, setTemps] = useState<number[]>([])
+  useEffect(() => {
+    fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,ts&machine_id=eq.' + machineId + '&order=ts.desc&limit=24', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setTemps(d.map((r: any) => r.inner_temp_c).filter((v: any) => v != null).reverse()) })
+  }, [machineId])
+  if (temps.length < 2) return <div style={{ fontSize: 10, color: C.text3 }}>No history</div>
+  const W = 110, H = 32, p = 3
+  const mn = Math.min(...temps), mx = Math.max(...temps), rng = mx - mn || 1
+  const pts = temps.map((t, i) => (p + (i/(temps.length-1))*(W-p*2)) + ',' + (H-p-((t-mn)/rng)*(H-p*2))).join(' ')
+  const last = temps[temps.length-1], lp = pts.split(' ').slice(-1)[0].split(',')
+  const col = last > 12 ? C.red : last < 3 ? C.blue : C.green
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+      <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>24h Temp</div>
+      <svg width={W} height={H}><polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" opacity="0.8"/><circle cx={lp[0]} cy={lp[1]} r="3" fill={col}/></svg>
+      <div style={{ fontSize: 10, color: col, fontWeight: 600 }}>{last}C</div>
+    </div>
+  )
+}
+
 function MachinesPage({ machines, loading, fetchData }: any) {
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
   return (
@@ -777,7 +806,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
 function FleetMapPage({ machines }: { machines: any[] }) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [scriptLoaded, setScriptLoaded] = useState(false)
-  const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXNra2Fra...(set NEXT_PUBLIC_MAPBOX_TOKEN)'
+  const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'NEXT_PUBLIC_MAPBOX_TOKEN_HERE'
   const COORDS: Record<string, {lat: number, lng: number}> = {
     'SR Nagar, Ameerpet': { lat: 17.4374, lng: 78.4487 },
     'Cheeriyal, ECIL': { lat: 17.4702, lng: 78.5607 },
@@ -1151,9 +1180,13 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
 
   const save = async () => {
     setSaving(true)
-    // In production: PATCH to machines table or dedicated config table
-    await new Promise(r => setTimeout(r, 600))
-    showSaved()
+    try {
+      const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }
+      for (const m of machines) {
+        await fetch(SB_URL + '/rest/v1/machines?id=eq.' + m.id, { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify({ machine_config: config[m.id] || {} }) }) })
+      }
+      showSaved()
+    } catch { showErr('Save failed') }
     setSaving(false)
   }
 
