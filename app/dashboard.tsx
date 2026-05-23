@@ -54,10 +54,11 @@ function Dot({ color, pulse = false, size = 7 }: { color: string; pulse?: boolea
 function Badge({ children, color = C.orange, bg }: any) {
   return (
     <span style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-      padding: '2px 7px', borderRadius: 10,
-      background: bg || color + '22', color,
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+      padding: '2px 8px', borderRadius: 10,
+      background: bg || color + '18', color,
       textTransform: 'uppercase' as const,
+      border: `1px solid ${color}30`,
     }}>{children}</span>
   )
 }
@@ -68,6 +69,7 @@ function Pill({ children, color, bg }: any) {
       display: 'inline-flex', alignItems: 'center', gap: 4,
       fontSize: 11, fontWeight: 600, padding: '3px 10px',
       borderRadius: 20, background: bg, color,
+      border: `1px solid ${color}30`,
     }}>{children}</span>
   )
 }
@@ -211,25 +213,22 @@ function StatCard({ label, value, sub, color, icon, pct }: any) {
   return (
     <div style={{
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14,
-      padding: '18px 20px', position: 'relative', overflow: 'hidden',
+      padding: '18px 20px', position: 'relative' as const, overflow: 'hidden',
     }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color, borderRadius: '14px 14px 0 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <span style={{ fontSize: 11, color: C.text2, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</span>
-        <div style={{ width: 34, height: 34, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{icon}</div>
+      <div style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.9 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>{label}</div>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
       </div>
-      <div style={{ fontSize: 30, fontWeight: 800, color, letterSpacing: '-0.03em', marginBottom: 4 }}>{value}</div>
-      <div style={{ fontSize: 11, color: C.text3, marginBottom: 10 }}>{sub}</div>
-      {pct !== undefined && (
-        <div style={{ height: 4, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 0.8s ease' }} />
-        </div>
-      )}
+      <div style={{ fontSize: 36, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{sub}</div>}
+      <div style={{ marginTop: 16, height: 2, background: C.border, borderRadius: 2 }}>
+        <div style={{ height: '100%', background: color, borderRadius: 2, width: `${Math.min(pct ?? 100, 100)}%`, opacity: 0.7, transition: 'width .6s' }} />
+      </div>
     </div>
   )
 }
 
-// ─── Machine Card ────────────────────────────────────────────────
 function MachineCard({ machine }: { machine: any }) {
   const online = machine.status === 'online'
   const temp = machine.inner_temp_c
@@ -245,7 +244,7 @@ function MachineCard({ machine }: { machine: any }) {
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = C.border; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
     >
       {/* Top stripe */}
-      <div style={{ height: 4, background: online ? C.green : C.border2 }} />
+      <div style={{ height: 3, background: `linear-gradient(90deg, ${online ? C.green : C.border2}, transparent)` }} />
 
       <div style={{ padding: '16px 18px' }}>
         {/* Header */}
@@ -717,7 +716,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
             const layers = [m.stock_l1, m.stock_l2, m.stock_l3]
             return (
               <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
-                <div style={{ height: 4, background: online ? C.green : C.border2 }} />
+                <div style={{ height: 3, background: `linear-gradient(90deg, ${online ? C.green : C.border2}, transparent)` }} />
                 <div style={{ padding: '18px 22px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
