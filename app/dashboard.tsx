@@ -978,7 +978,7 @@ function AdsPage({ machines }: { machines: any[] }) {
   const loadAds = () => {
     fetch(SB_URL + '/rest/v1/ads?select=*&order=created_at.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
       .then(r => r.json()).then(d => { setAds(Array.isArray(d) ? d : []); setLoading(false) })
-      .catch(() => { setAds([]); setLoading(false) })
+      .catch(e => { console.error('ads load error', e); setAds([]); setLoading(false) })
   }
   useEffect(() => { loadAds() }, [])
 
@@ -1084,11 +1084,7 @@ function AdsPage({ machines }: { machines: any[] }) {
         </div>
       )}
 
-      {/* Supabase table notice */}
-      <div style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', marginBottom: 18, fontSize: 12, color: C.text2 }}>
-        <b style={{ color: C.text }}>Setup required:</b> Create an <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>ads</code> table in Supabase with columns:
-        <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace', marginLeft: 6 }}>id, machine_id, title, media_url, media_type, start_time, end_time, days, active, created_at</code>
-      </div>
+
 
       {/* Ad list */}
       {loading ? (
@@ -1211,11 +1207,7 @@ function LoyaltyPage() {
         </div>
       )}
 
-      {/* Setup notice */}
-      <div style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', marginBottom: 18, fontSize: 12, color: C.text2 }}>
-        <b style={{ color: C.text }}>Setup required:</b> Create a <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>loyalty</code> table in Supabase with columns:
-        <code style={{ background: C.border, padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace', marginLeft: 6 }}>id, phone, name, points, joined_at, last_order_at</code>
-      </div>
+
 
       {/* Search */}
       <div style={{ marginBottom: 16 }}>
