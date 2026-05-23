@@ -886,9 +886,28 @@ function FleetMapPage({ machines }: { machines: any[] }) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'NEXT_PUBLIC_MAPBOX_TOKEN_HERE'
+  // Machine coords by SN (most reliable) then by location string
+  const MACHINE_COORDS: Record<string, {lat: number, lng: number}> = {
+    'C3B31F38D1C07A76': { lat: 17.4374, lng: 78.4487 }, // Fruitful-2 SR Nagar
+    '9E3D050CEF2EEC7B': { lat: 17.4702, lng: 78.5607 }, // Fruitful-1 ECIL
+  }
   const COORDS: Record<string, {lat: number, lng: number}> = {
     'SR Nagar, Ameerpet': { lat: 17.4374, lng: 78.4487 },
+    'SR Nagar': { lat: 17.4374, lng: 78.4487 },
+    'Ameerpet': { lat: 17.4374, lng: 78.4487 },
     'Cheeriyal, ECIL': { lat: 17.4702, lng: 78.5607 },
+    'ECIL': { lat: 17.4702, lng: 78.5607 },
+    'Cheeriyal': { lat: 17.4702, lng: 78.5607 },
+  }
+  const getCoords = (m: any) => {
+    if (MACHINE_COORDS[m.sn]) return MACHINE_COORDS[m.sn]
+    if (m.location) {
+      if (COORDS[m.location]) return COORDS[m.location]
+      // Partial match
+      const key = Object.keys(COORDS).find(k => m.location.includes(k) || k.includes(m.location))
+      if (key) return COORDS[key]
+    }
+    return null
   }
   useEffect(() => {
     if ((window as any).mapboxgl) { setScriptLoaded(true); return; }
@@ -902,7 +921,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
     mgl.accessToken = MB
     const map = new mgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.49, 17.45], zoom: 10.5 })
     machines.forEach((m: any) => {
-      const co = COORDS[m.location]; if (!co) return
+      const co = getCoords(m); if (!co) return
       const online = m.status === 'online'
       const el = document.createElement('div')
       el.style.cssText = 'width:36px;height:36px;border-radius:50%;background:' + (online ? C.green : C.red) + ';border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;'
@@ -922,7 +941,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
         <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', minHeight: 500, position: 'relative' }}>
-          {!scriptLoaded && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface2, flexDirection: 'column', gap: 12 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text3 }}>Loading Mapbox...</div></div>}
+          {!scriptLoaded && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface2, flexDirection: 'column', gap: 12, zIndex: 10 }}><div style={{ fontSize: 32 }}>🗺</div><div style={{ fontSize: 13, fontWeight: 600, color: C.text3 }}>Loading Map...</div><div style={{ fontSize: 11, color: C.text3 }}>Powered by Mapbox</div></div>}
           <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: 500 }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
