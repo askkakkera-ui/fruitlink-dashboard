@@ -1313,9 +1313,14 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
   const operatorId = getCookie('fl_operator_id') || ''
-  const name = getCookie('fl_operator_name') || 'Admin'
-  const role = getCookie('fl_role') || 'operator'
-  const state = getCookie('fl_state') || 'Telangana'
+  const [name, setName] = useState('Admin')
+  const [role, setRole] = useState('operator')
+  const [state, setState] = useState('Telangana')
+  useEffect(() => {
+    setName(getCookie('fl_operator_name') || 'Admin')
+    setRole(getCookie('fl_role') || 'operator')
+    setState(getCookie('fl_state') || 'Telangana')
+  }, [])
   const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
   const SB_URL2 = SB_URL
   const SB_KEY2 = SB_KEY
