@@ -1855,7 +1855,7 @@ function CooldownsSection({ showSaved }: any) {
               </div>
             </div>
           </div>
-        )}
+        })}
       </div>
     </div>
   )
