@@ -1835,7 +1835,6 @@ function BillingSection({ role }: any) {
     },
     professional: {
       name: 'Professional', color: C.orange, bg: C.orangeBg, icon: '⭐',
-      badge: 'Most Popular',
       features: [
         'Everything in Starter',
         'Ad Content Manager (JPEG/video by machine, time, day)',
@@ -1853,8 +1852,8 @@ function BillingSection({ role }: any) {
         'White-label dashboard',
         'REST API + Webhooks',
         'SAML Single Sign-On',
-        'Dedicated infrastructure',
-        'Guaranteed SLA + Priority support',
+        'Dedicated infrastructure + Guaranteed SLA',
+        'Priority support',
         'Unlimited operators',
       ]
     }
@@ -1876,11 +1875,10 @@ function BillingSection({ role }: any) {
 
   const handleUpgrade = (machineId: string, plan: string) => {
     setUpgrading(machineId)
-    // Razorpay integration placeholder
     setTimeout(() => {
       setMachinePlans({ ...machinePlans, [machineId]: plan })
       setUpgrading(null)
-      alert('Razorpay integration coming soon — plan marked as ' + PLANS[plan].name)
+      alert('Razorpay integration coming soon — plan will be set to ' + PLANS[plan].name)
     }, 800)
   }
 
@@ -1888,87 +1886,83 @@ function BillingSection({ role }: any) {
 
   return (
     <div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Billing & Plans</div>
-      <div style={{ fontSize: 13, color: C.text2, marginBottom: 24 }}>Manage your subscription plan per machine. Pricing TBD.</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 2 }}>Billing & Plans</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage subscription plan per machine · Pricing TBD</div>
 
-      {/* Plan comparison cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 28 }}>
+      {/* Plan cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 26 }}>
         {Object.entries(PLANS).map(([key, p]: any) => (
-          <div key={key} style={{ background: C.surface, border: '2px solid ' + (key === 'professional' ? C.orange : C.border), borderRadius: 14, overflow: 'hidden' }}>
-            {key === 'professional' && (
-              <div style={{ background: C.orange, color: '#fff', fontSize: 10, fontWeight: 700, textAlign: 'center', padding: '4px 0', letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>⭐ Most Popular</div>
-            )}
-            <div style={{ padding: '18px 18px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 20 }}>{p.icon}</span>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{p.name}</div>
+          <div key={key} style={{ background: C.surface, border: '2px solid ' + (key === 'professional' ? C.orange : C.border), borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ background: key === 'professional' ? C.orange : C.surface2, padding: key === 'professional' ? '10px 16px' : '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontSize: 16 }}>{p.icon}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: key === 'professional' ? '#fff' : C.text }}>{p.name}</span>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: p.color, marginBottom: 14 }}>Pricing TBD / machine / month</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {p.features.map((f: string, i: number) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 11.5, color: C.text2 }}>
-                    <span style={{ color: p.color, fontSize: 12, flexShrink: 0, marginTop: 1 }}>✓</span>
-                    <span>{f}</span>
-                  </div>
-                ))}
-              </div>
+              {key === 'professional' && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 8px' }}>POPULAR</span>}
+            </div>
+            {/* Price */}
+            <div style={{ padding: '12px 16px 0', borderBottom: '1px solid ' + C.border }}>
+              <div style={{ fontSize: 12, color: p.color, fontWeight: 700, marginBottom: 12 }}>Pricing TBD · per machine · per month</div>
+            </div>
+            {/* Features */}
+            <div style={{ padding: '12px 16px 16px', flex: 1 }}>
+              {p.features.map((f: string, i: number) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 11.5, color: C.text2, marginBottom: 7 }}>
+                  <span style={{ color: p.color, flexShrink: 0, marginTop: 1, fontWeight: 700 }}>✓</span>
+                  <span>{f}</span>
+                </div>
+              ))}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Per machine plan selector */}
+      {/* Per machine */}
       <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Your Machines</div>
       {loading ? (
-        <div style={{ color: C.text3, fontSize: 13 }}>Loading machines...</div>
-      ) : machines.length === 0 ? (
-        <div style={{ color: C.text3, fontSize: 13 }}>No machines found.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {machines.map((m: any) => {
-            const plan = currentPlan(m.id)
-            const P = PLANS[plan]
-            return (
-              <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🖥</div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                      <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{m.sn} · {m.location}, {m.state}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Pill color={P.color} bg={P.bg}>{P.icon} {P.name}</Pill>
-                    {/* Plan switcher */}
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {Object.entries(PLANS).map(([key, pp]: any) => (
-                        key !== plan && (
-                          <button key={key} onClick={() => handleUpgrade(m.id, key)} disabled={upgrading === m.id}
-                            style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid ' + pp.color, background: 'transparent', color: pp.color, fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: upgrading === m.id ? 0.6 : 1 }}>
-                            {key === 'starter' ? '↓ Downgrade' : '↑ Upgrade'} to {pp.name}
-                          </button>
-                        )
-                      ))}
-                    </div>
+        <div style={{ color: C.text3, fontSize: 13 }}>Loading...</div>
+      ) : machines.map((m: any) => {
+        const plan = currentPlan(m.id)
+        const P = PLANS[plan]
+        const online = m.status === 'online'
+        return (
+          <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+            <div style={{ height: 3, background: online ? C.green : C.red }} />
+            <div style={{ padding: '14px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>🖥</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                    <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn} · {m.location}, {m.state}</div>
+                    <div style={{ marginTop: 4 }}><Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill></div>
                   </div>
                 </div>
-                {/* Features of current plan */}
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {P.features.slice(0,4).map((f: string, i: number) => (
-                    <div key={i} style={{ fontSize: 10, color: C.text3, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 6, padding: '3px 8px' }}>{f}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
+                  <Pill color={P.color} bg={P.bg}>{P.icon} {P.name}</Pill>
+                  {Object.entries(PLANS).map(([key, pp]: any) => key !== plan && (
+                    <button key={key} onClick={() => handleUpgrade(m.id, key)} disabled={upgrading === m.id}
+                      style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid ' + pp.color, background: 'transparent', color: pp.color, fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: upgrading === m.id ? 0.6 : 1, whiteSpace: 'nowrap' as const }}>
+                      {key === 'starter' ? '↓' : '↑'} {pp.name}
+                    </button>
                   ))}
-                  {P.features.length > 4 && <div style={{ fontSize: 10, color: P.color, background: P.bg, borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>+{P.features.length - 4} more</div>}
                 </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+              {/* Feature pills */}
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border }}>
+                {P.features.slice(0,3).map((f: string, i: number) => (
+                  <div key={i} style={{ fontSize: 10, color: C.text3, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 6, padding: '3px 8px' }}>{f}</div>
+                ))}
+                <div style={{ fontSize: 10, color: P.color, background: P.bg, borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>+{P.features.length - 3} more features</div>
+              </div>
+            </div>
+          </div>
+        )
+      })}
 
-      {/* Razorpay notice */}
-      <div style={{ marginTop: 20, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
-        <b style={{ color: C.text }}>Payment Integration:</b> Razorpay subscription billing will be activated once pricing is confirmed. Upgrade/downgrade will trigger automatic proration.
+      <div style={{ marginTop: 8, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
+        <b style={{ color: C.text }}>💳 Payment Integration:</b> Razorpay subscription billing activates once pricing is confirmed. Upgrades/downgrades will apply from next billing cycle.
       </div>
     </div>
   )
