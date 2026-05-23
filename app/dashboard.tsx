@@ -1814,48 +1814,70 @@ function CooldownsSection({ showSaved }: any) {
   )
 }
 
-          <div key={m.id} style={{ background: C.surface, border: '2px solid ' + (online ? C.green + '50' : C.red + '50'), borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
-            <div style={{ height: 4, background: online ? C.green : C.red }} />
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' as const }}>
-                {/* Left: machine info */}
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                  <div style={{ width: 52, height: 52, borderRadius: 12, background: online ? C.greenBg : C.redBg, border: '2px solid ' + (online ? C.green + '50' : C.red + '50'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🖥</div>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 5 }}>{m.display_name}</div>
-                    <div style={{ fontSize: 13, color: C.text2, fontFamily: 'monospace', marginBottom: 4 }}>SN: {m.sn}</div>
-                    <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>📍 {m.location}, {m.state}</div>
-                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>
-                      <Dot color={online ? C.green : C.red} pulse={online} size={6} />&nbsp;{online ? 'Online' : 'Offline'}
-                    </Pill>
-                  </div>
+function BillingSection({ role }: any) {
+  const [machines, setMachines] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const PLANS: any = {
+    starter: { name: 'Starter', color: C.green, bg: C.greenBg, icon: '🟢', features: ['Live Console + Machine List + Fleet Map','Revenue & P&L Analytics','17 WhatsApp alert types','Remote machine config','UPI + NFC payments (0% MDR)','Up to 2 operators'] },
+    professional: { name: 'Professional', color: C.orange, bg: C.orangeBg, icon: '⭐', features: ['Everything in Starter','Ad Content Manager','Loyalty Programme','Operators Management + RBAC','Up to 10 operators'] },
+    enterprise: { name: 'Enterprise', color: C.blue, bg: C.blueBg, icon: '🏢', features: ['Everything in Professional','White-label dashboard','REST API + Webhooks','SAML SSO','Dedicated infrastructure','Unlimited operators'] },
+  }
+  useEffect(() => {
+    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location,state', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      .then(r => r.json()).then(d => { setMachines(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 2 }}>Billing & Plans</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage subscription plan per machine · Pricing TBD</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 26 }}>
+        {Object.entries(PLANS).map(([key, p]: any) => (
+          <div key={key} style={{ background: C.surface, border: '2px solid ' + (key === 'professional' ? C.orange : C.border), borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ background: key === 'professional' ? C.orange : C.surface2, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ fontSize: 16 }}>{p.icon}</span><span style={{ fontSize: 14, fontWeight: 800, color: key === 'professional' ? '#fff' : C.text }}>{p.name}</span></div>
+              {key === 'professional' && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 8px' }}>POPULAR</span>}
+            </div>
+            <div style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: 12, color: p.color, fontWeight: 700, marginBottom: 10 }}>Pricing TBD · per machine · per month</div>
+              {p.features.map((f: string, i: number) => (
+                <div key={i} style={{ display: 'flex', gap: 7, fontSize: 12, color: C.text2, marginBottom: 5 }}>
+                  <span style={{ color: p.color, fontWeight: 700 }}>✓</span><span>{f}</span>
                 </div>
-                {/* Right: plan + buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                  <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>Current Plan</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: P.color }}>{P.icon} {P.name}</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                    {Object.entries(PLANS).map(([key, pp]: any) => key !== plan && (
-                      <button key={key} onClick={() => handleUpgrade(m.id, key)} disabled={upgrading === m.id}
-                        style={{ padding: '8px 18px', borderRadius: 9, border: '2px solid ' + pp.color, background: key === 'professional' ? pp.color : 'transparent', color: key === 'professional' ? '#fff' : pp.color, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: upgrading === m.id ? 0.6 : 1, whiteSpace: 'nowrap' as const }}>
-                        {key === 'starter' ? '↓ Downgrade' : '↑ Upgrade'} → {pp.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Your Machines</div>
+      {loading ? <div style={{ color: C.text3 }}>Loading...</div> : machines.map((m: any) => (
+        <div key={m.id} style={{ background: C.surface, border: '2px solid ' + (m.status === 'online' ? C.green + '50' : C.red + '50'), borderRadius: 14, marginBottom: 14, overflow: 'hidden' }}>
+          <div style={{ height: 4, background: m.status === 'online' ? C.green : C.red }} />
+          <div style={{ padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 16 }}>
+            <div style={{ display: 'flex', gap: 14 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🖥</div>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 4 }}>{m.display_name}</div>
+                <div style={{ fontSize: 13, color: C.text2, fontFamily: 'monospace', marginBottom: 4 }}>SN: {m.sn}</div>
+                <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>📍 {m.location}, {m.state}</div>
+                <Pill color={m.status === 'online' ? C.green : C.red} bg={m.status === 'online' ? C.greenBg : C.redBg}>
+                  <Dot color={m.status === 'online' ? C.green : C.red} pulse={m.status === 'online'} size={6} />&nbsp;{m.status === 'online' ? 'Online' : 'Offline'}
+                </Pill>
               </div>
-              {/* Included features */}
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid ' + C.border }}>
-                <div style={{ fontSize: 12, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 10 }}>Included in {P.name}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8 }}>
-                  {P.features.map((f: string, i: number) => (
-                    <div key={i} style={{ fontSize: 12, color: C.text, background: C.surface2, border: '1px solid ' + C.border2, borderRadius: 7, padding: '5px 12px' }}>✓ {f}</div>
-                  ))}
-                </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 8 }}>
+              <div style={{ fontSize: 12, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const }}>Current Plan</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>🟢 Starter</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.orange, background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>↑ Professional</button>
+                <button onClick={() => alert('Razorpay coming soon')} style={{ padding: '7px 16px', borderRadius: 9, border: '2px solid ' + C.blue, background: 'transparent', color: C.blue, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>↑ Enterprise</button>
               </div>
             </div>
           </div>
-        })}
+        </div>
+      ))}
+      <div style={{ marginTop: 12, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
+        <b style={{ color: C.text }}>💳 Payment Integration:</b> Razorpay subscription billing activates once pricing is confirmed.
       </div>
     </div>
   )
