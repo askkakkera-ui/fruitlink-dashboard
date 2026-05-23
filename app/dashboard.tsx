@@ -1825,6 +1825,7 @@ function BillingSection({ role }: any) {
 
 function SettingsPage() {
   const [activeSection, setActiveSection] = useState('profile')
+  const [settingsRole] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || 'operator') : 'operator')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -1848,7 +1849,7 @@ function SettingsPage() {
     { group: 'Account', items: [{ key: 'profile', label: 'Profile', icon: '👤' }, { key: 'security', label: 'Security', icon: '🔒' }] },
     { group: 'Machines', items: [{ key: 'thresholds', label: 'Thresholds', icon: '🌡' }, { key: 'locations', label: 'Locations', icon: '📍' }, { key: 'machine_config', label: 'Machine Config', icon: '⚙' }] },
     { group: 'Alerts', items: [{ key: 'notifications', label: 'Notifications', icon: '🔔' }, { key: 'cooldowns', label: 'Cooldowns', icon: '⏱' }] },
-    { group: 'System', items: [{ key: 'billing', label: 'Billing', icon: '💳' }, { key: 'danger', label: 'Danger Zone', icon: '⚠️' }] },
+    { group: 'System', items: [{ key: 'billing', label: 'Billing', icon: '💳' }, ...(role === 'super_admin' ? [{ key: 'danger', label: 'Danger Zone', icon: '⚠️' }] : [])] },
   ]
 
   return (
@@ -1861,7 +1862,7 @@ function SettingsPage() {
             <div key={group.group} style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{group.group}</div>
               {group.items.map(item => (
-                <button key={item.key} onClick={() => setActiveSection(item.key)} style={{
+                <button key={item.key} onClick={() => { if (item.key === 'danger' && settingsRole !== 'super_admin') return; setActiveSection(item.key) }} style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2,
                   background: activeSection === item.key ? C.orangeBg : 'transparent',
                   color: activeSection === item.key ? C.orange : C.text2,
@@ -1892,7 +1893,7 @@ function SettingsPage() {
           {activeSection === 'locations' && (
             <LocationsSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
           )}
-          {activeSection === 'danger' && (
+          {activeSection === 'danger' && role === 'super_admin' && (
             <DangerSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} operatorId={operatorId} />
           )}
           {activeSection === 'machine_config' && <MachineConfigSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
