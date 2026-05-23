@@ -841,6 +841,174 @@ function DangerSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, 
 }
 
 
+function ProfileSection({ operatorId, name, role, state, initials, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [form, setForm] = useState({ name, state, country: 'India', org: 'Fruitlink Technologies Pvt Ltd', phone: '+91 89771 10142', email: 'skkakkera@gmail.com' })
+  const set = (k: string) => (e: any) => setForm(p => ({ ...p, [k]: e.target.value }))
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, state: form.state, country: form.country }) })
+      if (res.ok) { document.cookie = 'fl_operator_name=' + form.name + '; path=/; max-age=86400'; document.cookie = 'fl_state=' + form.state + '; path=/; max-age=86400'; showSaved() }
+      else showErr('Failed to save')
+    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Profile</div>
+      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Your account details and contact information</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0', borderBottom: '1px solid #e2e8f0', marginBottom: 24 }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 700 }}>{initials}</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{form.name}</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{form.email}</div>
+          <div style={{ marginTop: 6, display: 'inline-block', background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        {[['Full Name', 'name'], ['Email Address', 'email'], ['WhatsApp Number', 'phone'], ['State / Region', 'state'], ['Country', 'country'], ['Organization', 'org']].map(([label, key]) => (
+          <div key={key}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>{label}</div>
+            <input value={(form as any)[key]} onChange={set(key)} readOnly={key === 'email'} style={{ width: '100%', background: key === 'email' ? '#f1f5f9' : '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a', outline: 'none' }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+        <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save changes'}</button>
+      </div>
+    </div>
+  )
+}
+
+function SecuritySection({ operatorId, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [pw, setPw] = useState({ current: '', newp: '', confirm: '' })
+  const save = async () => {
+    if (pw.newp !== pw.confirm) return showErr('Passwords do not match')
+    if (pw.newp.length < 6) return showErr('Min 6 characters')
+    setSaving(true)
+    try {
+      const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw.newp }) })
+      const { hash } = await hashRes.json()
+      const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ password_hash: hash }) })
+      if (res.ok) { setPw({ current: '', newp: '', confirm: '' }); showSaved() } else showErr('Failed to update')
+    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Security</div>
+      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Manage your password and active sessions</div>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Change Password</div>
+        {([['Current password', 'current'], ['New password', 'newp'], ['Confirm new password', 'confirm']] as const).map(([label, key]) => (
+          <div key={key} style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>{label}</div>
+            <input type="password" value={(pw as any)[key]} onChange={e => setPw(p => ({ ...p, [key]: e.target.value }))} placeholder="••••••••" style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }} />
+          </div>
+        ))}
+        <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Updated!' : saving ? 'Saving...' : 'Update password'}</button>
+      </div>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>Active Sessions</div>
+        {[['Chrome on Mac · Hyderabad, IN', 'Now', true], ['Chrome on iPhone · Hyderabad, IN', '2h ago', false]].map(([sess, time, current]: any) => (
+          <div key={sess} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+            <div>
+              <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{sess}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{time} {current && <span style={{ color: '#16a34a', fontWeight: 600 }}>· Current</span>}</div>
+            </div>
+            {!current && <button style={{ fontSize: 12, color: '#dc2626', border: '1px solid #fecaca', background: '#fff', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Revoke</button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function LocationsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [machines, setMachines] = useState<any[]>([])
+  useEffect(() => {
+    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,status', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      .then(r => r.json()).then(d => setMachines(Array.isArray(d) ? d : []))
+  }, [])
+  const update = (id: string, field: string, val: string) => setMachines(ms => ms.map(m => m.id === id ? { ...m, [field]: val } : m))
+  const save = async () => {
+    setSaving(true)
+    try {
+      await Promise.all(machines.map(m => fetch(SB_URL + '/rest/v1/machines?id=eq.' + m.id, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ display_name: m.display_name, location: m.location }) })))
+      showSaved()
+    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Machine Locations</div>
+      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Update display names and locations for your machines</div>
+      {machines.map(m => (
+        <div key={m.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{m.display_name}</div>
+            <div style={{ fontSize: 11, color: m.status === 'online' ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>{m.status === 'online' ? '● Online' : '○ Offline'}</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Display Name</div>
+              <input value={m.display_name || ''} onChange={e => update(m.id, 'display_name', e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 13, outline: 'none' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Location</div>
+              <input value={m.location || ''} onChange={e => update(m.id, 'location', e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 13, outline: 'none' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Serial Number</div>
+              <input value={m.sn || ''} readOnly style={{ width: '100%', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', outline: 'none' }} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save locations'}</button>
+      </div>
+    </div>
+  )
+}
+
+function DangerSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, operatorId }: any) {
+  const clearAlerts = async () => {
+    if (!window.confirm('Delete ALL alert history? This cannot be undone.')) return
+    setSaving(true)
+    try {
+      await fetch(SB_URL + '/rest/v1/alerts?created_at=gte.2000-01-01', { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      showSaved()
+    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
+  }
+  const clearTelemetry = async () => {
+    if (!window.confirm('Delete ALL telemetry history? This cannot be undone.')) return
+    setSaving(true)
+    try {
+      await fetch(SB_URL + '/rest/v1/telemetry?ts=gte.2000-01-01', { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      showSaved()
+    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626', marginBottom: 4 }}>Danger Zone</div>
+      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Irreversible actions — proceed with caution</div>
+      {[
+        { title: 'Clear All Alerts', desc: 'Permanently delete all alert history from the database', btn: 'Clear alerts', red: false, action: clearAlerts },
+        { title: 'Reset Telemetry', desc: 'Remove all telemetry history for all machines', btn: 'Reset data', red: false, action: clearTelemetry },
+        { title: 'Delete Account', desc: 'Permanently delete your account and all associated data', btn: 'Delete account', red: true, action: () => showErr('Contact support to delete your account') },
+      ].map(({ title, desc, btn, red, action }) => (
+        <div key={title} style={{ background: '#fff', border: '1px solid ' + (red ? '#fecaca' : '#e2e8f0'), borderRadius: 12, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{title}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{desc}</div>
+          </div>
+          <button onClick={action} disabled={saving} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid ' + (red ? '#fca5a5' : '#e2e8f0'), background: red ? '#fef2f2' : '#fff', color: red ? '#dc2626' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, marginLeft: 16 }}>{btn}</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+
 function SettingsPage() {
   const [activeSection, setActiveSection] = useState('profile')
   const [saved, setSaved] = useState(false)
