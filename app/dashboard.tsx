@@ -562,6 +562,208 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
 }
 
 // ─── Coming Soon ─────────────────────────────────────────────────
+function OrdersPage() {
+  const [orders, setOrders] = useState<any[]>([])
+  const [machines, setMachines] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all')
+
+  useEffect(() => {
+    const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    Promise.all([
+      fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=200', { headers }).then(r => r.json()),
+      fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location', { headers }).then(r => r.json()),
+    ]).then(([o, m]) => {
+      setOrders(Array.isArray(o) ? o : [])
+      setMachines(Array.isArray(m) ? m : [])
+      setLoading(false)
+    })
+  }, [])
+
+  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
+  const fmtAmount = (p: number) => '₹' + (p / 100).toFixed(2)
+
+  const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const PAY_TYPE: any = { upi: '📱 UPI', cash: '💵 Cash', card: '💳 Card', qr: '📲 QR' }
+
+  const filtered = orders.filter((o: any) => {
+    if (filter === 'paid') return o.pay_state === 1
+    if (filter === 'pending') return o.pay_state === 0
+    if (filter === 'delivered') return o.delivery_state === 1
+    return true
+  })
+
+  const totalRevenue = orders.filter((o: any) => o.pay_state === 1).reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
+  const totalOrders = orders.length
+  const paid = orders.filter((o: any) => o.pay_state === 1).length
+  const pending = orders.filter((o: any) => o.pay_state === 0).length
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Orders</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>{totalOrders} total orders across all machines</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+        {[
+          { label: 'Total Orders', value: totalOrders, color: C.blue, icon: '🧾', pct: 100 },
+          { label: 'Total Revenue', value: fmtAmount(totalRevenue), color: C.green, icon: '₹', pct: paid > 0 ? (paid/totalOrders)*100 : 0 },
+          { label: 'Paid', value: paid, color: C.green, icon: '✅', pct: totalOrders > 0 ? (paid/totalOrders)*100 : 0 },
+          { label: 'Pending Payment', value: pending, color: C.amber, icon: '⏳', pct: totalOrders > 0 ? (pending/totalOrders)*100 : 0 },
+        ].map(s => <StatCard key={s.label} {...s} sub="" />)}
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: `1px solid ${C.border}` }}>
+        {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered']].map(([f, label]) => (
+          <button key={f} onClick={() => setFilter(f)} style={{
+            padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: filter === f ? C.sidebar : 'transparent',
+            color: filter === f ? '#fff' : C.text2,
+            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading orders...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>No orders found</div>
+        </div>
+      ) : (
+        <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
+                {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map((h, i) => (
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((o: any, i: number) => {
+                const m = getMachine(o.machine_id)
+                const ps = PAY_STATE[o.pay_state] || PAY_STATE[0]
+                const ds = DEL_STATE[o.delivery_state] || DEL_STATE[0]
+                return (
+                  <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.blue }}>{o.order_code}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '—'}</div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmount(o.amount_paise || 0)}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>{PAY_TYPE[o.pay_type] || o.pay_type}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: C.text }}>{o.cup_num || '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: 12, color: C.text }}>{fmtTime(o.created_at)}</div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{fmtAgo(o.created_at)}</div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, background: C.surface2, fontSize: 11, color: C.text3 }}>
+            Showing {filtered.length} of {orders.length} orders
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FleetMapPage({ machines }: { machines: any[] }) {
+  const coords: any = {
+    'SR Nagar, Ameerpet': { lat: 17.4374, lng: 78.4487 },
+    'Cheeriyal, ECIL': { lat: 17.4702, lng: 78.5607 },
+  }
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Fleet Map</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>{machines.length} machines · {machines.filter(m => m.status === 'online').length} online</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', minHeight: 480 }}>
+          <iframe
+            src={`https://www.google.com/maps/embed/v1/view?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFmBWY&center=17.45,78.49&zoom=12&maptype=roadmap`}
+            style={{ width: '100%', height: '100%', minHeight: 480, border: 'none' }}
+            title="Fleet Map"
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {machines.map((m: any) => {
+            const coord = coords[m.location] || null
+            const online = m.status === 'online'
+            return (
+              <div key={m.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px', borderTop: `3px solid ${online ? C.green : C.border2}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                    <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+                  </div>
+                  <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>
+                    <Dot color={online ? C.green : C.red} pulse={online} size={5} />
+                    {online ? 'Online' : 'Offline'}
+                  </Pill>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14 }}>📍</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.location || '—'}</div>
+                    <div style={{ fontSize: 11, color: C.text3 }}>{m.state}, {m.country}</div>
+                  </div>
+                </div>
+                {coord && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <span style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>📌 {coord.lat.toFixed(4)}, {coord.lng.toFixed(4)}</span>
+                  </div>
+                )}
+                <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  <div style={{ background: C.surface2, borderRadius: 7, padding: '6px 10px', fontSize: 11 }}>
+                    <div style={{ color: C.text3, marginBottom: 2 }}>Temperature</div>
+                    <div style={{ fontWeight: 600, color: m.inner_temp_c > 12 ? C.red : C.green }}>{m.inner_temp_c != null ? m.inner_temp_c + '°C' : '—'}</div>
+                  </div>
+                  <div style={{ background: C.surface2, borderRadius: 7, padding: '6px 10px', fontSize: 11 }}>
+                    <div style={{ color: C.text3, marginBottom: 2 }}>App Version</div>
+                    <div style={{ fontWeight: 600, color: C.text }}>{m.app_version ? 'v' + m.app_version : '—'}</div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+
+          <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 10, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Add GPS Coordinates</div>
+            <div style={{ fontSize: 12, color: C.text3, lineHeight: 1.6 }}>
+              To pin machines on the map, update lat/lng in machine settings. Currently showing approximate Hyderabad area.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ComingSoon({ label }: { label: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
@@ -1096,8 +1298,8 @@ export default function Dashboard() {
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     settings: <SettingsPage />,
     machines: <ComingSoon label="Machine Management" />,
-    map: <ComingSoon label="Fleet Map" />,
-    orders: <ComingSoon label="Order Management" />,
+    map: <FleetMapPage machines={machines} />,
+    orders: <OrdersPage />,
   }
 
   return (
