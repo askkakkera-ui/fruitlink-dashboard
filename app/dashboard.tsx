@@ -673,6 +673,261 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
 }
 
 
+function SettingsPage() {
+  const [activeSection, setActiveSection] = useState('profile')
+  const [saved, setSaved] = useState(false)
+  const name = getCookie('fl_operator_name') || 'Admin'
+  const email = getCookie('fl_operator_id') ? 'skkakkera@gmail.com' : ''
+  const role = getCookie('fl_role') || 'operator'
+  const state = getCookie('fl_state') || 'Telangana'
+  const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)
+
+  const navItems = [
+    { group: 'Account', items: [{ key: 'profile', label: 'Profile', icon: '👤' }, { key: 'security', label: 'Security', icon: '🔒' }] },
+    { group: 'Machines', items: [{ key: 'thresholds', label: 'Thresholds', icon: '🌡' }, { key: 'locations', label: 'Locations', icon: '📍' }] },
+    { group: 'Alerts', items: [{ key: 'notifications', label: 'Notifications', icon: '🔔' }, { key: 'cooldowns', label: 'Cooldowns', icon: '⏱' }] },
+    { group: 'System', items: [{ key: 'billing', label: 'Billing', icon: '💳' }, { key: 'danger', label: 'Danger Zone', icon: '⚠️' }] },
+  ]
+
+  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2500) }
+
+  const sections: any = {
+    profile: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Profile</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Your account details and contact information</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0', borderBottom: '1px solid #e2e8f0', marginBottom: 24 }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 700 }}>{initials}</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{name}</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>skkakkera@gmail.com</div>
+            <div style={{ marginTop: 6, display: 'inline-block', background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          {[['Full Name', name], ['Email Address', 'skkakkera@gmail.com'], ['WhatsApp Number', '+91 89771 10142'], ['State / Region', state], ['Country', 'India'], ['Organization', 'Fruitlink Technologies Pvt Ltd']].map(([label, val]) => (
+            <div key={label}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>{label}</div>
+              <input defaultValue={val} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a', outline: 'none' }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Saved!' : 'Save changes'}</button>
+        </div>
+      </div>
+    ),
+    security: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Security</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Manage your password and active sessions</div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Change Password</div>
+          {['Current password', 'New password', 'Confirm new password'].map(label => (
+            <div key={label} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>{label}</div>
+              <input type="password" placeholder="••••••••" style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }} />
+            </div>
+          ))}
+          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Updated!' : 'Update password'}</button>
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>Active Sessions</div>
+          {[['Chrome on Mac · Hyderabad, IN', 'Now', true], ['Chrome on iPhone · Hyderabad, IN', '2h ago', false]].map(([sess, time, current]: any) => (
+            <div key={sess} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <div>
+                <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{sess}</div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{time} {current && <span style={{ color: '#16a34a', fontWeight: 600 }}>· Current</span>}</div>
+              </div>
+              {!current && <button style={{ fontSize: 12, color: '#dc2626', border: '1px solid #fecaca', background: '#fff', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Revoke</button>}
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+    thresholds: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Alert Thresholds</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Configure when alerts are triggered for your machines</div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 0, background: '#f8fafc', padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>
+            {['Alert Type', 'Warn at', 'Stop at'].map(h => <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</div>)}
+          </div>
+          {[['🌡 Temperature High', '15°C', '20°C'], ['❄️ Temperature Low', '2°C', '0°C'], ['📦 Stock Low (per layer)', '20%', '0%'], ['⏰ Machine Offline After', '15 min', '—'], ['🚪 Door Open Alert', '—', 'Immediately']].map(([label, warn, stop]) => (
+            <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 0, padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+              <div style={{ fontSize: 13, color: '#0f172a' }}>{label}</div>
+              <input defaultValue={warn} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 80, outline: 'none' }} />
+              <input defaultValue={stop} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 80, outline: 'none' }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Saved!' : 'Save thresholds'}</button>
+        </div>
+      </div>
+    ),
+    locations: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Machine Locations</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Update display names and locations for your machines</div>
+        {[['Fruitful-1', 'C3B31F38D1C07A76', 'SR Nagar, Ameerpet', '● Online'], ['Fruitful-2', '9E3D050CEF2EEC7B', 'Cheeriyal, ECIL', '○ Offline']].map(([name, sn, loc, status]) => (
+          <div key={sn} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{name}</div>
+              <div style={{ fontSize: 11, color: status.includes('Online') ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>{status}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Display Name</div>
+                <input defaultValue={name} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 13, outline: 'none' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Location</div>
+                <input defaultValue={loc} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 13, outline: 'none' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Serial Number</div>
+                <input defaultValue={sn} readOnly style={{ width: '100%', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', outline: 'none' }} />
+              </div>
+            </div>
+          </div>
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Saved!' : 'Save locations'}</button>
+        </div>
+      </div>
+    ),
+    notifications: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Notifications</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Choose which alerts you receive and via which channel</div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Notification Channels</div>
+          {[['WhatsApp', 'Instant alerts via WhatsApp message', true], ['Telegram', 'Alerts via Telegram bot', true], ['Email Digest', 'Daily summary at 9am IST', false]].map(([ch, desc, on]: any) => (
+            <div key={ch} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{ch}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{desc}</div>
+              </div>
+              <div style={{ width: 40, height: 22, borderRadius: 11, background: on ? '#f97316' : '#e2e8f0', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: '#fff', top: 3, [on ? 'right' : 'left']: 3 }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Alert Types</div>
+          {[['Machine Offline', 'CRITICAL', true], ['Temperature High/Stop', 'CRITICAL', true], ['Stock Empty', 'HIGH', true], ['Door Open', 'HIGH', true], ['Vend Failure', 'HIGH', true], ['Stock Low', 'MEDIUM', false], ['No Orders (4h)', 'MEDIUM', false]].map(([label, sev, on]: any) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ fontSize: 13, color: '#0f172a' }}>{label}</div>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: sev === 'CRITICAL' ? '#fff1f2' : sev === 'HIGH' ? '#fff7ed' : '#fffbeb', color: sev === 'CRITICAL' ? '#dc2626' : sev === 'HIGH' ? '#ea580c' : '#d97706' }}>{sev}</span>
+              </div>
+              <div style={{ width: 40, height: 22, borderRadius: 11, background: on ? '#f97316' : '#e2e8f0', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: '#fff', top: 3, [on ? 'right' : 'left']: 3 }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+    cooldowns: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Alert Cooldowns</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>How long to wait before re-sending the same alert</div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', background: '#f8fafc', padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>
+            {['Alert Type', 'Cooldown', 'Notify'].map(h => <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</div>)}
+          </div>
+          {[['Machine Offline', '1h', true], ['Temperature High', '1h', true], ['Temperature Low', '2h', true], ['Temperature Stop', '1h', true], ['Stock Empty L1/L2/L3', '4h', true], ['Stock Low L1/L2/L3', '6h', false], ['Door Open', '1h', true], ['Vend Failure', '0.5h', true], ['Cup / Film Empty', '2h', true]].map(([label, cd, notify]: any) => (
+            <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', padding: '11px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+              <div style={{ fontSize: 13, color: '#0f172a' }}>{label}</div>
+              <input defaultValue={cd} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, width: 64, outline: 'none' }} />
+              <div style={{ width: 36, height: 20, borderRadius: 10, background: notify ? '#f97316' : '#e2e8f0', position: 'relative', cursor: 'pointer' }}>
+                <div style={{ position: 'absolute', width: 14, height: 14, borderRadius: '50%', background: '#fff', top: 3, [notify ? 'right' : 'left']: 3 }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Saved!' : 'Save cooldowns'}</button>
+        </div>
+      </div>
+    ),
+    billing: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Billing</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Your subscription and usage details</div>
+        <div style={{ background: 'linear-gradient(135deg, #1a1f2e, #2d3748)', borderRadius: 16, padding: '24px', marginBottom: 20, color: '#fff' }}>
+          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Current Plan</div>
+          <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>Starter</div>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>2 machines · Unlimited alerts · WhatsApp + Telegram</div>
+          <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 16px' }}>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Machines</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>2 / 5</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 16px' }}>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Next billing</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>Jun 23</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 16px' }}>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Monthly</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>₹999</div>
+            </div>
+          </div>
+        </div>
+        <button style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Upgrade Plan</button>
+      </div>
+    ),
+    danger: (
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626', marginBottom: 4 }}>Danger Zone</div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Irreversible actions — proceed with caution</div>
+        {[['Clear All Alerts', 'Permanently delete all alert history from the database', 'Clear alerts', false], ['Reset Machine Data', 'Remove all telemetry and order history for all machines', 'Reset data', false], ['Delete Account', 'Permanently delete your account and all associated data', 'Delete account', true]].map(([title, desc, btn, red]: any) => (
+          <div key={title} style={{ background: '#fff', border: '1px solid ' + (red ? '#fecaca' : '#e2e8f0'), borderRadius: 12, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{title}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{desc}</div>
+            </div>
+            <button style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid ' + (red ? '#fca5a5' : '#e2e8f0'), background: red ? '#fef2f2' : '#fff', color: red ? '#dc2626' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, marginLeft: 16 }}>{btn}</button>
+          </div>
+        ))}
+      </div>
+    ),
+  }
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+      {/* Sidebar */}
+      <div style={{ width: 220, background: '#fff', borderRight: '1px solid #e2e8f0', padding: '20px 0', flexShrink: 0 }}>
+        <div style={{ padding: '0 16px 16px', borderBottom: '1px solid #f1f5f9', marginBottom: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Settings</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Fruitlink Dashboard</div>
+        </div>
+        {navItems.map(group => (
+          <div key={group.group}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '12px 16px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>{group.group}</div>
+            {group.items.map(item => (
+              <div key={item.key} onClick={() => setActiveSection(item.key)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: activeSection === item.key ? 700 : 400, color: activeSection === item.key ? '#f97316' : '#374151', background: activeSection === item.key ? '#fff7ed' : 'transparent', borderRight: activeSection === item.key ? '3px solid #f97316' : '3px solid transparent', transition: 'all 0.1s' }}>
+                <span style={{ fontSize: 15 }}>{item.icon}</span>
+                {item.label}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* Content */}
+      <div style={{ flex: 1, padding: '32px 40px', overflowY: 'auto' }}>
+        {sections[activeSection]}
+      </div>
+    </div>
+  )
+}
+
+
 export default function Dashboard() {
   const [time, setTime] = useState('');
   const [machines, setMachines] = useState([]);
@@ -745,7 +1000,8 @@ export default function Dashboard() {
     if (activeKey === 'fleet') return <FleetMap machines={machines} />;
     if (activeKey === 'operators-list') return <OperatorsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
     if (activeKey === 'alerts') return <AlertsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
-    if (activeKey === 'settings') return (
+    if (activeKey === 'settings') return <SettingsPage />
+    if (activeKey === 'settings_old') return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, gap: 16 }}>
         <div style={{ fontSize: 52, opacity: 0.2 }}>...</div>
         <div style={{ fontSize: 20, fontWeight: 800, color: '#6b7280' }}>{getPageLabel()}</div>
