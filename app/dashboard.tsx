@@ -1256,7 +1256,7 @@ function LoyaltyPage() {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
                 {['Customer', 'Phone', 'Points', 'Status', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: C.text2 }}>{h}</th>
+                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
