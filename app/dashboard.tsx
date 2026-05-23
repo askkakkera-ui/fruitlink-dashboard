@@ -1855,6 +1855,18 @@ function CooldownsSection({ showSaved }: any) {
               </div>
             </div>
           </div>
+      </div>
+    </div>
+  )
+}
+      )}
+      <div style={{ marginTop: 8, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
+        <b style={{ color: C.text }}>💳 Payment Integration:</b> Razorpay subscription billing activates once pricing is confirmed.
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [active, setActive] = useState('console')
   const [machines, setMachines] = useState<any[]>([])
