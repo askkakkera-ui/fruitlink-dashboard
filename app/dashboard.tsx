@@ -1815,42 +1815,165 @@ function CooldownsSection({ showSaved }: any) {
 }
 
 function BillingSection({ role }: any) {
+  const [machines, setMachines] = useState<any[]>([])
+  const [machinePlans, setMachinePlans] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [upgrading, setUpgrading] = useState<string | null>(null)
+
+  const PLANS: any = {
+    starter: {
+      name: 'Starter', color: C.green, bg: C.greenBg, icon: '🟢',
+      features: [
+        'Live Console + Machine List + Fleet Map',
+        'Revenue & P&L Analytics',
+        '17 WhatsApp alert types with smart cooldowns',
+        'Remote machine config (pricing, cup size, maintenance mode)',
+        'UPI + NFC + Card payments (0% MDR on UPI)',
+        'Temperature thresholds + notifications',
+        'Up to 2 operators',
+      ]
+    },
+    professional: {
+      name: 'Professional', color: C.orange, bg: C.orangeBg, icon: '⭐',
+      badge: 'Most Popular',
+      features: [
+        'Everything in Starter',
+        'Ad Content Manager (JPEG/video by machine, time, day)',
+        'Loyalty Programme (customer points + redeem)',
+        'Operators Management + RBAC (assigned machines)',
+        'Operators see only their machines, alerts & orders',
+        'Danger Zone (super_admin only)',
+        'Up to 10 operators',
+      ]
+    },
+    enterprise: {
+      name: 'Enterprise', color: C.blue, bg: C.blueBg, icon: '🏢',
+      features: [
+        'Everything in Professional',
+        'White-label dashboard',
+        'REST API + Webhooks',
+        'SAML Single Sign-On',
+        'Dedicated infrastructure',
+        'Guaranteed SLA + Priority support',
+        'Unlimited operators',
+      ]
+    }
+  }
+
+  useEffect(() => {
+    const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location,state', { headers: h })
+      .then(r => r.json()).then(d => {
+        if (Array.isArray(d)) {
+          setMachines(d)
+          const plans: Record<string, string> = {}
+          d.forEach((m: any) => { plans[m.id] = 'starter' })
+          setMachinePlans(plans)
+        }
+        setLoading(false)
+      })
+  }, [])
+
+  const handleUpgrade = (machineId: string, plan: string) => {
+    setUpgrading(machineId)
+    // Razorpay integration placeholder
+    setTimeout(() => {
+      setMachinePlans({ ...machinePlans, [machineId]: plan })
+      setUpgrading(null)
+      alert('Razorpay integration coming soon — plan marked as ' + PLANS[plan].name)
+    }, 800)
+  }
+
+  const currentPlan = (id: string) => machinePlans[id] || 'starter'
+
   return (
     <div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Billing</div>
-      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage your Fruitlink subscription</div>
-      <div style={{ background: C.surface2, border: '2px solid ' + C.orange, borderRadius: 16, padding: '24px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6 }}>Current Plan</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Fruitlink Pro</div>
-            <div style={{ fontSize: 13, color: C.text2 }}>Full access · Unlimited machines · WhatsApp alerts</div>
-          </div>
-          <div style={{ background: C.orange, color: '#fff', padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>ACTIVE</div>
-        </div>
-        <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid ' + C.border, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-          {[
-            { label: 'Machines', value: '2 / Unlimited' },
-            { label: 'Operators', value: '3 / Unlimited' },
-            { label: 'Alerts/Month', value: 'Unlimited' },
-          ].map(f => (
-            <div key={f.label}>
-              <div style={{ fontSize: 10, color: C.text3, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', marginBottom: 4 }}>{f.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{f.value}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Billing & Plans</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 24 }}>Manage your subscription plan per machine. Pricing TBD.</div>
+
+      {/* Plan comparison cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 28 }}>
+        {Object.entries(PLANS).map(([key, p]: any) => (
+          <div key={key} style={{ background: C.surface, border: '2px solid ' + (key === 'professional' ? C.orange : C.border), borderRadius: 14, overflow: 'hidden' }}>
+            {key === 'professional' && (
+              <div style={{ background: C.orange, color: '#fff', fontSize: 10, fontWeight: 700, textAlign: 'center', padding: '4px 0', letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>⭐ Most Popular</div>
+            )}
+            <div style={{ padding: '18px 18px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 20 }}>{p.icon}</span>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{p.name}</div>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: p.color, marginBottom: 14 }}>Pricing TBD / machine / month</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {p.features.map((f: string, i: number) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 11.5, color: C.text2 }}>
+                    <span style={{ color: p.color, fontSize: 12, flexShrink: 0, marginTop: 1 }}>✓</span>
+                    <span>{f}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-      <div style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 12, padding: '18px 20px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Razorpay Integration</div>
-        <div style={{ fontSize: 13, color: C.text2, marginBottom: 14 }}>Automated monthly billing via Razorpay is coming soon. You will be able to manage subscriptions, invoices and payment history here.</div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.orangeBg, border: '1px solid ' + C.orange + '40', borderRadius: 8, padding: '6px 14px' }}>
-          <span style={{ fontSize: 12, color: C.orange, fontWeight: 600 }}>🚀 Coming Soon — Razorpay SaaS Billing</span>
+
+      {/* Per machine plan selector */}
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Your Machines</div>
+      {loading ? (
+        <div style={{ color: C.text3, fontSize: 13 }}>Loading machines...</div>
+      ) : machines.length === 0 ? (
+        <div style={{ color: C.text3, fontSize: 13 }}>No machines found.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {machines.map((m: any) => {
+            const plan = currentPlan(m.id)
+            const P = PLANS[plan]
+            return (
+              <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🖥</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                      <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{m.sn} · {m.location}, {m.state}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Pill color={P.color} bg={P.bg}>{P.icon} {P.name}</Pill>
+                    {/* Plan switcher */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {Object.entries(PLANS).map(([key, pp]: any) => (
+                        key !== plan && (
+                          <button key={key} onClick={() => handleUpgrade(m.id, key)} disabled={upgrading === m.id}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid ' + pp.color, background: 'transparent', color: pp.color, fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: upgrading === m.id ? 0.6 : 1 }}>
+                            {key === 'starter' ? '↓ Downgrade' : '↑ Upgrade'} to {pp.name}
+                          </button>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {/* Features of current plan */}
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {P.features.slice(0,4).map((f: string, i: number) => (
+                    <div key={i} style={{ fontSize: 10, color: C.text3, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 6, padding: '3px 8px' }}>{f}</div>
+                  ))}
+                  {P.features.length > 4 && <div style={{ fontSize: 10, color: P.color, background: P.bg, borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>+{P.features.length - 4} more</div>}
+                </div>
+              </div>
+            )
+          })}
         </div>
+      )}
+
+      {/* Razorpay notice */}
+      <div style={{ marginTop: 20, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: C.text2 }}>
+        <b style={{ color: C.text }}>Payment Integration:</b> Razorpay subscription billing will be activated once pricing is confirmed. Upgrade/downgrade will trigger automatic proration.
       </div>
     </div>
   )
 }
+
 
 function SettingsPage() {
   const [activeSection, setActiveSection] = useState('profile')
