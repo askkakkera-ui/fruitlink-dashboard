@@ -1529,9 +1529,14 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  const role = getCookie('fl_role')
-  const name = getCookie('fl_operator_name') || 'Admin'
-  const operatorId = getCookie('fl_operator_id')
+  const [role, setRole] = useState('operator')
+  const [name, setName] = useState('Admin')
+  const [operatorId, setOperatorId] = useState('')
+  useEffect(() => {
+    setRole(getCookie('fl_role') || 'operator')
+    setName(getCookie('fl_operator_name') || 'Admin')
+    setOperatorId(getCookie('fl_operator_id') || '')
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
