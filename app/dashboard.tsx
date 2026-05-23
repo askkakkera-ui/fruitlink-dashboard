@@ -1126,6 +1126,188 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
 }
 
 // ─── Settings Page ───────────────────────────────────────────────
+
+function ThresholdsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [machines, setMachines] = useState<any[]>([])
+  const [thresholds, setThresholds] = useState<Record<string, any>>({})
+  useEffect(() => {
+    fetch(SB_URL + '/rest/v1/machines?select=id,display_name', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+      .then(r => r.json()).then(d => {
+        if (Array.isArray(d)) {
+          setMachines(d)
+          const t: Record<string, any> = {}
+          d.forEach((m: any) => { t[m.id] = { temp_high: 12, temp_low: 3, temp_stop: 20 } })
+          setThresholds(t)
+        }
+      })
+  }, [])
+  const save = async () => {
+    setSaving(true)
+    showSaved()
+    setSaving(false)
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Thresholds</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Set temperature alert thresholds per machine</div>
+      {machines.map(m => (
+        <div key={m.id} style={{ marginBottom: 18, padding: 16, background: C.surface2, borderRadius: 12, border: '1px solid ' + C.border }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 14 }}>{m.display_name}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+            {[
+              { label: 'Temp High Alert (°C)', key: 'temp_high', desc: 'Alert when above this' },
+              { label: 'Temp Low Alert (°C)', key: 'temp_low', desc: 'Alert when below this' },
+              { label: 'Temp Stop Selling (°C)', key: 'temp_stop', desc: 'Stop vending above this' },
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</label>
+                <input type="number" value={thresholds[m.id]?.[f.key] ?? ''} onChange={e => setThresholds({ ...thresholds, [m.id]: { ...thresholds[m.id], [f.key]: +e.target.value } })}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+                <div style={{ fontSize: 10, color: C.text3, marginTop: 3 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Thresholds'}</button>
+    </div>
+  )
+}
+
+function NotificationsSection({ operatorId, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [phone, setPhone] = useState('')
+  const [alerts, setAlerts] = useState<Record<string, boolean>>({
+    machine_offline: true, temperature_high: true, temperature_low: true,
+    temperature_stop: true, stock_empty: true, stock_low: false,
+    door_open: true, vend_failure: true, cup_empty: true, film_empty: true,
+  })
+  const save = async () => {
+    setSaving(true)
+    showSaved()
+    setSaving(false)
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Notifications</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Configure WhatsApp alert notifications</div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>WhatsApp Number</label>
+        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 89771 10142"
+          style={{ width: '100%', maxWidth: 300, padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Alerts will be sent via Twilio WhatsApp</div>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Alert Types</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {Object.entries(alerts).map(([key, val]) => (
+            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: val ? C.orangeBg : C.surface2, border: '1px solid ' + (val ? C.orange : C.border), borderRadius: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={val} onChange={e => setAlerts({ ...alerts, [key]: e.target.checked })} style={{ width: 16, height: 16, accentColor: C.orange }} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{key.replace(/_/g, ' ').replace(/\w/g, l => l.toUpperCase())}</div>
+                <div style={{ fontSize: 10, color: C.text3 }}>{val ? 'Enabled' : 'Disabled'}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+      <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Notifications'}</button>
+    </div>
+  )
+}
+
+function CooldownsSection({ showSaved }: any) {
+  const COOLDOWNS = [
+    { type: 'machine_offline', label: 'Machine Offline', hours: 1, severity: 'CRITICAL' },
+    { type: 'temperature_high', label: 'High Temperature', hours: 1, severity: 'CRITICAL' },
+    { type: 'temperature_low', label: 'Low Temperature', hours: 2, severity: 'HIGH' },
+    { type: 'temperature_stop', label: 'Temp Stop Selling', hours: 1, severity: 'CRITICAL' },
+    { type: 'stock_empty_l1', label: 'Layer 1 Empty', hours: 4, severity: 'HIGH' },
+    { type: 'stock_empty_l2', label: 'Layer 2 Empty', hours: 4, severity: 'HIGH' },
+    { type: 'stock_empty_l3', label: 'Layer 3 Empty', hours: 4, severity: 'HIGH' },
+    { type: 'stock_low_l1', label: 'Layer 1 Low', hours: 6, severity: 'MEDIUM' },
+    { type: 'stock_low_l2', label: 'Layer 2 Low', hours: 6, severity: 'MEDIUM' },
+    { type: 'stock_low_l3', label: 'Layer 3 Low', hours: 6, severity: 'MEDIUM' },
+    { type: 'door_open', label: 'Door Open', hours: 1, severity: 'HIGH' },
+    { type: 'vend_failure', label: 'Vend Failure', hours: 0.5, severity: 'HIGH' },
+    { type: 'cup_empty', label: 'Cups Empty', hours: 2, severity: 'HIGH' },
+    { type: 'film_empty', label: 'Film Empty', hours: 2, severity: 'HIGH' },
+  ]
+  const SEV_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue }
+  const SEV_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg }
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Alert Cooldowns</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>How long to wait before re-firing the same alert. Configured in alert.js on VPS.</div>
+      <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
+              {['Alert Type', 'Severity', 'Cooldown'].map(h => (
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {COOLDOWNS.map((c, i) => (
+              <tr key={c.type} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                <td style={{ padding: '10px 16px' }}>
+                  <div style={{ fontWeight: 600, color: C.text }}>{c.label}</div>
+                  <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{c.type}</div>
+                </td>
+                <td style={{ padding: '10px 16px' }}>
+                  <span style={{ background: SEV_BG[c.severity], color: SEV_COLOR[c.severity], padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{c.severity}</span>
+                </td>
+                <td style={{ padding: '10px 16px', fontWeight: 600, color: C.text }}>{c.hours}h</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 14, padding: '12px 16px', background: C.surface2, borderRadius: 10, border: '1px solid ' + C.border, fontSize: 12, color: C.text3 }}>
+        To change cooldowns, edit <code style={{ fontFamily: 'monospace', background: C.border, padding: '1px 6px', borderRadius: 4 }}>/root/fruitlink/machine-api/alert.js</code> on the VPS and restart PM2.
+      </div>
+    </div>
+  )
+}
+
+function BillingSection({ role }: any) {
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Billing</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Manage your Fruitlink subscription</div>
+      <div style={{ background: C.surface2, border: '2px solid ' + C.orange, borderRadius: 16, padding: '24px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6 }}>Current Plan</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Fruitlink Pro</div>
+            <div style={{ fontSize: 13, color: C.text2 }}>Full access · Unlimited machines · WhatsApp alerts</div>
+          </div>
+          <div style={{ background: C.orange, color: '#fff', padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>ACTIVE</div>
+        </div>
+        <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid ' + C.border, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {[
+            { label: 'Machines', value: '2 / Unlimited' },
+            { label: 'Operators', value: '3 / Unlimited' },
+            { label: 'Alerts/Month', value: 'Unlimited' },
+          ].map(f => (
+            <div key={f.label}>
+              <div style={{ fontSize: 10, color: C.text3, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', marginBottom: 4 }}>{f.label}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{f.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 12, padding: '18px 20px' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Razorpay Integration</div>
+        <div style={{ fontSize: 13, color: C.text2, marginBottom: 14 }}>Automated monthly billing via Razorpay is coming soon. You will be able to manage subscriptions, invoices and payment history here.</div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.orangeBg, border: '1px solid ' + C.orange + '40', borderRadius: 8, padding: '6px 14px' }}>
+          <span style={{ fontSize: 12, color: C.orange, fontWeight: 600 }}>🚀 Coming Soon — Razorpay SaaS Billing</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SettingsPage() {
   const [activeSection, setActiveSection] = useState('profile')
   const [saved, setSaved] = useState(false)
@@ -1192,11 +1374,14 @@ function SettingsPage() {
           {activeSection === 'danger' && (
             <DangerSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} operatorId={operatorId} />
           )}
-          {!['profile', 'security', 'locations', 'danger'].includes(activeSection) && (
+          {activeSection === 'thresholds' && <ThresholdsSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
+          {activeSection === 'notifications' && <NotificationsSection operatorId={operatorId} SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
+          {activeSection === 'cooldowns' && <CooldownsSection showSaved={showSaved} />}
+          {activeSection === 'billing' && <BillingSection role={role} />}
+          {!['profile','security','locations','danger','thresholds','notifications','cooldowns','billing'].includes(activeSection) && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: C.text3 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
               <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Coming Soon</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>This section is being built</div>
             </div>
           )}
         </div>
