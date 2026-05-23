@@ -888,13 +888,13 @@ function FleetMapPage({ machines }: { machines: any[] }) {
   const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'NEXT_PUBLIC_MAPBOX_TOKEN_HERE'
   // Machine coords by SN (most reliable) then by location string
   const MACHINE_COORDS: Record<string, {lat: number, lng: number}> = {
-    'C3B31F38D1C07A76': { lat: 17.4383, lng: 78.4430 }, // Fruitful-2 270/3RT Road No.2 SR Nagar near Axis Bank
+    'C3B31F38D1C07A76': { lat: 17.442822793310572, lng: 78.44438079543997 }, // Fruitful-2 Tim Cafe SR Nagar exact
     '9E3D050CEF2EEC7B': { lat: 17.4702, lng: 78.5607 }, // Fruitful-1 ECIL
   }
   const COORDS: Record<string, {lat: number, lng: number}> = {
-    'SR Nagar, Ameerpet': { lat: 17.4383, lng: 78.4430 },
-    'SR Nagar': { lat: 17.4383, lng: 78.4430 },
-    'Ameerpet': { lat: 17.4383, lng: 78.4430 },
+    'SR Nagar, Ameerpet': { lat: 17.442822793310572, lng: 78.44438079543997 },
+    'SR Nagar': { lat: 17.442822793310572, lng: 78.44438079543997 },
+    'Ameerpet': { lat: 17.442822793310572, lng: 78.44438079543997 },
     'Cheeriyal, ECIL': { lat: 17.4702, lng: 78.5607 },
     'ECIL': { lat: 17.4702, lng: 78.5607 },
     'Cheeriyal': { lat: 17.4702, lng: 78.5607 },
@@ -919,7 +919,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
     if (!scriptLoaded || !mapRef.current) return
     const mgl = (window as any).mapboxgl
     mgl.accessToken = MB
-    const map = new mgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.4430, 17.4383], zoom: 10.5 })
+    const map = new mgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.44438079543997, 17.442822793310572], zoom: 10.5 })
     machines.forEach((m: any) => {
       const co = getCoords(m); if (!co) return
       const online = m.status === 'online'
