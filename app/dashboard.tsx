@@ -374,7 +374,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
               display: 'grid', gridTemplateColumns: '120px 1fr auto',
               gap: 16, padding: '14px 20px', alignItems: 'center',
               borderBottom: i < Math.min(activeAlerts.length, 5) - 1 ? `1px solid ${C.border}` : 'none',
-              background: i % 2 === 0 ? '#fff' : C.surface2,
+              background: i % 2 === 0 ? C.surface : C.surface2,
             }}>
               <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>
                 {a.severity}
@@ -522,13 +522,13 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                       </thead>
                       <tbody>
                         {machAlerts.map((a: any, i: number) => (
-                          <tr key={a.id} style={{ borderBottom: i < machAlerts.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                          <tr key={a.id} style={{ borderBottom: i < machAlerts.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? C.surface : C.surface2 }}>
                             <td style={{ padding: '12px 16px' }}>
                               <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
                               <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 10, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
@@ -640,7 +640,7 @@ function OrdersPage() {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map((h, i) => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.09em', fontWeight: 700 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -650,7 +650,7 @@ function OrdersPage() {
                 const ps = PAY_STATE[o.pay_state] || PAY_STATE[0]
                 const ds = DEL_STATE[o.delivery_state] || DEL_STATE[0]
                 return (
-                  <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                  <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.surface2 }}>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.blue }}>{o.order_code}</div>
                     </td>
@@ -1017,13 +1017,13 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
             <thead>
               <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.09em', fontWeight: 700 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {operators.map((op, i) => (
-                <tr key={op.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                <tr key={op.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.surface2 }}>
                   <td style={{ padding: '13px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
@@ -1083,7 +1083,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Role</label>
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: '#fff', color: C.text }}>
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: C.surface, color: C.text }}>
                   <option value="operator">Operator</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
@@ -1242,13 +1242,13 @@ function CooldownsSection({ showSaved }: any) {
           <thead>
             <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
               {['Alert Type', 'Severity', 'Cooldown'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.09em', fontWeight: 700 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {COOLDOWNS.map((c, i) => (
-              <tr key={c.type} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+              <tr key={c.type} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? C.surface : C.surface2 }}>
                 <td style={{ padding: '10px 16px' }}>
                   <div style={{ fontWeight: 600, color: C.text }}>{c.label}</div>
                   <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{c.type}</div>
@@ -1419,7 +1419,7 @@ function ProfileSection({ operatorId, name, role, state, initials, SB_URL, SB_KE
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        <button style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: '#fff', color: C.text2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+        <button style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
         <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Changes'}</button>
       </div>
     </div>
@@ -1509,7 +1509,7 @@ function DangerSection({ SB_URL, SB_KEY, operatorId }: any) {
         <div style={{ fontWeight: 700, color: C.red, marginBottom: 6 }}>Delete Account</div>
         <div style={{ fontSize: 13, color: C.text2, marginBottom: 14 }}>Type DELETE to confirm permanent account deletion.</div>
         <input value={confirm} onChange={e => setConfirm(e.target.value)} placeholder='Type "DELETE"'
-          style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.red}60`, fontSize: 13, outline: 'none', marginBottom: 12, boxSizing: 'border-box', background: '#fff', color: C.text }} />
+          style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.red}60`, fontSize: 13, outline: 'none', marginBottom: 12, boxSizing: 'border-box', background: C.surface, color: C.text }} />
         <button onClick={deleteAccount} disabled={confirm !== 'DELETE'} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, fontWeight: 700, cursor: confirm === 'DELETE' ? 'pointer' : 'not-allowed', opacity: confirm === 'DELETE' ? 1 : 0.5 }}>Delete My Account</button>
       </div>
     </div>
