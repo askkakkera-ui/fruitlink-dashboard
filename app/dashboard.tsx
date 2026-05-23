@@ -171,9 +171,18 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
   const fetchAlerts = async () => {
     setLoading(true)
     const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
+    const role = getCookie('fl_role')
+    const operatorId = getCookie('fl_operator_id')
+    let machineIds: string[] = []
+    if (role !== 'super_admin' && operatorId) {
+      const moRes = await fetch(supabaseUrl + '/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id', { headers })
+      const moData = await moRes.json()
+      machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
+    }
+    const idFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
     const [alertRes, machineRes] = await Promise.all([
-      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500', { headers }),
-      fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location', { headers }),
+      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + idFilter, { headers }),
+      fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location' + (machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : ''), { headers }),
     ])
     const [alertData, machineData] = await Promise.all([alertRes.json(), machineRes.json()])
     const ads = Array.isArray(alertData) ? alertData : []
