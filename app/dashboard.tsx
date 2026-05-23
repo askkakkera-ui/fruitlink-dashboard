@@ -1550,7 +1550,7 @@ export default function Dashboard() {
     const enriched: any[] = []
     if (Array.isArray(mData)) {
       for (const m of mData) {
-        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=created_at.desc&limit=1', { headers })
+        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=ts.desc&limit=1', { headers })
         const tData = await tRes.json()
         const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
         enriched.push({ ...m, ...tel })
@@ -2044,7 +2044,7 @@ export default function Dashboard() {
     const enriched: any[] = []
     if (Array.isArray(mData)) {
       for (const m of mData) {
-        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=created_at.desc&limit=1', { headers })
+        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=ts.desc&limit=1', { headers })
         const tData = await tRes.json()
         const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
         enriched.push({ ...m, ...tel })
