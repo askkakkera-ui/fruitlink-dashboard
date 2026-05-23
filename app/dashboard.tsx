@@ -566,9 +566,12 @@ function OrdersPage() {
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [view, setView] = useState<'analytics' | 'orders'>('analytics')
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
 
   const [uRole] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || 'operator') : 'operator')
   const [uOpId] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '')
+
   useEffect(() => {
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     const load = async () => {
@@ -580,7 +583,7 @@ function OrdersPage() {
         ids = Array.isArray(mo) ? mo.map((r: any) => r.machine_id) : []
       }
       const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
-      const os = await fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=200' + f, { headers: h }).then(r => r.json())
+      const os = await fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=500' + f, { headers: h }).then(r => r.json())
       setOrders(Array.isArray(os) ? os : [])
       setLoading(false)
     }
@@ -588,14 +591,45 @@ function OrdersPage() {
   }, [uRole, uOpId])
 
   const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const fmtAmt = (p: number) => '₹' + (p / 100).toFixed(0)
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
-  const fmtAmount = (p: number) => '₹' + (p / 100).toFixed(2)
 
-  const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
-  const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
-  const PAY_TYPE: any = { upi: '📱 UPI', cash: '💵 Cash', card: '💳 Card', qr: '📲 QR' }
+  // Period filter
+  const now = new Date()
+  const periodOrders = orders.filter((o: any) => {
+    const d = new Date(o.created_at)
+    if (period === 'today') return d.toDateString() === now.toDateString()
+    if (period === 'week') return (now.getTime() - d.getTime()) < 7 * 86400000
+    return (now.getTime() - d.getTime()) < 30 * 86400000
+  })
 
+  const paidOrders = periodOrders.filter((o: any) => o.pay_state === 1)
+  const totalRevenue = paidOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
+  const totalCups = paidOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
+  const avgOrder = paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0
+  const convRate = periodOrders.length > 0 ? (paidOrders.length / periodOrders.length * 100) : 0
+
+  // Revenue per machine
+  const machineRevenue = machines.map((m: any) => {
+    const mOrders = paidOrders.filter((o: any) => o.machine_id === m.id)
+    const rev = mOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
+    const cups = mOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
+    return { ...m, revenue: rev, cups, orders: mOrders.length }
+  }).sort((a: any, b: any) => b.revenue - a.revenue)
+
+  // Daily revenue chart data (last 7 days)
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (6 - i))
+    return d.toDateString()
+  })
+  const dailyData = days.map(day => {
+    const dayOrders = orders.filter((o: any) => new Date(o.created_at).toDateString() === day && o.pay_state === 1)
+    return { day: new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.length }
+  })
+  const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
+
+  // Tab filter for order list
   const filtered = orders.filter((o: any) => {
     if (filter === 'paid') return o.pay_state === 1
     if (filter === 'pending') return o.pay_state === 0
@@ -603,118 +637,161 @@ function OrdersPage() {
     return true
   })
 
-  const totalRevenue = orders.filter((o: any) => o.pay_state === 1).reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
-  const totalOrders = orders.length
-  const paid = orders.filter((o: any) => o.pay_state === 1).length
-  const pending = orders.filter((o: any) => o.pay_state === 0).length
+  const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
 
   return (
-    <div style={{ padding: '24px 28px' }}>
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Orders</div>
-        <div style={{ fontSize: 13, color: C.text2 }}>{totalOrders} total orders across all machines</div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
-        {[
-          { label: 'Total Orders', value: totalOrders, color: C.blue, icon: '🧾', pct: 100 },
-          { label: 'Total Revenue', value: fmtAmount(totalRevenue), color: C.green, icon: '₹', pct: paid > 0 ? (paid/totalOrders)*100 : 0 },
-          { label: 'Paid', value: paid, color: C.green, icon: '✅', pct: totalOrders > 0 ? (paid/totalOrders)*100 : 0 },
-          { label: 'Pending Payment', value: pending, color: C.amber, icon: '⏳', pct: totalOrders > 0 ? (pending/totalOrders)*100 : 0 },
-        ].map(s => <StatCard key={s.label} {...s} sub="" />)}
-      </div>
-
-      <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: `1px solid ${C.border}` }}>
-        {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered']].map(([f, label]) => (
-          <button key={f} onClick={() => setFilter(f)} style={{
-            padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
-            background: filter === f ? C.sidebar : 'transparent',
-            color: filter === f ? C.surface : C.text2,
-            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
-          }}>{label}</button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading orders...</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>No orders found</div>
+    <div style={{ padding: '22px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Revenue & Orders</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{orders.length} total orders · {machines.length} machines</div>
         </div>
-      ) : (
-        <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
-                {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map((h, i) => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: C.text3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((o: any, i: number) => {
-                const m = getMachine(o.machine_id)
-                const ps = PAY_STATE[o.pay_state] || PAY_STATE[0]
-                const ds = DEL_STATE[o.delivery_state] || DEL_STATE[0]
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* View toggle */}
+          <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
+            {[['analytics', '📊 Analytics'], ['orders', '📋 Orders']].map(([v, l]) => (
+              <button key={v} onClick={() => setView(v as any)} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: view === v ? C.sidebar : 'transparent', color: view === v ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
+            ))}
+          </div>
+          {/* Period toggle */}
+          {view === 'analytics' && (
+            <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
+              {[['today', 'Today'], ['week', '7 Days'], ['month', '30 Days']].map(([p, l]) => (
+                <button key={p} onClick={() => setPeriod(p as any)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: period === p ? C.orange : 'transparent', color: period === p ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {view === 'analytics' ? (
+        <div>
+          {/* KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+            {[
+              { label: 'Total Revenue', value: fmtAmt(totalRevenue), sub: period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : 'last 30 days', color: C.green, icon: '₹', pct: 75 },
+              { label: 'Paid Orders', value: paidOrders.length.toString(), sub: periodOrders.length + ' total', color: C.blue, icon: '✅', pct: convRate },
+              { label: 'Avg Order Value', value: fmtAmt(avgOrder), sub: 'per transaction', color: C.orange, icon: '📈', pct: 60 },
+              { label: 'Cups Served', value: totalCups.toString(), sub: 'juice cups', color: C.amber, icon: '🥤', pct: 80 },
+            ].map(s => <StatCard key={s.label} {...s} />)}
+          </div>
+
+          {/* Daily Revenue Chart */}
+          <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '20px 24px', marginBottom: 18 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Daily Revenue — Last 7 Days</div>
+            <div style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>Paid orders only</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 160 }}>
+              {dailyData.map((d, i) => {
+                const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 4 : 2)
                 return (
-                  <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.surface2 }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.blue }}>{o.order_code}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '—'}</div>
-                      <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmount(o.amount_paise || 0)}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
-                      <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>{PAY_TYPE[o.pay_type] || o.pay_type}</div>
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontWeight: 600, color: C.text }}>{o.cup_num || '—'}</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontSize: 12, color: C.text }}>{fmtTime(o.created_at)}</div>
-                      <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{fmtAgo(o.created_at)}</div>
-                    </td>
-                  </tr>
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    {d.revenue > 0 && <div style={{ fontSize: 9, color: C.text3, fontWeight: 600 }}>{fmtAmt(d.revenue)}</div>}
+                    <div style={{ width: '100%', height: h, background: d.revenue > 0 ? C.orange : C.border, borderRadius: '4px 4px 0 0', transition: 'height .4s', position: 'relative' as const }}>
+                      {d.cups > 0 && <div style={{ position: 'absolute' as const, top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 9, color: C.orange, fontWeight: 700 }}>{d.cups}🥤</div>}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.text3, textAlign: 'center', fontWeight: 500 }}>{d.day}</div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
-          <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, background: C.surface2, fontSize: 11, color: C.text3 }}>
-            Showing {filtered.length} of {orders.length} orders
+            </div>
           </div>
+
+          {/* Revenue per machine */}
+          <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '20px 24px' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16 }}>Revenue by Machine</div>
+            {machineRevenue.length === 0 ? (
+              <div style={{ color: C.text3, fontSize: 13 }}>No revenue data for this period</div>
+            ) : machineRevenue.map((m: any, i: number) => {
+              const pct = totalRevenue > 0 ? (m.revenue / totalRevenue * 100) : 0
+              return (
+                <div key={m.id} style={{ marginBottom: i < machineRevenue.length - 1 ? 18 : 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: C.orangeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>🖥</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.display_name}</div>
+                        <div style={{ fontSize: 10, color: C.text3 }}>{m.orders} orders · {m.cups} cups</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.green }}>{fmtAmt(m.revenue)}</div>
+                      <div style={{ fontSize: 10, color: C.text3 }}>{pct.toFixed(1)}% of total</div>
+                    </div>
+                  </div>
+                  <div style={{ height: 6, background: C.border, borderRadius: 3 }}>
+                    <div style={{ height: '100%', background: C.orange, borderRadius: 3, width: pct + '%', transition: 'width .6s' }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        <div>
+          {/* Order list filter tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: '1px solid ' + C.border }}>
+            {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered']].map(([f, label]) => (
+              <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === f ? C.sidebar : 'transparent', color: filter === f ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>{label}</button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading orders...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: '1px solid ' + C.border }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>No orders found</div>
+            </div>
+          ) : (
+            <div style={{ background: C.surface, borderRadius: 16, border: '1px solid ' + C.border, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
+                    {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map(h => (
+                      <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((o: any, i: number) => {
+                    const m = getMachine(o.machine_id)
+                    const ps = PAY_STATE[o.pay_state] || PAY_STATE[0]
+                    const ds = DEL_STATE[o.delivery_state] || DEL_STATE[0]
+                    return (
+                      <tr key={o.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? C.surface : C.surface2 }}>
+                        <td style={{ padding: '12px 16px' }}><div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.blue }}>{o.order_code}</div></td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '--'}</div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>{o.pay_type?.toUpperCase()}</div>
+                        </td>
+                        <td style={{ padding: '12px 16px' }}><Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill></td>
+                        <td style={{ padding: '12px 16px', fontWeight: 600, color: C.text }}>{o.cup_num || '--'}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ fontSize: 12, color: C.text }}>{fmtTime(o.created_at)}</div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{fmtAgo(o.created_at)}</div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <div style={{ padding: '10px 16px', borderTop: '1px solid ' + C.border, background: C.surface2, fontSize: 11, color: C.text3 }}>
+                Showing {filtered.length} of {orders.length} orders
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function TempSparkline({ machineId }: { machineId: string }) {
-  const [temps, setTemps] = useState<number[]>([])
-  useEffect(() => {
-    fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,ts&machine_id=eq.' + machineId + '&order=ts.desc&limit=24', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
-      .then(r => r.json()).then(d => { if (Array.isArray(d)) setTemps(d.map((r: any) => r.inner_temp_c).filter((v: any) => v != null).reverse()) })
-  }, [machineId])
-  if (temps.length < 2) return <div style={{ fontSize: 10, color: C.text3 }}>No history</div>
-  const W = 110, H = 32, p = 3
-  const mn = Math.min(...temps), mx = Math.max(...temps), rng = mx - mn || 1
-  const pts = temps.map((t, i) => (p + (i/(temps.length-1))*(W-p*2)) + ',' + (H-p-((t-mn)/rng)*(H-p*2))).join(' ')
-  const last = temps[temps.length-1], lp = pts.split(' ').slice(-1)[0].split(',')
-  const col = last > 12 ? C.red : last < 3 ? C.blue : C.green
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-      <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>24h Temp</div>
-      <svg width={W} height={H}><polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" opacity="0.8"/><circle cx={lp[0]} cy={lp[1]} r="3" fill={col}/></svg>
-      <div style={{ fontSize: 10, color: col, fontWeight: 600 }}>{last}C</div>
-    </div>
-  )
-}
 
 function MachinesPage({ machines, loading, fetchData }: any) {
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
