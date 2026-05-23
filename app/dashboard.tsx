@@ -151,41 +151,39 @@ const SEVERITY_ICON: Record<string, string> = {
   CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢',
 }
 const ALERT_LABELS: Record<string, string> = {
-  machine_offline: 'Machine Offline',
-  temperature_high: 'High Temperature',
-  temperature_low: 'Low Temperature',
-  temperature_stop: 'Temp — Stop Selling',
-  stock_empty_l1: 'Layer 1 Empty',
-  stock_empty_l2: 'Layer 2 Empty',
-  stock_empty_l3: 'Layer 3 Empty',
-  stock_low_l1: 'Layer 1 Low Stock',
-  stock_low_l2: 'Layer 2 Low Stock',
-  stock_low_l3: 'Layer 3 Low Stock',
-  door_open: 'Door Open',
-  vend_failure: 'Vend Failure',
-  cup_empty: 'Cups Empty',
-  film_empty: 'Film Empty',
-  cooling_off: 'Cooling Off',
-  no_orders_4h: 'No Orders (4h)',
+  machine_offline: 'Machine Offline', temperature_high: 'High Temperature',
+  temperature_low: 'Low Temperature', temperature_stop: 'Temp — Stop Selling',
+  stock_empty_l1: 'Layer 1 Empty', stock_empty_l2: 'Layer 2 Empty', stock_empty_l3: 'Layer 3 Empty',
+  stock_low_l1: 'Layer 1 Low Stock', stock_low_l2: 'Layer 2 Low Stock', stock_low_l3: 'Layer 3 Low Stock',
+  door_open: 'Door Open', vend_failure: 'Vend Failure', cup_empty: 'Cups Empty',
+  film_empty: 'Film Empty', cooling_off: 'Cooling Off', no_orders_4h: 'No Orders (4h)',
 }
 
 function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
   const [alerts, setAlerts] = useState<any[]>([])
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all'|'active'|'resolved'>('active')
+  const [globalFilter, setGlobalFilter] = useState<'all'|'active'|'resolved'>('active')
   const [severityFilter, setSeverityFilter] = useState('all')
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [machineFilter, setMachineFilter] = useState<Record<string, 'all'|'active'|'resolved'>>({})
 
   const fetchAlerts = async () => {
     setLoading(true)
     const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
     const [alertRes, machineRes] = await Promise.all([
-      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=200', { headers }),
+      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500', { headers }),
       fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location', { headers }),
     ])
     const [alertData, machineData] = await Promise.all([alertRes.json(), machineRes.json()])
-    setAlerts(Array.isArray(alertData) ? alertData : [])
-    setMachines(Array.isArray(machineData) ? machineData : [])
+    const ads = Array.isArray(alertData) ? alertData : []
+    const mds = Array.isArray(machineData) ? machineData : []
+    setAlerts(ads)
+    setMachines(mds)
+    // auto-expand machines that have active alerts
+    const exp: Record<string, boolean> = {}
+    mds.forEach((m: any) => { if (ads.some((a: any) => a.machine_id === m.id && !a.resolved_at)) exp[m.id] = true })
+    setExpanded(exp)
     setLoading(false)
   }
 
@@ -193,9 +191,9 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
 
   const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
 
-  const filtered = alerts.filter((a: any) => {
-    if (filter === 'active' && a.resolved_at) return false
-    if (filter === 'resolved' && !a.resolved_at) return false
+  const globalFiltered = alerts.filter((a: any) => {
+    if (globalFilter === 'active' && a.resolved_at) return false
+    if (globalFilter === 'resolved' && !a.resolved_at) return false
     if (severityFilter !== 'all' && a.severity !== severityFilter) return false
     return true
   })
@@ -209,11 +207,13 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
     resolved: alerts.filter((a: any) => a.resolved_at).length,
   }
 
+  // Group filtered alerts by machine
+  const machinesWithAlerts = machines.filter(m => globalFiltered.some((a: any) => a.machine_id === m.id))
+
   const fmtTime = (t: string) => {
     const d = new Date(t)
     return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   }
-
   const timeAgo = (t: string) => {
     const diff = Date.now() - new Date(t).getTime()
     const m = Math.floor(diff / 60000)
@@ -223,22 +223,24 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
     return Math.floor(h / 24) + 'd ago'
   }
 
+  const toggleExpand = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }))
+  const getMachineFilter = (id: string) => machineFilter[id] || 'all'
+  const setMachFilter = (id: string, f: 'all'|'active'|'resolved') => setMachineFilter(p => ({ ...p, [id]: f }))
+
   return (
     <div style={{ padding: '28px 32px', background: '#f8fafc', minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5 }}>Alert Center</h2>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>
-            {counts.active} active alert{counts.active !== 1 ? 's' : ''} across {machines.length} machine{machines.length !== 1 ? 's' : ''}
-          </p>
+          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>{counts.active} active alerts across {machines.length} machine{machines.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={fetchAlerts} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1a1f2e', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 13, letterSpacing: 0.2 }}>
+        <button onClick={fetchAlerts} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1a1f2e', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
           <span style={{ fontSize: 15 }}>↻</span> Refresh
         </button>
       </div>
 
-      {/* Severity summary cards */}
+      {/* Severity cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
         {(['CRITICAL','HIGH','MEDIUM','LOW'] as const).map(s => (
           <div key={s} onClick={() => setSeverityFilter(severityFilter === s ? 'all' : s)}
@@ -253,100 +255,130 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
         ))}
       </div>
 
-      {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: '#fff', borderRadius: 12, padding: 6, border: '1px solid #e2e8f0', width: 'fit-content', boxShadow: '0 1px 3px #0000000a' }}>
+      {/* Global filter tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 24, background: '#fff', borderRadius: 12, padding: 6, border: '1px solid #e2e8f0', width: 'fit-content', boxShadow: '0 1px 3px #0000000a' }}>
         {([['active', '● Active', counts.active], ['resolved', '✓ Resolved', counts.resolved], ['all', 'All', counts.active + counts.resolved]] as const).map(([f, label, count]) => (
-          <button key={f} onClick={() => setFilter(f as any)}
-            style={{ padding: '7px 18px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.15s',
-              background: filter === f ? '#1a1f2e' : 'transparent',
-              color: filter === f ? '#fff' : '#64748b' }}>
+          <button key={f} onClick={() => setGlobalFilter(f as any)}
+            style={{ padding: '7px 18px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.15s', background: globalFilter === f ? '#1a1f2e' : 'transparent', color: globalFilter === f ? '#fff' : '#64748b' }}>
             {label} <span style={{ opacity: 0.7, fontWeight: 400, fontSize: 12 }}>({count})</span>
           </button>
         ))}
       </div>
 
-      {/* Table */}
+      {/* Machine grouped sections */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>⟳</div>
-          <div style={{ fontSize: 14 }}>Loading alerts...</div>
-        </div>
-      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}><div style={{ fontSize: 32, marginBottom: 8 }}>⟳</div><div>Loading alerts...</div></div>
+      ) : machinesWithAlerts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 80, background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>All clear!</div>
           <div style={{ fontSize: 14, color: '#64748b' }}>No alerts match your current filters.</div>
         </div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px #0000000a' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                {[['Severity', '10%'], ['Machine & Location', '22%'], ['Alert & Description', '38%'], ['Time', '15%'], ['Status', '15%']].map(([h, w]) => (
-                  <th key={h} style={{ padding: '13px 18px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, width: w }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a: any, i: number) => {
-                const m = getMachine(a.machine_id)
-                const isActive = !a.resolved_at
-                return (
-                  <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#fafbfc', transition: 'background 0.1s' }}>
-                    {/* Severity */}
-                    <td style={{ padding: '14px 18px' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: SEVERITY_BG[a.severity] || '#f8fafc', border: '1px solid ' + (SEVERITY_COLOR[a.severity] || '#e2e8f0') + '44', borderRadius: 8, padding: '4px 10px' }}>
-                        <span style={{ fontSize: 10 }}>{SEVERITY_ICON[a.severity] || '⚪'}</span>
-                        <span style={{ fontWeight: 700, fontSize: 11, color: SEVERITY_COLOR[a.severity] || '#666', letterSpacing: 0.5 }}>{a.severity}</span>
-                      </div>
-                    </td>
-                    {/* Machine */}
-                    <td style={{ padding: '14px 18px' }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{m.display_name || '—'}</div>
-                      <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginTop: 2, fontWeight: 600 }}>{m.sn || a.machine_id.slice(0,12)}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {machinesWithAlerts.map((m: any) => {
+            const machAlerts = globalFiltered.filter((a: any) => a.machine_id === m.id)
+            const mf = getMachineFilter(m.id)
+            const mFiltered = machAlerts.filter((a: any) => {
+              if (mf === 'active') return !a.resolved_at
+              if (mf === 'resolved') return !!a.resolved_at
+              return true
+            })
+            const mActive = machAlerts.filter((a: any) => !a.resolved_at).length
+            const mResolved = machAlerts.filter((a: any) => a.resolved_at).length
+            const isOpen = !!expanded[m.id]
+            const worstSev = mActive > 0 ? (machAlerts.find((a: any) => !a.resolved_at && a.severity === 'CRITICAL') ? 'CRITICAL' : machAlerts.find((a: any) => !a.resolved_at && a.severity === 'HIGH') ? 'HIGH' : machAlerts.find((a: any) => !a.resolved_at && a.severity === 'MEDIUM') ? 'MEDIUM' : 'LOW') : null
+
+            return (
+              <div key={m.id} style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px #0000000a' }}>
+                {/* Machine header - clickable to expand */}
+                <div onClick={() => toggleExpand(m.id)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', cursor: 'pointer', background: isOpen ? '#f8fafc' : '#fff', borderBottom: isOpen ? '1px solid #e2e8f0' : 'none', transition: 'background 0.15s' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    {worstSev && <span style={{ fontSize: 20 }}>{SEVERITY_ICON[worstSev]}</span>}
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>{m.display_name}</div>
+                      <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', fontWeight: 600, marginTop: 1 }}>{m.sn}</div>
                       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>📍 {m.location || '—'}</div>
-                    </td>
-                    {/* Alert & Description */}
-                    <td style={{ padding: '14px 18px' }}>
-                      <div style={{ display: 'inline-block', background: '#f1f5f9', borderRadius: 6, padding: '2px 8px', fontFamily: 'monospace', fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 5 }}>{a.alert_type}</div>
-                      <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 500, lineHeight: 1.4 }}>
-                        {ALERT_LABELS[a.alert_type] || a.alert_type.replace(/_/g, ' ')}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>{a.message}</div>
-                    </td>
-                    {/* Time */}
-                    <td style={{ padding: '14px 18px' }}>
-                      <div style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{timeAgo(a.created_at)}</div>
-                    </td>
-                    {/* Status */}
-                    <td style={{ padding: '14px 18px' }}>
-                      {isActive ? (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '5px 12px' }}>
-                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc2626', display: 'inline-block', animation: 'pulse 2s infinite' }}></span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>Active</span>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '5px 12px' }}>
-                          <span style={{ fontSize: 12 }}>✓</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>Resolved</span>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', fontSize: 12, color: '#94a3b8' }}>
-            Showing {filtered.length} of {alerts.length} alerts
-          </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {mActive > 0 && <span style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontWeight: 700, fontSize: 12, borderRadius: 20, padding: '3px 12px' }}>● {mActive} Active</span>}
+                    {mResolved > 0 && <span style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', fontWeight: 700, fontSize: 12, borderRadius: 20, padding: '3px 12px' }}>✓ {mResolved} Resolved</span>}
+                    <span style={{ fontSize: 18, color: '#94a3b8', transform: isOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+                  </div>
+                </div>
+
+                {/* Expanded alert list */}
+                {isOpen && (
+                  <div>
+                    {/* Per-machine filter tabs */}
+                    <div style={{ display: 'flex', gap: 4, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      {([['all', 'All', machAlerts.length], ['active', '● Active', mActive], ['resolved', '✓ Resolved', mResolved]] as const).map(([f, label, count]) => (
+                        <button key={f} onClick={(e) => { e.stopPropagation(); setMachFilter(m.id, f) }}
+                          style={{ padding: '4px 14px', borderRadius: 6, border: 'none', fontWeight: 600, fontSize: 12, cursor: 'pointer', background: mf === f ? '#1a1f2e' : '#fff', color: mf === f ? '#fff' : '#64748b', boxShadow: '0 1px 2px #0000001a' }}>
+                          {label} ({count})
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Alert rows */}
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                          {['Severity', 'Alert & Description', 'Time', 'Status'].map(h => (
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mFiltered.map((a: any, i: number) => (
+                          <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: SEVERITY_BG[a.severity] || '#f8fafc', border: '1px solid ' + (SEVERITY_COLOR[a.severity] || '#e2e8f0') + '44', borderRadius: 7, padding: '3px 9px' }}>
+                                <span style={{ fontSize: 10 }}>{SEVERITY_ICON[a.severity] || '⚪'}</span>
+                                <span style={{ fontWeight: 700, fontSize: 11, color: SEVERITY_COLOR[a.severity] || '#666' }}>{a.severity}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ display: 'inline-block', background: '#f1f5f9', borderRadius: 5, padding: '2px 7px', fontFamily: 'monospace', fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 4 }}>{a.alert_type}</div>
+                              <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 500 }}>{ALERT_LABELS[a.alert_type] || a.alert_type.replace(/_/g, ' ')}</div>
+                              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, lineHeight: 1.4 }}>{a.message}</div>
+                            </td>
+                            <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                              <div style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
+                              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{timeAgo(a.created_at)}</div>
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              {!a.resolved_at ? (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, padding: '4px 10px' }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }}></span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>Active</span>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, padding: '4px 10px' }}>
+                                  <span style={{ fontSize: 11 }}>✓</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>Resolved</span>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', fontSize: 12, color: '#94a3b8' }}>
+                      Showing {mFiltered.length} of {machAlerts.length} alerts for {m.display_name}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
-
 
 
 function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: { op: any, supabaseUrl: string, supabaseKey: string, onClose: () => void }) {
