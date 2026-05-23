@@ -1065,7 +1065,7 @@ export default function Dashboard() {
 
   const activeAlertCount = alerts.filter(a => !a.resolved_at).length
 
-  const pages: Record<string, JSX.Element> = {
+  const pages: Record<string, React.ReactElement> = {
     console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
     alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
     operators: role === 'super_admin'
