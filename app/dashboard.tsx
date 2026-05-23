@@ -1260,19 +1260,22 @@ export default function Dashboard() {
     const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&id=eq.none' : '')
     const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
 
-    const [mRes, aRes, tRes] = await Promise.all([
+    const [mRes, aRes] = await Promise.all([
       fetch(SB_URL + '/rest/v1/machines?select=*&order=created_at.asc' + idFilter, { headers }),
       fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
-      fetch(SB_URL + '/rest/v1/telemetry?select=machine_id,inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state&order=created_at.desc&limit=100', { headers }),
     ])
-    const [mData, aData, tData] = await Promise.all([mRes.json(), aRes.json(), tRes.json()])
+    const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
 
-    // Enrich machines with latest telemetry
-    const latestTel: Record<string, any> = {}
-    if (Array.isArray(tData)) {
-      tData.forEach((t: any) => { if (!latestTel[t.machine_id]) latestTel[t.machine_id] = t })
+    // Fetch latest telemetry per machine individually
+    const enriched: any[] = []
+    if (Array.isArray(mData)) {
+      for (const m of mData) {
+        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=created_at.desc&limit=1', { headers })
+        const tData = await tRes.json()
+        const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
+        enriched.push({ ...m, ...tel })
+      }
     }
-    const enriched = Array.isArray(mData) ? mData.map((m: any) => ({ ...m, ...(latestTel[m.id] || {}) })) : []
 
     setMachines(enriched)
     setAlerts(Array.isArray(aData) ? aData : [])
