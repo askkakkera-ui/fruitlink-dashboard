@@ -711,8 +711,8 @@ export default function Dashboard() {
 
   const renderPage = () => {
     if (activeKey === 'fleet') return <FleetMap machines={machines} />;
-    if (activeKey === 'operators-list') return <OperatorsPage supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL || ''} supabaseKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''} />
-    if (activeKey === 'alerts') return <AlertsPage supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL || ''} supabaseKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''} />
+    if (activeKey === 'operators-list') return <OperatorsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
+    if (activeKey === 'alerts') return <AlertsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
     if (activeKey === 'settings') return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, gap: 16 }}>
         <div style={{ fontSize: 52, opacity: 0.2 }}>...</div>
