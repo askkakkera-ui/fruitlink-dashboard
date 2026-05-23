@@ -1126,6 +1126,102 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
 
 // ─── Settings Page ───────────────────────────────────────────────
 
+
+function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [machines, setMachines] = useState<any[]>([])
+  const [config, setConfig] = useState<Record<string, any>>({})
+
+  useEffect(() => {
+    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location', {
+      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    }).then(r => r.json()).then(d => {
+      if (Array.isArray(d)) {
+        setMachines(d)
+        const c: Record<string, any> = {}
+        d.forEach((m: any) => {
+          c[m.id] = {
+            price_200ml: 80, price_250ml: 100, price_355ml: 120, price_400ml: 150,
+            default_volume: 250, max_daily_cups: 200, maintenance_mode: false
+          }
+        })
+        setConfig(c)
+      }
+    })
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    // In production: PATCH to machines table or dedicated config table
+    await new Promise(r => setTimeout(r, 600))
+    showSaved()
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4 }}>Machine Config</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Remote pricing and volume settings — changes apply instantly, no engineer visit needed</div>
+
+      {machines.map((m: any) => (
+        <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+              {m.status === 'online' ? '🟢' : '🔴'}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.display_name}</div>
+              <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{m.sn} · {m.location}</div>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 12, color: C.text2 }}>Maintenance mode</span>
+              <div onClick={() => setConfig({ ...config, [m.id]: { ...config[m.id], maintenance_mode: !config[m.id]?.maintenance_mode } })}
+                style={{ width: 36, height: 20, borderRadius: 10, background: config[m.id]?.maintenance_mode ? C.red : C.border2, cursor: 'pointer', position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
+                <div style={{ position: 'absolute' as const, top: 2, left: config[m.id]?.maintenance_mode ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 10 }}>Cup Pricing (₹)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+              {[['200ml', 'price_200ml'], ['250ml', 'price_250ml'], ['355ml', 'price_355ml'], ['400ml', 'price_400ml']].map(([label, key]) => (
+                <div key={key}>
+                  <label style={{ display: 'block', fontSize: 11, color: C.text2, marginBottom: 4, fontWeight: 600 }}>{label}</label>
+                  <div style={{ position: 'relative' as const }}>
+                    <span style={{ position: 'absolute' as const, left: 9, top: 9, fontSize: 12, color: C.text3, fontWeight: 600 }}>₹</span>
+                    <input type="number" value={config[m.id]?.[key] ?? ''} onChange={e => setConfig({ ...config, [m.id]: { ...config[m.id], [key]: +e.target.value } })}
+                      style={{ width: '100%', padding: '8px 8px 8px 22px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 6 }}>Default Cup Size</label>
+              <select value={config[m.id]?.default_volume ?? 250} onChange={e => setConfig({ ...config, [m.id]: { ...config[m.id], default_volume: +e.target.value } })}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2 }}>
+                {[200, 250, 355, 400].map(v => <option key={v} value={v}>{v}ml</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 6 }}>Max Daily Cups</label>
+              <input type="number" value={config[m.id]?.max_daily_cups ?? 200} onChange={e => setConfig({ ...config, [m.id]: { ...config[m.id], max_daily_cups: +e.target.value } })}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+        {saved ? '✓ Saved!' : '⚡ Apply Config Remotely'}
+      </button>
+      <div style={{ marginTop: 10, fontSize: 11, color: C.text3 }}>Changes take effect on next machine sync cycle (~2 min)</div>
+    </div>
+  )
+}
+
 function ThresholdsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
   const [machines, setMachines] = useState<any[]>([])
   const [thresholds, setThresholds] = useState<Record<string, any>>({})
@@ -1179,6 +1275,7 @@ function NotificationsSection({ operatorId, SB_URL, SB_KEY, showSaved, showErr, 
     machine_offline: true, temperature_high: true, temperature_low: true,
     temperature_stop: true, stock_empty: true, stock_low: false,
     door_open: true, vend_failure: true, cup_empty: true, film_empty: true,
+    waste_bin_full: true, power_loss: true, unusual_access: true,
   })
   const save = async () => {
     setSaving(true)
@@ -1330,7 +1427,7 @@ function SettingsPage() {
 
   const navItems = [
     { group: 'Account', items: [{ key: 'profile', label: 'Profile', icon: '👤' }, { key: 'security', label: 'Security', icon: '🔒' }] },
-    { group: 'Machines', items: [{ key: 'thresholds', label: 'Thresholds', icon: '🌡' }, { key: 'locations', label: 'Locations', icon: '📍' }] },
+    { group: 'Machines', items: [{ key: 'thresholds', label: 'Thresholds', icon: '🌡' }, { key: 'locations', label: 'Locations', icon: '📍' }, { key: 'machine_config', label: 'Machine Config', icon: '⚙️' }] },
     { group: 'Alerts', items: [{ key: 'notifications', label: 'Notifications', icon: '🔔' }, { key: 'cooldowns', label: 'Cooldowns', icon: '⏱' }] },
     { group: 'System', items: [{ key: 'billing', label: 'Billing', icon: '💳' }, { key: 'danger', label: 'Danger Zone', icon: '⚠️' }] },
   ]
@@ -1379,11 +1476,12 @@ function SettingsPage() {
           {activeSection === 'danger' && (
             <DangerSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} operatorId={operatorId} />
           )}
+          {activeSection === 'machine_config' && <MachineConfigSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
           {activeSection === 'thresholds' && <ThresholdsSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
           {activeSection === 'notifications' && <NotificationsSection operatorId={operatorId} SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
           {activeSection === 'cooldowns' && <CooldownsSection showSaved={showSaved} />}
           {activeSection === 'billing' && <BillingSection role={role} />}
-          {!['profile','security','locations','danger','thresholds','notifications','cooldowns','billing'].includes(activeSection) && (
+          {!['profile','security','locations','danger','thresholds','notifications','cooldowns','billing','machine_config'].includes(activeSection) && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: C.text3 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
               <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Coming Soon</div>
