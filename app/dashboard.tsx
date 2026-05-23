@@ -471,7 +471,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
           <button key={f} onClick={() => setFilter(f as any)} style={{
             padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
             background: filter === f ? C.sidebar : 'transparent',
-            color: filter === f ? '#fff' : C.text2,
+            color: filter === f ? C.surface : C.text2,
             fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
           }}>{label}</button>
         ))}
@@ -621,7 +621,7 @@ function OrdersPage() {
           <button key={f} onClick={() => setFilter(f)} style={{
             padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
             background: filter === f ? C.sidebar : 'transparent',
-            color: filter === f ? '#fff' : C.text2,
+            color: filter === f ? C.surface : C.text2,
             fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
           }}>{label}</button>
         ))}
