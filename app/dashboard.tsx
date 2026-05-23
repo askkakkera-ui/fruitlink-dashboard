@@ -1,213 +1,427 @@
-'use client';
-import { useEffect, useState, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
+'use client'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
-const MACHINE_COORDS = { 'C3B31F38D1C07A76': { lat: 17.4363, lng: 78.4439 }, '9E3D050CEF2EEC7B': { lat: 17.5006, lng: 78.6199 } };
+const SB_URL = 'https://fpwvutdvwnvrunviporz.supabase.co'
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk'
+
+// ─── Design Tokens ───────────────────────────────────────────────
+const C = {
+  sidebar:   '#1c2333',
+  sidebarB:  '#161b27',
+  sidebarT:  '#2a3649',
+  active:    '#f97316',
+  activeGlow:'#f9731620',
+  bg:        '#f0f2f7',
+  surface:   '#ffffff',
+  surface2:  '#f8f9fc',
+  border:    '#e4e7ef',
+  border2:   '#d0d4e4',
+  text:      '#0f1117',
+  text2:     '#5a6080',
+  text3:     '#9099b8',
+  textSide:  '#c8cde8',
+  textSide2: '#8892b8',
+  textSide3: '#5a6090',
+  green:     '#16a34a',
+  greenBg:   '#dcfce7',
+  red:       '#dc2626',
+  redBg:     '#fee2e2',
+  amber:     '#d97706',
+  amberBg:   '#fef3c7',
+  blue:      '#2563eb',
+  blueBg:    '#dbeafe',
+  orange:    '#f97316',
+  orangeBg:  '#ffedd5',
+}
 
 function getCookie(name: string): string {
-  if (typeof document === 'undefined') return '';
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return match ? match[2] : '';
+  if (typeof document === 'undefined') return ''
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+  return match ? match[2] : ''
 }
 
-function TempChart({ data }) {
-  if (!data || data.length < 2) return <div className='text-xs text-gray-400 text-center py-4'>No data yet</div>;
-  const W = 600; const H = 120; const pad = { t:10, r:10, b:30, l:36 };
-  const iW = W - pad.l - pad.r; const iH = H - pad.t - pad.b;
-  const vals = data.map(d => d.inner_temp_c).filter(v => v !== null && v !== undefined);
-  if (vals.length < 2) return <div className='text-xs text-gray-400 text-center py-4'>No data yet</div>;
-  const mn = Math.min(...vals); const mx = Math.max(...vals);
-  const range = mx - mn || 1;
-  const filtered = data.filter(d => d.inner_temp_c !== null);
-  const pts = filtered.map((d, i) => { const x = pad.l + (i / (filtered.length - 1)) * iW; const y = pad.t + iH - ((d.inner_temp_c - mn) / range) * iH; return x + ',' + y; }).join(' ');
-  const ticks = [mn, Math.round((mn + mx) / 2), mx];
+// ─── Tiny Components ─────────────────────────────────────────────
+function Dot({ color, pulse = false, size = 7 }: { color: string; pulse?: boolean; size?: number }) {
   return (
-    <svg viewBox={'0 0 ' + W + ' ' + H} className='w-full' style={{height:120}}>
-      {ticks.map((t, i) => { const y = pad.t + iH - ((t - mn) / range) * iH; return <g key={i}><line x1={pad.l} y1={y} x2={W - pad.r} y2={y} stroke='#f3f4f6' strokeWidth='1'/><text x={pad.l - 4} y={y + 4} textAnchor='end' fontSize='9' fill='#9ca3af'>{t}C</text></g>; })}
-      <polyline points={pts} fill='none' stroke='#f97316' strokeWidth='2' strokeLinejoin='round'/>
-      {filtered.filter((_, i) => i % Math.max(1, Math.ceil(filtered.length / 6)) === 0).map((d, i) => { const idx = filtered.indexOf(d); const x = pad.l + (idx / (filtered.length - 1)) * iW; const label = new Date(d.ts).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }); return <text key={i} x={x} y={H - 4} textAnchor='middle' fontSize='9' fill='#9ca3af'>{label}</text>; })}
-    </svg>
-  );
+    <span style={{
+      display: 'inline-block', width: size, height: size,
+      borderRadius: '50%', background: color, flexShrink: 0,
+      animation: pulse ? 'fl-pulse 2s infinite' : 'none',
+    }} />
+  )
 }
 
-function StockChart({ data }) {
-  if (!data || data.length < 2) return <div className='text-xs text-gray-400 text-center py-4'>No data yet</div>;
-  const W = 600; const H = 80; const pad = { t:8, r:10, b:24, l:10 };
-  const iW = W - pad.l - pad.r; const iH = H - pad.t - pad.b;
-  const levels = [{ key: 'stock_l1', color: '#f97316', label: 'L1' }, { key: 'stock_l2', color: '#16a34a', label: 'L2' }, { key: 'stock_l3', color: '#3b82f6', label: 'L3' }];
+function Badge({ children, color = C.orange, bg }: any) {
   return (
-    <div>
-      <svg viewBox={'0 0 ' + W + ' ' + H} className='w-full' style={{height:80}}>
-        {levels.map(lv => { const pts = data.map((d, i) => { const x = pad.l + (i / (data.length - 1)) * iW; const y = pad.t + (d[lv.key] ? 2 : iH); return x + ',' + y; }).join(' '); return <polyline key={lv.key} points={pts} fill='none' stroke={lv.color} strokeWidth='2' strokeLinejoin='round' opacity='0.8'/>; })}
-        {data.filter((_, i) => i % Math.max(1, Math.ceil(data.length / 6)) === 0).map((d, i) => { const idx = data.indexOf(d); const x = pad.l + (idx / (data.length - 1)) * iW; const label = new Date(d.ts).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }); return <text key={i} x={x} y={H - 2} textAnchor='middle' fontSize='9' fill='#9ca3af'>{label}</text>; })}
-      </svg>
-      <div className='flex gap-4 mt-1'>{levels.map(lv => <div key={lv.key} className='flex items-center gap-1'><div style={{width:8,height:8,borderRadius:2,background:lv.color}}></div><span className='text-xs text-gray-400'>{lv.label}</span></div>)}</div>
-    </div>
-  );
+    <span style={{
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+      padding: '2px 7px', borderRadius: 10,
+      background: bg || color + '22', color,
+      textTransform: 'uppercase' as const,
+    }}>{children}</span>
+  )
 }
 
-function FleetMap({ machines }) {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-
-  useEffect(() => {
-    if ((window as any).mapboxgl) { setScriptLoaded(true); return; }
-    if (document.querySelector('script[src*="mapbox-gl"]')) { setScriptLoaded(true); return; }
-    const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://cdn.jsdelivr.net/npm/mapbox-gl@3.3.0/dist/mapbox-gl.css'; document.head.appendChild(link);
-    const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/mapbox-gl@3.3.0/dist/mapbox-gl.js'; script.onload = () => setScriptLoaded(true); document.head.appendChild(script);
-  }, []);
-
-  useEffect(() => {
-    if (!scriptLoaded || !mapRef.current || mapInstanceRef.current) return;
-    const mapboxgl = (window as any).mapboxgl;
-    mapboxgl.accessToken = MAPBOX_TOKEN;
-    const map = new mapboxgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.53, 17.47], zoom: 10.5 });
-    mapInstanceRef.current = map;
-    map.on('load', () => {
-      setMapLoaded(true);
-      machines.forEach((machine) => {
-        const coords = MACHINE_COORDS[machine.sn];
-        if (!coords) return;
-        const online = machine.status === 'online';
-        const el = document.createElement('div');
-        el.style.cssText = 'width:46px;height:46px;border-radius:50%;background:' + (online ? '#f97316' : '#e5e7eb') + ';border:3px solid ' + (online ? '#c2410c' : '#d1d5db') + ';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;box-shadow:0 4px 12px ' + (online ? 'rgba(249,115,22,0.4)' : 'rgba(0,0,0,0.12)') + ';transition:transform 0.15s;';
-        el.innerHTML = '🍊';
-        el.onmouseenter = () => { el.style.transform = 'scale(1.15)'; };
-        el.onmouseleave = () => { el.style.transform = 'scale(1)'; };
-        el.addEventListener('click', () => { setSelected(machine); map.flyTo({ center: [coords.lng, coords.lat], zoom: 14, duration: 1200 }); });
-        new mapboxgl.Marker({ element: el }).setLngLat([coords.lng, coords.lat]).addTo(map);
-      });
-      map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
-    });
-    return () => { if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
-  }, [scriptLoaded, machines]);
-
-  const flyTo = (machine) => {
-    setSelected(machine);
-    const coords = MACHINE_COORDS[machine.sn];
-    if (mapInstanceRef.current && coords) mapInstanceRef.current.flyTo({ center: [coords.lng, coords.lat], zoom: 14, duration: 1200 });
-  };
-
+function Pill({ children, color, bg }: any) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <h2 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>Fleet Map</h2>
-        <p style={{ fontSize: 15, color: '#6b7280', margin: '4px 0 0' }}>{machines.filter(m => m.status === 'online').length} of {machines.length} machines online · Hyderabad</p>
-      </div>
-      <div style={{ display: 'flex', gap: 20 }}>
-        <div ref={mapRef} style={{ flex: 1, borderRadius: 20, overflow: 'hidden', border: '1.5px solid #e8eaed', minHeight: 500, background: '#f1f5f9', position: 'relative' }}>
-          {!mapLoaded && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: '#6b7280', fontSize: 16 }}><div style={{ fontSize: 36 }}>Loading map...</div></div>}
-        </div>
-        <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {machines.map((machine) => {
-            const online = machine.status === 'online';
-            const isSel = selected && selected.id === machine.id;
-            return (
-              <div key={machine.id} onClick={() => flyTo(machine)} style={{ background: '#fff', border: '1.5px solid ' + (isSel ? '#f97316' : '#e8eaed'), borderRadius: 16, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: isSel ? '0 0 0 3px #fed7aa' : '0 1px 4px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: online ? '#fff7ed' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🍊</div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 15, color: '#111827' }}>{machine.display_name || machine.sn}</div>
-                      <div style={{ fontSize: 13, color: '#6b7280' }}>{machine.location || 'Hyderabad'}</div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, background: online ? '#dcfce7' : '#f3f4f6', color: online ? '#15803d' : '#6b7280' }}>{online ? 'Online' : 'Offline'}</span>
-                </div>
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>SN: {machine.sn}</div>
-              </div>
-            );
-          })}
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: '12px 14px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#c2410c', marginBottom: 4 }}>Coverage Area</div>
-            <div style={{ fontSize: 13, color: '#f97316', lineHeight: 1.6 }}>Ameerpet - SR Nagar<br/>ECIL - Cheeriyal corridor</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 11, fontWeight: 600, padding: '3px 10px',
+      borderRadius: 20, background: bg, color,
+    }}>{children}</span>
+  )
 }
 
-const NAV = [
-  { label: 'Console', icon: '⊡', key: 'console', badge: 'live' },
-  { label: 'Equipment Management', icon: '⊞', key: 'equipment', children: [{ label: 'Machine List', key: 'machines', icon: '▣' }, { label: 'Fleet Map', key: 'fleet', icon: '◎' }, { label: 'Alerts', key: 'alerts', icon: '!' }] },
-  { label: 'Order Management', icon: '⊟', key: 'orders', children: [{ label: 'Orders List', key: 'orders-list', icon: '▤' }] },
-  ...(getCookie('fl_role') === 'super_admin' ? [{ label: 'Operator Management', icon: '⊕', key: 'operators', children: [{ label: 'Operators', key: 'operators-list', icon: '▥' }] }] : []),
-  { label: 'Settings', icon: '⊗', key: 'settings' },
-];
-
-
-const SEVERITY_COLOR: Record<string, string> = {
-  CRITICAL: '#dc2626', HIGH: '#ea580c', MEDIUM: '#d97706', LOW: '#16a34a',
-}
-const SEVERITY_BG: Record<string, string> = {
-  CRITICAL: '#fff1f2', HIGH: '#fff7ed', MEDIUM: '#fffbeb', LOW: '#f0fdf4',
-}
-const SEVERITY_ICON: Record<string, string> = {
-  CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢',
-}
-const ALERT_LABELS: Record<string, string> = {
-  machine_offline: 'Machine Offline', temperature_high: 'High Temperature',
-  temperature_low: 'Low Temperature', temperature_stop: 'Temp — Stop Selling',
-  stock_empty_l1: 'Layer 1 Empty', stock_empty_l2: 'Layer 2 Empty', stock_empty_l3: 'Layer 3 Empty',
-  stock_low_l1: 'Layer 1 Low Stock', stock_low_l2: 'Layer 2 Low Stock', stock_low_l3: 'Layer 3 Low Stock',
-  door_open: 'Door Open', vend_failure: 'Vend Failure', cup_empty: 'Cups Empty',
-  film_empty: 'Film Empty', cooling_off: 'Cooling Off', no_orders_4h: 'No Orders (4h)',
+function SectionLabel({ children }: any) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: C.textSide3, padding: '12px 16px 4px', textTransform: 'uppercase' as const }}>{children}</div>
+  )
 }
 
-function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
-  const [alerts, setAlerts] = useState<any[]>([])
-  const [machines, setMachines] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [globalFilter, setGlobalFilter] = useState<'all'|'active'|'resolved'>('active')
-  const [severityFilter, setSeverityFilter] = useState('all')
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [machineFilter, setMachineFilter] = useState<Record<string, 'all'|'active'|'resolved'>>({})
+// ─── Sidebar ─────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  { key: 'console', label: 'Console', icon: '⊞', badge: 'LIVE', group: '' },
+  { key: 'machines', label: 'Machine List', icon: '▣', group: 'Equipment Management' },
+  { key: 'map', label: 'Fleet Map', icon: '◎', group: 'Equipment Management' },
+  { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
+  { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
+  { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
+  { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
+]
 
-  const fetchAlerts = async () => {
-    setLoading(true)
-    const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
-    const role = getCookie('fl_role')
-    const operatorId = getCookie('fl_operator_id')
-    let machineIds: string[] = []
-    if (role !== 'super_admin' && operatorId) {
-      const moRes = await fetch(supabaseUrl + '/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id', { headers })
-      const moData = await moRes.json()
-      machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
-    }
-    const idFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
-    const [alertRes, machineRes] = await Promise.all([
-      fetch(supabaseUrl + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + idFilter, { headers }),
-      fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location' + (machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : ''), { headers }),
-    ])
-    const [alertData, machineData] = await Promise.all([alertRes.json(), machineRes.json()])
-    const ads = Array.isArray(alertData) ? alertData : []
-    const mds = Array.isArray(machineData) ? machineData : []
-    setAlerts(ads)
-    setMachines(mds)
-    // auto-expand machines that have active alerts
-    const exp: Record<string, boolean> = {}
-    mds.forEach((m: any) => { if (ads.some((a: any) => a.machine_id === m.id && !a.resolved_at)) exp[m.id] = true })
-    setExpanded(exp)
-    setLoading(false)
-  }
-
-  useEffect(() => { fetchAlerts() }, [])
-
-  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
-
-  const globalFiltered = alerts.filter((a: any) => {
-    if (globalFilter === 'active' && a.resolved_at) return false
-    if (globalFilter === 'resolved' && !a.resolved_at) return false
-    if (severityFilter !== 'all' && a.severity !== severityFilter) return false
-    return true
+function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
+  const initials = (name || 'A').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const groups: Record<string, typeof NAV_ITEMS> = {}
+  NAV_ITEMS.forEach(item => {
+    if (item.superAdmin && role !== 'super_admin') return
+    const g = item.group || '__top'
+    if (!groups[g]) groups[g] = []
+    groups[g].push(item)
   })
 
+  return (
+    <div style={{
+      width: 230, flexShrink: 0, background: C.sidebar,
+      display: 'flex', flexDirection: 'column',
+      boxShadow: '2px 0 12px #00000018',
+    }}>
+      {/* Logo */}
+      <div style={{ padding: '20px 16px 16px', borderBottom: `1px solid ${C.sidebarT}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10, background: C.orange,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 17, fontWeight: 800, color: '#fff', flexShrink: 0,
+            boxShadow: '0 2px 8px #f9731640',
+          }}>F</div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>FRUITLINK</div>
+            <div style={{ fontSize: 10.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff12', borderRadius: 8, padding: '6px 10px' }}>
+          <Dot color={C.green} pulse size={6} />
+          <span style={{ fontSize: 11, color: C.textSide, fontWeight: 500 }}>Online</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.textSide3 }}>System OK</span>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+        {Object.entries(groups).map(([group, items]) => (
+          <div key={group}>
+            {group !== '__top' && <SectionLabel>{group}</SectionLabel>}
+            {items.map(item => {
+              const isActive = active === item.key
+              return (
+                <button key={item.key} onClick={() => setActive(item.key)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: isActive ? C.activeGlow : 'transparent',
+                  color: isActive ? C.orange : C.textSide2,
+                  fontSize: 14.5, fontWeight: isActive ? 600 : 400,
+                  transition: 'all 0.15s', marginBottom: 1,
+                  borderLeft: isActive ? `3px solid ${C.orange}` : '3px solid transparent',
+                  paddingLeft: isActive ? 9 : 12,
+                }}>
+                  <span style={{ fontSize: 16, opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
+                  <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
+                  {item.badge && <Badge color={C.orange}>{item.badge}</Badge>}
+                  {item.alertDot && alertCount > 0 && (
+                    <span style={{ background: C.red, color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10 }}>{alertCount}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* User */}
+      <div style={{ padding: '12px', borderTop: `1px solid ${C.sidebarT}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#ffffff10', borderRadius: 9, padding: '8px 10px' }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: '50%', background: C.orange,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
+          }}>{initials}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
+            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
+          </div>
+          <button onClick={onLogout} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textSide3, fontSize: 16, padding: 2 }} title="Logout">⏻</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Top Bar ─────────────────────────────────────────────────────
+function TopBar({ active }: { active: string }) {
+  const [time, setTime] = useState('')
+  useEffect(() => {
+    const tick = () => setTime(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))
+    tick()
+    const t = setInterval(tick, 30000)
+    return () => clearInterval(t)
+  }, [])
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alert Center', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List' }
+  return (
+    <div style={{
+      height: 52, background: C.surface, borderBottom: `1px solid ${C.border}`,
+      display: 'flex', alignItems: 'center', padding: '0 24px', gap: 14, flexShrink: 0,
+      boxShadow: '0 1px 4px #00000008',
+    }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 11, color: C.text3, letterSpacing: '0.04em' }}>FRUITLINK</span>
+        <span style={{ color: C.text3, fontSize: 12 }}>›</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{labels[active] || active}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.greenBg, borderRadius: 20, padding: '4px 12px' }}>
+        <Dot color={C.green} pulse size={6} />
+        <span style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>System Online</span>
+      </div>
+      <span style={{ fontSize: 11, color: C.text3 }}>{time}</span>
+    </div>
+  )
+}
+
+// ─── Stat Card ───────────────────────────────────────────────────
+function StatCard({ label, value, sub, color, icon, pct }: any) {
+  return (
+    <div style={{
+      background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14,
+      padding: '18px 20px', position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color, borderRadius: '14px 14px 0 0' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <span style={{ fontSize: 11, color: C.text2, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</span>
+        <div style={{ width: 34, height: 34, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{icon}</div>
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color, letterSpacing: '-0.03em', marginBottom: 4 }}>{value}</div>
+      <div style={{ fontSize: 11, color: C.text3, marginBottom: 10 }}>{sub}</div>
+      {pct !== undefined && (
+        <div style={{ height: 4, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 0.8s ease' }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Machine Card ────────────────────────────────────────────────
+function MachineCard({ machine }: { machine: any }) {
+  const online = machine.status === 'online'
+  const temp = machine.inner_temp_c
+  const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
+  const layers = [machine.stock_l1, machine.stock_l2, machine.stock_l3]
+
+  return (
+    <div style={{
+      background: C.surface, border: `1px solid ${C.border}`,
+      borderRadius: 16, overflow: 'hidden', transition: 'all 0.2s',
+    }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = C.border2; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px #00000010' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = C.border; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
+    >
+      {/* Top stripe */}
+      <div style={{ height: 4, background: online ? C.green : C.border2 }} />
+
+      <div style={{ padding: '16px 18px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 3 }}>{machine.display_name}</div>
+            <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', letterSpacing: '0.03em' }}>{machine.sn}</div>
+          </div>
+          {online ? (
+            <Pill color={C.green} bg={C.greenBg}><Dot color={C.green} pulse size={5} /> Online</Pill>
+          ) : (
+            <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Offline</Pill>
+          )}
+        </div>
+
+        {/* Layers */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {layers.map((has, i) => (
+            <div key={i} style={{
+              flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
+              borderRadius: 10, padding: '10px 6px', textAlign: 'center',
+              borderTop: `2px solid ${online ? (has ? C.green : C.red) : C.border2}`,
+            }}>
+              <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
+              <div style={{ fontSize: 17, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: online ? (has ? C.green : C.red) : C.text3 }}>
+                {online ? (has ? 'Stocked' : 'Empty') : '—'}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Sensors grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {[
+            { label: 'Temperature', value: temp != null ? `${temp}°C` : '—', color: tempColor, sub: temp != null ? (temp > 12 ? 'High' : temp < 3 ? 'Low' : 'Normal') : '' },
+            { label: 'Location', value: machine.location || '—', color: C.text, sub: machine.state || '' },
+            { label: 'Cup Tray', value: machine.cup_present === true ? 'Present' : machine.cup_present === false ? 'Missing' : '—', color: machine.cup_present ? C.green : machine.cup_present === false ? C.red : C.text3, sub: '' },
+            { label: 'App Version', value: machine.app_version ? `v${machine.app_version}` : '—', color: C.blue, sub: 'JW Intell' },
+          ].map(f => (
+            <div key={f.label} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 10px' }}>
+              <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
+              {f.sub && <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{f.sub}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Console Page ────────────────────────────────────────────────
+function ConsolePage({ machines, alerts, loading }: any) {
+  const online = machines.filter((m: any) => m.status === 'online').length
+  const activeAlerts = alerts.filter((a: any) => !a.resolved_at)
+  const critical = activeAlerts.filter((a: any) => a.severity === 'CRITICAL').length
+  const high = activeAlerts.filter((a: any) => a.severity === 'HIGH').length
+  const lacking = machines.filter((m: any) => m.status === 'online' && (!m.stock_l1 || !m.stock_l2 || !m.stock_l3)).length
+
+  const stats = [
+    { label: 'All Equipment', value: machines.length.toString(), sub: `${online} online · ${machines.length - online} offline`, color: C.blue, icon: '🖥', pct: machines.length > 0 ? (online / machines.length) * 100 : 0 },
+    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? machines.find((m: any) => m.status === 'online')?.display_name || '' : 'No machines online', color: C.green, icon: '📡', pct: machines.length > 0 ? (online / machines.length) * 100 : 0 },
+    { label: 'Active Alerts', value: activeAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: activeAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(activeAlerts.length * 10, 100) },
+    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: machines.length > 0 ? (lacking / machines.length) * 100 : 0 },
+  ]
+
+  const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
+  const SEVERITY_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg, LOW: C.greenBg }
+  const ALERT_LABELS: any = {
+    machine_offline: 'Machine Offline', temperature_high: 'High Temperature', temperature_low: 'Low Temperature',
+    stock_empty_l1: 'Layer 1 Empty', stock_empty_l2: 'Layer 2 Empty', stock_empty_l3: 'Layer 3 Empty',
+    stock_low_l1: 'Layer 1 Low', stock_low_l2: 'Layer 2 Low', stock_low_l3: 'Layer 3 Low',
+    door_open: 'Door Open', vend_failure: 'Vend Failure', cup_empty: 'Cups Empty',
+    film_empty: 'Film Empty', temperature_stop: 'Temp Stop', cooling_off: 'Cooling Off',
+  }
+  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const fmtAgo = (t: string) => {
+    const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000)
+    if (m < 60) return `${m}m ago`
+    if (m < 1440) return `${Math.floor(m / 60)}h ago`
+    return `${Math.floor(m / 1440)}d ago`
+  }
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+        {stats.map(s => <StatCard key={s.label} {...s} />)}
+      </div>
+
+      {/* Machine Cards */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Dot color={C.orange} pulse size={6} />
+          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced from JW Intell · every 2 min</span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16, marginBottom: 22 }}>
+          {machines.map((m: any) => <MachineCard key={m.id} machine={m} />)}
+        </div>
+      )}
+
+      {/* Recent Alerts */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Recent Alerts</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Dot color={C.orange} pulse size={6} />
+            <span style={{ fontSize: 11, color: C.text3 }}>Live feed</span>
+          </div>
+        </div>
+        {activeAlerts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>All clear — no active alerts</div>
+          </div>
+        ) : activeAlerts.slice(0, 5).map((a: any, i: number) => {
+          const m = getMachine(a.machine_id)
+          return (
+            <div key={a.id} style={{
+              display: 'grid', gridTemplateColumns: '120px 1fr auto',
+              gap: 16, padding: '14px 20px', alignItems: 'center',
+              borderBottom: i < Math.min(activeAlerts.length, 5) - 1 ? `1px solid ${C.border}` : 'none',
+              background: i % 2 === 0 ? '#fff' : C.surface2,
+            }}>
+              <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>
+                {a.severity}
+              </Pill>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 2 }}>
+                  {ALERT_LABELS[a.alert_type] || a.alert_type} — {m.display_name || '—'}
+                </div>
+                <div style={{ fontSize: 11, color: C.text2 }}>{a.message}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, color: C.text3 }}>{fmtAgo(a.created_at)}</div>
+                <div style={{ marginTop: 4 }}>
+                  <Pill color={C.red} bg={C.redBg}>Active</Pill>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Alerts Page ─────────────────────────────────────────────────
+function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
+  const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
+  const [sevFilter, setSevFilter] = useState('all')
+  const [expandedM, setExpandedM] = useState<Record<string, boolean>>({})
+  const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
+  const SEVERITY_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg, LOW: C.greenBg }
+  const ALERT_LABELS: any = {
+    machine_offline: 'Machine Offline', temperature_high: 'High Temperature', temperature_low: 'Low Temperature',
+    temperature_stop: 'Temp — Stop Selling', stock_empty_l1: 'Layer 1 Empty', stock_empty_l2: 'Layer 2 Empty',
+    stock_empty_l3: 'Layer 3 Empty', stock_low_l1: 'Layer 1 Low', stock_low_l2: 'Layer 2 Low',
+    stock_low_l3: 'Layer 3 Low', door_open: 'Door Open', vend_failure: 'Vend Failure',
+    cup_empty: 'Cups Empty', film_empty: 'Film Empty', cooling_off: 'Cooling Off',
+  }
+  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const fmtAgo = (t: string) => {
+    const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000)
+    if (m < 60) return `${m}m ago`
+    if (m < 1440) return `${Math.floor(m / 60)}h ago`
+    return `${Math.floor(m / 1440)}d ago`
+  }
   const counts: any = {
     CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
     HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
@@ -216,168 +430,125 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
     active: alerts.filter((a: any) => !a.resolved_at).length,
     resolved: alerts.filter((a: any) => a.resolved_at).length,
   }
-
-  // Group filtered alerts by machine
-  const machinesWithAlerts = machines.filter(m => globalFiltered.some((a: any) => a.machine_id === m.id))
-
-  const fmtTime = (t: string) => {
-    const d = new Date(t)
-    return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-  }
-  const timeAgo = (t: string) => {
-    const diff = Date.now() - new Date(t).getTime()
-    const m = Math.floor(diff / 60000)
-    if (m < 60) return m + 'm ago'
-    const h = Math.floor(m / 60)
-    if (h < 24) return h + 'h ago'
-    return Math.floor(h / 24) + 'd ago'
-  }
-
-  const toggleExpand = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }))
-  const getMachineFilter = (id: string) => machineFilter[id] || 'all'
-  const setMachFilter = (id: string, f: 'all'|'active'|'resolved') => setMachineFilter(p => ({ ...p, [id]: f }))
+  const filtered = alerts.filter((a: any) => {
+    if (filter === 'active' && a.resolved_at) return false
+    if (filter === 'resolved' && !a.resolved_at) return false
+    if (sevFilter !== 'all' && a.severity !== sevFilter) return false
+    return true
+  })
 
   return (
-    <div style={{ padding: '28px 32px', background: '#f8fafc', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5 }}>Alert Center</h2>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>{counts.active} active alerts across {machines.length} machine{machines.length !== 1 ? 's' : ''}</p>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Alert Center</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{counts.active} active · {counts.resolved} resolved</div>
         </div>
-        <button onClick={fetchAlerts} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1a1f2e', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
-          <span style={{ fontSize: 15 }}>↻</span> Refresh
-        </button>
+        <button onClick={fetchAlerts} style={{
+          display: 'flex', alignItems: 'center', gap: 6, background: C.sidebar, color: '#fff',
+          border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
+        }}>↻ Refresh</button>
       </div>
 
       {/* Severity cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
-        {(['CRITICAL','HIGH','MEDIUM','LOW'] as const).map(s => (
-          <div key={s} onClick={() => setSeverityFilter(severityFilter === s ? 'all' : s)}
-            style={{ background: severityFilter === s ? SEVERITY_BG[s] : '#fff', border: '1.5px solid ' + (severityFilter === s ? SEVERITY_COLOR[s] : '#e2e8f0'), borderRadius: 14, padding: '16px 20px', cursor: 'pointer', transition: 'all 0.15s', boxShadow: severityFilter === s ? '0 4px 12px ' + SEVERITY_COLOR[s] + '22' : '0 1px 3px #0000000a' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 22 }}>{SEVERITY_ICON[s]}</span>
-              <span style={{ fontSize: 28, fontWeight: 800, color: counts[s] > 0 ? SEVERITY_COLOR[s] : '#cbd5e1' }}>{counts[s]}</span>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: SEVERITY_COLOR[s], textTransform: 'uppercase', letterSpacing: 0.8 }}>{s}</div>
-            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Active alerts</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+        {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map(s => (
+          <div key={s} onClick={() => setSevFilter(sevFilter === s ? 'all' : s)} style={{
+            background: sevFilter === s ? SEVERITY_BG[s] : C.surface,
+            border: `1px solid ${sevFilter === s ? SEVERITY_COLOR[s] + '60' : C.border}`,
+            borderRadius: 12, padding: '14px 16px', cursor: 'pointer', transition: 'all 0.15s',
+            borderTop: `3px solid ${SEVERITY_COLOR[s]}`,
+          }}>
+            <div style={{ fontSize: 26, fontWeight: 800, color: counts[s] > 0 ? SEVERITY_COLOR[s] : C.border2, letterSpacing: '-0.02em', marginBottom: 4 }}>{counts[s]}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: SEVERITY_COLOR[s], textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{s}</div>
+            <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>Active alerts</div>
           </div>
         ))}
       </div>
 
-      {/* Global filter tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 24, background: '#fff', borderRadius: 12, padding: 6, border: '1px solid #e2e8f0', width: 'fit-content', boxShadow: '0 1px 3px #0000000a' }}>
-        {([['active', '● Active', counts.active], ['resolved', '✓ Resolved', counts.resolved], ['all', 'All', counts.active + counts.resolved]] as const).map(([f, label, count]) => (
-          <button key={f} onClick={() => setGlobalFilter(f as any)}
-            style={{ padding: '7px 18px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.15s', background: globalFilter === f ? '#1a1f2e' : 'transparent', color: globalFilter === f ? '#fff' : '#64748b' }}>
-            {label} <span style={{ opacity: 0.7, fontWeight: 400, fontSize: 12 }}>({count})</span>
-          </button>
+      {/* Filter tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: `1px solid ${C.border}` }}>
+        {([['active', `Active (${counts.active})`], ['resolved', `Resolved (${counts.resolved})`], ['all', 'All']] as const).map(([f, label]) => (
+          <button key={f} onClick={() => setFilter(f as any)} style={{
+            padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: filter === f ? C.sidebar : 'transparent',
+            color: filter === f ? '#fff' : C.text2,
+            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+          }}>{label}</button>
         ))}
       </div>
 
-      {/* Machine grouped sections */}
+      {/* Grouped by Machine */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}><div style={{ fontSize: 32, marginBottom: 8 }}>⟳</div><div>Loading alerts...</div></div>
-      ) : machinesWithAlerts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 80, background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>All clear!</div>
-          <div style={{ fontSize: 14, color: '#64748b' }}>No alerts match your current filters.</div>
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading alerts...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>All clear!</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>No alerts match your current filters.</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {machinesWithAlerts.map((m: any) => {
-            const machAlerts = globalFiltered.filter((a: any) => a.machine_id === m.id)
-            const mf = getMachineFilter(m.id)
-            const mFiltered = machAlerts.filter((a: any) => {
-              if (mf === 'active') return !a.resolved_at
-              if (mf === 'resolved') return !!a.resolved_at
-              return true
-            })
-            const mActive = machAlerts.filter((a: any) => !a.resolved_at).length
-            const mResolved = machAlerts.filter((a: any) => a.resolved_at).length
-            const isOpen = !!expanded[m.id]
-            const worstSev = mActive > 0 ? (machAlerts.find((a: any) => !a.resolved_at && a.severity === 'CRITICAL') ? 'CRITICAL' : machAlerts.find((a: any) => !a.resolved_at && a.severity === 'HIGH') ? 'HIGH' : machAlerts.find((a: any) => !a.resolved_at && a.severity === 'MEDIUM') ? 'MEDIUM' : 'LOW') : null
-
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {machines.map((m: any) => {
+            const machAlerts = filtered.filter((a: any) => a.machine_id === m.id)
+            if (machAlerts.length === 0) return null
+            const isOpen = expandedM[m.id] !== false
             return (
-              <div key={m.id} style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px #0000000a' }}>
-                {/* Machine header - clickable to expand */}
-                <div onClick={() => toggleExpand(m.id)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', cursor: 'pointer', background: isOpen ? '#f8fafc' : '#fff', borderBottom: isOpen ? '1px solid #e2e8f0' : 'none', transition: 'background 0.15s' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {worstSev && <span style={{ fontSize: 20 }}>{SEVERITY_ICON[worstSev]}</span>}
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>{m.display_name}</div>
-                      <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', fontWeight: 600, marginTop: 1 }}>{m.sn}</div>
-                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>📍 {m.location || '—'}</div>
-                    </div>
+              <div key={m.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+                {/* Machine header — click to expand/collapse */}
+                <div onClick={() => setExpandedM(prev => ({ ...prev, [m.id]: !isOpen }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: C.surface2, borderBottom: isOpen ? `1px solid ${C.border}` : 'none', userSelect: 'none' as const }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: m.status === 'online' ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 16 }}>{m.status === 'online' ? '🟢' : '🔴'}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {mActive > 0 && <span style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontWeight: 700, fontSize: 12, borderRadius: 20, padding: '3px 12px' }}>● {mActive} Active</span>}
-                    {mResolved > 0 && <span style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', fontWeight: 700, fontSize: 12, borderRadius: 20, padding: '3px 12px' }}>✓ {mResolved} Resolved</span>}
-                    <span style={{ fontSize: 18, color: '#94a3b8', transform: isOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                    <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 1 }}>{m.location} · {m.sn}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ background: C.redBg, color: C.red, fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>{machAlerts.length} alert{machAlerts.length !== 1 ? 's' : ''}</span>
+                    <span style={{ fontSize: 16, color: C.text3, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
                   </div>
                 </div>
-
-                {/* Expanded alert list */}
+                {/* Alert rows */}
                 {isOpen && (
                   <div>
-                    {/* Per-machine filter tabs */}
-                    <div style={{ display: 'flex', gap: 4, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      {([['all', 'All', machAlerts.length], ['active', '● Active', mActive], ['resolved', '✓ Resolved', mResolved]] as const).map(([f, label, count]) => (
-                        <button key={f} onClick={(e) => { e.stopPropagation(); setMachFilter(m.id, f) }}
-                          style={{ padding: '4px 14px', borderRadius: 6, border: 'none', fontWeight: 600, fontSize: 12, cursor: 'pointer', background: mf === f ? '#1a1f2e' : '#fff', color: mf === f ? '#fff' : '#64748b', boxShadow: '0 1px 2px #0000001a' }}>
-                          {label} ({count})
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Alert rows */}
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                       <thead>
-                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                          {['Severity', 'Alert & Description', 'Time', 'Status'].map(h => (
-                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 }}>{h}</th>
+                        <tr style={{ background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
+                          {['Severity', 'Alert', 'Time', 'Status'].map((h, i) => (
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {mFiltered.map((a: any, i: number) => (
-                          <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                        {machAlerts.map((a: any, i: number) => (
+                          <tr key={a.id} style={{ borderBottom: i < machAlerts.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? '#fff' : C.surface2 }}>
                             <td style={{ padding: '12px 16px' }}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: SEVERITY_BG[a.severity] || '#f8fafc', border: '1px solid ' + (SEVERITY_COLOR[a.severity] || '#e2e8f0') + '44', borderRadius: 7, padding: '3px 9px' }}>
-                                <span style={{ fontSize: 10 }}>{SEVERITY_ICON[a.severity] || '⚪'}</span>
-                                <span style={{ fontWeight: 700, fontSize: 11, color: SEVERITY_COLOR[a.severity] || '#666' }}>{a.severity}</span>
-                              </div>
+                              <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
-                              <div style={{ display: 'inline-block', background: '#f1f5f9', borderRadius: 5, padding: '2px 7px', fontFamily: 'monospace', fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 4 }}>{a.alert_type}</div>
-                              <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 500 }}>{ALERT_LABELS[a.alert_type] || a.alert_type.replace(/_/g, ' ')}</div>
-                              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, lineHeight: 1.4 }}>{a.message}</div>
+                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 10, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
+                              <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
-                            <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                              <div style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
-                              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{timeAgo(a.created_at)}</div>
+                            <td style={{ padding: '12px 16px' }}>
+                              <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
+                              <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
                               {!a.resolved_at ? (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, padding: '4px 10px' }}>
-                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }}></span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>Active</span>
-                                </div>
+                                <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
                               ) : (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, padding: '4px 10px' }}>
-                                  <span style={{ fontSize: 11 }}>✓</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>Resolved</span>
-                                </div>
+                                <Pill color={C.green} bg={C.greenBg}>✓ Resolved</Pill>
                               )}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', fontSize: 12, color: '#94a3b8' }}>
-                      Showing {mFiltered.length} of {machAlerts.length} alerts for {m.display_name}
+                    <div style={{ padding: '8px 16px', borderTop: `1px solid ${C.border}`, background: C.surface2, fontSize: 11, color: C.text3 }}>
+                      Showing {machAlerts.length} alert{machAlerts.length !== 1 ? 's' : ''} for {m.display_name}
                     </div>
                   </div>
                 )}
@@ -390,14 +561,234 @@ function AlertsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabas
   )
 }
 
+// ─── Coming Soon ─────────────────────────────────────────────────
+function OrdersPage() {
+  const [orders, setOrders] = useState<any[]>([])
+  const [machines, setMachines] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all')
 
-function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: { op: any, supabaseUrl: string, supabaseKey: string, onClose: () => void }) {
+  useEffect(() => {
+    const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    Promise.all([
+      fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=200', { headers }).then(r => r.json()),
+      fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location', { headers }).then(r => r.json()),
+    ]).then(([o, m]) => {
+      setOrders(Array.isArray(o) ? o : [])
+      setMachines(Array.isArray(m) ? m : [])
+      setLoading(false)
+    })
+  }, [])
+
+  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
+  const fmtAmount = (p: number) => '₹' + (p / 100).toFixed(2)
+
+  const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const PAY_TYPE: any = { upi: '📱 UPI', cash: '💵 Cash', card: '💳 Card', qr: '📲 QR' }
+
+  const filtered = orders.filter((o: any) => {
+    if (filter === 'paid') return o.pay_state === 1
+    if (filter === 'pending') return o.pay_state === 0
+    if (filter === 'delivered') return o.delivery_state === 1
+    return true
+  })
+
+  const totalRevenue = orders.filter((o: any) => o.pay_state === 1).reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
+  const totalOrders = orders.length
+  const paid = orders.filter((o: any) => o.pay_state === 1).length
+  const pending = orders.filter((o: any) => o.pay_state === 0).length
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Orders</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>{totalOrders} total orders across all machines</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+        {[
+          { label: 'Total Orders', value: totalOrders, color: C.blue, icon: '🧾', pct: 100 },
+          { label: 'Total Revenue', value: fmtAmount(totalRevenue), color: C.green, icon: '₹', pct: paid > 0 ? (paid/totalOrders)*100 : 0 },
+          { label: 'Paid', value: paid, color: C.green, icon: '✅', pct: totalOrders > 0 ? (paid/totalOrders)*100 : 0 },
+          { label: 'Pending Payment', value: pending, color: C.amber, icon: '⏳', pct: totalOrders > 0 ? (pending/totalOrders)*100 : 0 },
+        ].map(s => <StatCard key={s.label} {...s} sub="" />)}
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: `1px solid ${C.border}` }}>
+        {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered']].map(([f, label]) => (
+          <button key={f} onClick={() => setFilter(f)} style={{
+            padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: filter === f ? C.sidebar : 'transparent',
+            color: filter === f ? '#fff' : C.text2,
+            fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading orders...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>No orders found</div>
+        </div>
+      ) : (
+        <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
+                {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map((h, i) => (
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((o: any, i: number) => {
+                const m = getMachine(o.machine_id)
+                const ps = PAY_STATE[o.pay_state] || PAY_STATE[0]
+                const ds = DEL_STATE[o.delivery_state] || DEL_STATE[0]
+                return (
+                  <tr key={o.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.blue }}>{o.order_code}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '—'}</div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmount(o.amount_paise || 0)}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>{PAY_TYPE[o.pay_type] || o.pay_type}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: C.text }}>{o.cup_num || '—'}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: 12, color: C.text }}>{fmtTime(o.created_at)}</div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 1 }}>{fmtAgo(o.created_at)}</div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, background: C.surface2, fontSize: 11, color: C.text3 }}>
+            Showing {filtered.length} of {orders.length} orders
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FleetMapPage({ machines }: { machines: any[] }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const [scriptLoaded, setScriptLoaded] = useState(false)
+  const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoiYXNra2Fra...(set NEXT_PUBLIC_MAPBOX_TOKEN)'
+  const COORDS: Record<string, {lat: number, lng: number}> = {
+    'SR Nagar, Ameerpet': { lat: 17.4374, lng: 78.4487 },
+    'Cheeriyal, ECIL': { lat: 17.4702, lng: 78.5607 },
+  }
+  useEffect(() => {
+    if ((window as any).mapboxgl) { setScriptLoaded(true); return; }
+    if (document.querySelector('script[src*="mapbox-gl"]')) { setScriptLoaded(true); return; }
+    const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://cdn.jsdelivr.net/npm/mapbox-gl@3.3.0/dist/mapbox-gl.css'; document.head.appendChild(link)
+    const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/mapbox-gl@3.3.0/dist/mapbox-gl.js'; script.onload = () => setScriptLoaded(true); document.head.appendChild(script)
+  }, [])
+  useEffect(() => {
+    if (!scriptLoaded || !mapRef.current) return
+    const mgl = (window as any).mapboxgl
+    mgl.accessToken = MB
+    const map = new mgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.49, 17.45], zoom: 10.5 })
+    machines.forEach((m: any) => {
+      const co = COORDS[m.location]; if (!co) return
+      const online = m.status === 'online'
+      const el = document.createElement('div')
+      el.style.cssText = 'width:36px;height:36px;border-radius:50%;background:' + (online ? C.green : C.red) + ';border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;'
+      el.textContent = 'F'
+      const popup = new mgl.Popup({ offset: 20, closeButton: false }).setHTML('<b>' + m.display_name + '</b><br><small>' + (m.location||'') + '</small><br><small style="color:' + (online ? '#16a34a' : '#dc2626') + '">' + (online ? 'Online' : 'Offline') + '</small>' + (m.inner_temp_c != null ? '<br><small>Temp: ' + m.inner_temp_c + 'C</small>' : ''))
+      new mgl.Marker({ element: el }).setLngLat([co.lng, co.lat]).setPopup(popup).addTo(map)
+    })
+    map.addControl(new mgl.NavigationControl(), 'bottom-right')
+    return () => map.remove()
+  }, [scriptLoaded, machines])
+  const fmtTime = (t: string) => { if (!t) return '--'; const mins = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (mins < 60) return mins + 'm ago'; if (mins < 1440) return Math.floor(mins/60) + 'h ago'; return Math.floor(mins/1440) + 'd ago' }
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Fleet Map</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>{machines.length} machines registered</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', minHeight: 500, position: 'relative' }}>
+          {!scriptLoaded && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface2, flexDirection: 'column', gap: 12 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text3 }}>Loading Mapbox...</div></div>}
+          <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: 500 }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {machines.map((m: any) => {
+            const online = m.status === 'online'
+            const temp = m.inner_temp_c
+            const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
+            return (
+              <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ height: 3, background: online ? C.green : C.border2 }} />
+                <div style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                      <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+                    </div>
+                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text2, marginBottom: 10 }}>Location: {m.location || '--'}, {m.state}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                    {[
+                      { label: 'Temperature', value: temp != null ? temp + 'C' : '--', color: tempColor },
+                      { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
+                      { label: 'Scale', value: m.scale_weight_g != null ? m.scale_weight_g + 'g' : '--', color: C.text },
+                      { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
+                    ].map(f => (
+                      <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 9px' }}>
+                        <div style={{ fontSize: 9, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: f.color }}>{f.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+function ComingSoon({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
+      <div style={{ width: 64, height: 64, borderRadius: 16, background: C.orangeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🚧</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{label}</div>
+      <Badge color={C.orange}>Coming soon</Badge>
+    </div>
+  )
+}
+
+// ─── Operators Page (super_admin only) ───────────────────────────
+function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
   const [machines, setMachines] = useState<any[]>([])
   const [assigned, setAssigned] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
-
   useEffect(() => {
     const load = async () => {
       const [mRes, aRes] = await Promise.all([
@@ -410,83 +801,54 @@ function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: { op: an
     }
     load()
   }, [])
-
   const toggle = (mid: string) => setAssigned(prev => prev.includes(mid) ? prev.filter(x => x !== mid) : [...prev, mid])
-
   const save = async () => {
     setSaving(true); setMsg('')
     try {
-      // Delete all current assignments for this operator
       await fetch(supabaseUrl + '/rest/v1/machine_operators?operator_id=eq.' + op.id, { method: 'DELETE', headers })
-      // Insert new assignments
       if (assigned.length > 0) {
-        await fetch(supabaseUrl + '/rest/v1/machine_operators', {
-          method: 'POST',
-          headers: { ...headers, Prefer: 'return=minimal' },
-          body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id })))
-        })
+        await fetch(supabaseUrl + '/rest/v1/machine_operators', { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id }))) })
       }
-      setMsg('✓ Machines assigned!')
-      setTimeout(onClose, 800)
-    } catch(e: any) { setMsg('Error: ' + e.message) }
+      setMsg('✓ Saved'); setTimeout(onClose, 800)
+    } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
   }
-
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 480, boxShadow: '0 20px 60px #0002', maxHeight: '80vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Assign Machines</h3>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>to {op.name || op.email}</p>
-          </div>
-          <button onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 18, color: '#64748b' }}>✕</button>
+    <div style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: C.surface, borderRadius: 20, padding: 28, width: 420, boxShadow: '0 20px 60px #00000030' }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6 }}>Assign Machines</div>
+        <div style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>Assigning to {op.name || op.email}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+          {machines.map(m => (
+            <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: `1px solid ${assigned.includes(m.id) ? C.orange : C.border}`, borderRadius: 10, cursor: 'pointer', background: assigned.includes(m.id) ? C.orangeBg : C.surface2 }}>
+              <input type="checkbox" checked={assigned.includes(m.id)} onChange={() => toggle(m.id)} style={{ width: 16, height: 16, accentColor: C.orange }} />
+              <div>
+                <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name}</div>
+                <div style={{ fontSize: 11, color: C.text3 }}>{m.location}</div>
+              </div>
+            </label>
+          ))}
         </div>
-        {machines.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No machines found</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {machines.map((m: any) => {
-              const isChecked = assigned.includes(m.id)
-              return (
-                <div key={m.id} onClick={() => toggle(m.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: '1.5px solid ' + (isChecked ? '#f97316' : '#e2e8f0'), background: isChecked ? '#fff7ed' : '#fff', cursor: 'pointer', transition: 'all 0.15s' }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 6, border: '2px solid ' + (isChecked ? '#f97316' : '#cbd5e1'), background: isChecked ? '#f97316' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {isChecked && <span style={{ color: '#fff', fontSize: 13, fontWeight: 800 }}>✓</span>}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>{m.display_name}</div>
-                    <div style={{ fontSize: 11, color: '#6366f1', fontFamily: 'monospace', marginTop: 1 }}>{m.sn}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>📍 {m.location || '—'}</div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        {msg && <div style={{ marginTop: 12, padding: '8px 14px', borderRadius: 8, background: msg.startsWith('✓') ? '#f0fdf4' : '#fef2f2', color: msg.startsWith('✓') ? '#16a34a' : '#dc2626', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#f97316', color: '#fff', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
-            {saving ? 'Saving...' : 'Save Assignment'}
-          </button>
+        {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>
         </div>
       </div>
     </div>
   )
 }
 
-function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supabaseKey: string }) {
+function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [editOp, setEditOp] = useState<any>(null)
   const [delOp, setDelOp] = useState<any>(null)
+  const [assignOp, setAssignOp] = useState<any>(null)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [assignOp, setAssignOp] = useState<any>(null)
-
   const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
 
   const fetchOperators = async () => {
@@ -496,7 +858,6 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
-
   useEffect(() => { fetchOperators() }, [])
 
   const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' }); setEditOp(null); setShowAdd(true); setMsg('') }
@@ -512,104 +873,100 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
         }
         await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + editOp.id, { method: 'PATCH', headers, body: JSON.stringify(body) })
-        setMsg('✓ Operator updated')
+        setMsg('✓ Updated')
       } else {
         const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
         await fetch(supabaseUrl + '/rest/v1/operators', { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country }) })
-        setMsg('✓ Operator added')
+        setMsg('✓ Added')
       }
       await fetchOperators()
-      setTimeout(() => { setShowAdd(false); setMsg('') }, 1000)
-    } catch(e: any) { setMsg('Error: ' + e.message) }
+      setTimeout(() => { setShowAdd(false); setMsg('') }, 900)
+    } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
   }
 
   const deleteOperator = async () => {
     if (!delOp) return
     await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + delOp.id, { method: 'DELETE', headers })
-    setDelOp(null)
-    fetchOperators()
+    setDelOp(null); fetchOperators()
   }
 
-  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: '#0284c7' }
-  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: '#f0f9ff' }
+  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue }
+  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg }
 
   return (
-    <div style={{ padding: '28px 32px', background: '#f8fafc', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: -0.5 }}>Operators</h2>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>{operators.length} operator{operators.length !== 1 ? 's' : ''} registered</p>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Operators</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{operators.length} operator{operators.length !== 1 ? 's' : ''} registered</div>
         </div>
-        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f97316', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13, boxShadow: '0 2px 8px #f9731640' }}>
           + Add Operator
         </button>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
         {[
-          { label: 'Total Operators', value: operators.length, icon: '👥', color: '#0284c7', bg: '#f0f9ff' },
-          { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, icon: '👑', color: '#7c3aed', bg: '#f5f3ff' },
-          { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, icon: '🧑‍💼', color: '#16a34a', bg: '#f0fdf4' },
+          { label: 'Total Operators', value: operators.length, color: C.blue, icon: '👥' },
+          { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: '#7c3aed', icon: '👑' },
+          { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.green, icon: '🧑‍💼' },
         ].map(s => (
-          <div key={s.label} style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '18px 22px', boxShadow: '0 1px 3px #0000000a' }}>
+          <div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 20px', borderTop: `3px solid ${s.color}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 24 }}>{s.icon}</span>
-              <span style={{ fontSize: 30, fontWeight: 800, color: s.color }}>{s.value}</span>
+              <span style={{ fontSize: 22 }}>{s.icon}</span>
+              <span style={{ fontSize: 28, fontWeight: 800, color: s.color }}>{s.value}</span>
             </div>
-            <div style={{ marginTop: 8, fontSize: 13, color: '#64748b', fontWeight: 600 }}>{s.label}</div>
+            <div style={{ marginTop: 8, fontSize: 13, color: C.text2, fontWeight: 600 }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Table */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>Loading...</div>
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading...</div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px #0000000a' }}>
+        <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+              <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '13px 18px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 }}>{h}</th>
+                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {operators.map((op, i) => (
-                <tr key={op.id} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#fafbfc' }}>
-                  <td style={{ padding: '14px 18px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #f97316, #ea580c)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+                <tr key={op.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
+                  <td style={{ padding: '13px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
                         {(op.name || op.email).charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{op.name || '—'}</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{op.id.slice(0, 8)}...</div>
+                        <div style={{ fontWeight: 600, color: C.text }}>{op.name || '—'}</div>
+                        <div style={{ fontSize: 10, color: C.text3, fontFamily: 'monospace' }}>{op.id.slice(0, 8)}...</div>
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: '14px 18px', color: '#374151' }}>{op.email}</td>
-                  <td style={{ padding: '14px 18px' }}>
-                    <span style={{ background: ROLE_BG[op.role] || '#f8fafc', color: ROLE_COLOR[op.role] || '#555', padding: '4px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <td style={{ padding: '13px 16px', color: C.text }}>{op.email}</td>
+                  <td style={{ padding: '13px 16px' }}>
+                    <Pill color={ROLE_COLOR[op.role] || C.text2} bg={ROLE_BG[op.role] || C.surface2}>
                       {op.role === 'super_admin' ? '👑 Super Admin' : '🧑‍💼 Operator'}
-                    </span>
+                    </Pill>
                   </td>
-                  <td style={{ padding: '14px 18px' }}>
-                    <div style={{ fontSize: 13, color: '#374151' }}>{op.state || '—'}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{op.country || '—'}</div>
+                  <td style={{ padding: '13px 16px' }}>
+                    <div style={{ fontSize: 13, color: C.text }}>{op.state || '—'}</div>
+                    <div style={{ fontSize: 10, color: C.text3 }}>{op.country}</div>
                   </td>
-                  <td style={{ padding: '14px 18px', color: '#94a3b8', fontSize: 12 }}>
+                  <td style={{ padding: '13px 16px', color: C.text3, fontSize: 12 }}>
                     {op.created_at ? new Date(op.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                   </td>
-                  <td style={{ padding: '14px 18px' }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => setAssignOp(op)} style={{ background: '#eff6ff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}>🖥 Machines</button>
-                      <button onClick={() => openEdit(op)} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>✏️ Edit</button>
-                      <button onClick={() => setDelOp(op)} style={{ background: '#fef2f2', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, color: '#dc2626', cursor: 'pointer' }}>🗑 Delete</button>
+                  <td style={{ padding: '13px 16px' }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => setAssignOp(op)} style={{ background: C.blueBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.blue, cursor: 'pointer' }}>🖥 Machines</button>
+                      <button onClick={() => openEdit(op)} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>✏️ Edit</button>
+                      <button onClick={() => setDelOp(op)} style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.red, cursor: 'pointer' }}>🗑 Del</button>
                     </div>
                   </td>
                 </tr>
@@ -621,40 +978,40 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
 
       {/* Add/Edit Modal */}
       {showAdd && (
-        <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 460, boxShadow: '0 20px 60px #0002' }}>
-            <h3 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{editOp ? 'Edit Operator' : 'Add New Operator'}</h3>
+        <div style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: C.surface, borderRadius: 20, padding: 30, width: 460, boxShadow: '0 20px 60px #00000030' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 20 }}>{editOp ? 'Edit Operator' : 'Add New Operator'}</div>
             {[
               { label: 'Full Name', key: 'name', type: 'text', placeholder: 'e.g. Ravi Kumar' },
               { label: 'Email', key: 'email', type: 'email', placeholder: 'ravi@fruitlink.in', disabled: !!editOp },
-              { label: editOp ? 'New Password (leave blank to keep)' : 'Password', key: 'password', type: 'password', placeholder: '••••••••' },
+              { label: editOp ? 'New Password (blank = keep)' : 'Password', key: 'password', type: 'password', placeholder: '••••••••' },
             ].map(f => (
-              <div key={f.key} style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{f.label}</label>
+              <div key={f.key} style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{f.label}</label>
                 <input type={f.type} value={(form as any)[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.value })}
                   placeholder={f.placeholder} disabled={f.disabled}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: f.disabled ? '#f8fafc' : '#fff', color: '#0f172a' }} />
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: f.disabled ? C.surface2 : '#fff', color: C.text, boxSizing: 'border-box' }} />
               </div>
             ))}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Role</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Role</label>
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', background: '#fff', color: '#0f172a' }}>
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: '#fff', color: C.text }}>
                   <option value="operator">Operator</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>State</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>State</label>
                 <input value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} placeholder="Telangana"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', boxSizing: 'border-box', color: '#0f172a' }} />
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
               </div>
             </div>
-            {msg && <div style={{ marginBottom: 12, padding: '8px 14px', borderRadius: 8, background: msg.startsWith('✓') ? '#f0fdf4' : '#fef2f2', color: msg.startsWith('✓') ? '#16a34a' : '#dc2626', fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+            {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowAdd(false)} style={{ padding: '10px 20px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
-              <button onClick={saveOperator} disabled={saving} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#f97316', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+              <button onClick={() => setShowAdd(false)} style={{ padding: '9px 18px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+              <button onClick={saveOperator} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>
                 {saving ? 'Saving...' : editOp ? 'Update' : 'Add Operator'}
               </button>
             </div>
@@ -662,18 +1019,17 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
         </div>
       )}
 
-      {/* Delete Confirm */}
       {assignOp && <AssignMachinesModal op={assignOp} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} onClose={() => setAssignOp(null)} />}
 
       {delOp && (
-        <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: 380, boxShadow: '0 20px 60px #0002', textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🗑</div>
-            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800, color: '#0f172a' }}>Delete Operator?</h3>
-            <p style={{ margin: '0 0 24px', color: '#64748b', fontSize: 14 }}>This will permanently delete <b>{delOp.name || delOp.email}</b>. This action cannot be undone.</p>
+        <div style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: C.surface, borderRadius: 20, padding: 30, width: 360, textAlign: 'center', boxShadow: '0 20px 60px #00000030' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Delete Operator?</div>
+            <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Permanently delete <b>{delOp.name || delOp.email}</b>. Cannot be undone.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setDelOp(null)} style={{ padding: '10px 24px', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={deleteOperator} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+              <button onClick={() => setDelOp(null)} style={{ padding: '9px 22px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={deleteOperator} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.red, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
             </div>
           </div>
         </div>
@@ -682,175 +1038,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: { supabaseUrl: string; supa
   )
 }
 
-
-function ProfileSection({ operatorId, name, role, state, initials, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
-  const [form, setForm] = useState({ name, state, country: 'India', org: 'Fruitlink Technologies Pvt Ltd', phone: '+91 89771 10142', email: 'skkakkera@gmail.com' })
-  const set = (k: string) => (e: any) => setForm(p => ({ ...p, [k]: e.target.value }))
-  const save = async () => {
-    setSaving(true)
-    try {
-      const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, state: form.state, country: form.country }) })
-      if (res.ok) { document.cookie = 'fl_operator_name=' + form.name + '; path=/; max-age=86400'; document.cookie = 'fl_state=' + form.state + '; path=/; max-age=86400'; showSaved() }
-      else showErr('Failed to save')
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-  return (
-    <div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Profile</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Your account details and contact information</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0', borderBottom: '1px solid #e2e8f0', marginBottom: 24 }}>
-        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 700 }}>{initials}</div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{form.name}</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{form.email}</div>
-          <div style={{ marginTop: 6, display: 'inline-block', background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
-        {[['Full Name', 'name'], ['Email Address', 'email'], ['WhatsApp Number', 'phone'], ['State / Region', 'state'], ['Country', 'country'], ['Organization', 'org']].map(([label, key]) => (
-          <div key={key}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>{label}</div>
-            <input value={(form as any)[key]} onChange={set(key)} readOnly={key === 'email'} style={{ width: '100%', background: key === 'email' ? '#f1f5f9' : '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a', outline: 'none' }} />
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        <button style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-        <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save changes'}</button>
-      </div>
-    </div>
-  )
-}
-
-function SecuritySection({ operatorId, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
-  const [pw, setPw] = useState({ current: '', newp: '', confirm: '' })
-  const save = async () => {
-    if (pw.newp !== pw.confirm) return showErr('Passwords do not match')
-    if (pw.newp.length < 6) return showErr('Min 6 characters')
-    setSaving(true)
-    try {
-      const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw.newp }) })
-      const { hash } = await hashRes.json()
-      const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ password_hash: hash }) })
-      if (res.ok) { setPw({ current: '', newp: '', confirm: '' }); showSaved() } else showErr('Failed to update')
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-  return (
-    <div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Security</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Manage your password and active sessions</div>
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Change Password</div>
-        {([['Current password', 'current'], ['New password', 'newp'], ['Confirm new password', 'confirm']] as const).map(([label, key]) => (
-          <div key={key} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>{label}</div>
-            <input type="password" value={(pw as any)[key]} onChange={e => setPw(p => ({ ...p, [key]: e.target.value }))} placeholder="••••••••" style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }} />
-          </div>
-        ))}
-        <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Updated!' : saving ? 'Saving...' : 'Update password'}</button>
-      </div>
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>Active Sessions</div>
-        {[['Chrome on Mac · Hyderabad, IN', 'Now', true], ['Chrome on iPhone · Hyderabad, IN', '2h ago', false]].map(([sess, time, current]: any) => (
-          <div key={sess} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-            <div>
-              <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{sess}</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{time} {current && <span style={{ color: '#16a34a', fontWeight: 600 }}>· Current</span>}</div>
-            </div>
-            {!current && <button style={{ fontSize: 12, color: '#dc2626', border: '1px solid #fecaca', background: '#fff', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Revoke</button>}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function LocationsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
-  const [machines, setMachines] = useState<any[]>([])
-  useEffect(() => {
-    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,status', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
-      .then(r => r.json()).then(d => setMachines(Array.isArray(d) ? d : []))
-  }, [])
-  const update = (id: string, field: string, val: string) => setMachines(ms => ms.map(m => m.id === id ? { ...m, [field]: val } : m))
-  const save = async () => {
-    setSaving(true)
-    try {
-      await Promise.all(machines.map(m => fetch(SB_URL + '/rest/v1/machines?id=eq.' + m.id, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ display_name: m.display_name, location: m.location }) })))
-      showSaved()
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-  return (
-    <div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Machine Locations</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Update display names and locations for your machines</div>
-      {machines.map(m => (
-        <div key={m.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{m.display_name}</div>
-            <div style={{ fontSize: 11, color: m.status === 'online' ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>{m.status === 'online' ? '● Online' : '○ Offline'}</div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Display Name</div>
-              <input value={m.display_name || ''} onChange={e => update(m.id, 'display_name', e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 13, outline: 'none' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Location</div>
-              <input value={m.location || ''} onChange={e => update(m.id, 'location', e.target.value)} style={{ width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 13, outline: 'none' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Serial Number</div>
-              <input value={m.sn || ''} readOnly style={{ width: '100%', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontFamily: 'monospace', color: '#64748b', outline: 'none' }} />
-            </div>
-          </div>
-        </div>
-      ))}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={save} disabled={saving} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : saving ? 'Saving...' : 'Save locations'}</button>
-      </div>
-    </div>
-  )
-}
-
-function DangerSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, operatorId }: any) {
-  const clearAlerts = async () => {
-    if (!window.confirm('Delete ALL alert history? This cannot be undone.')) return
-    setSaving(true)
-    try {
-      await fetch(SB_URL + '/rest/v1/alerts?created_at=gte.2000-01-01', { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
-      showSaved()
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-  const clearTelemetry = async () => {
-    if (!window.confirm('Delete ALL telemetry history? This cannot be undone.')) return
-    setSaving(true)
-    try {
-      await fetch(SB_URL + '/rest/v1/telemetry?ts=gte.2000-01-01', { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
-      showSaved()
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-  return (
-    <div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626', marginBottom: 4 }}>Danger Zone</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Irreversible actions — proceed with caution</div>
-      {[
-        { title: 'Clear All Alerts', desc: 'Permanently delete all alert history from the database', btn: 'Clear alerts', red: false, action: clearAlerts },
-        { title: 'Reset Telemetry', desc: 'Remove all telemetry history for all machines', btn: 'Reset data', red: false, action: clearTelemetry },
-        { title: 'Delete Account', desc: 'Permanently delete your account and all associated data', btn: 'Delete account', red: true, action: () => showErr('Contact support to delete your account') },
-      ].map(({ title, desc, btn, red, action }) => (
-        <div key={title} style={{ background: '#fff', border: '1px solid ' + (red ? '#fecaca' : '#e2e8f0'), borderRadius: 12, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{title}</div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{desc}</div>
-          </div>
-          <button onClick={action} disabled={saving} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid ' + (red ? '#fca5a5' : '#e2e8f0'), background: red ? '#fef2f2' : '#fff', color: red ? '#dc2626' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, marginLeft: 16 }}>{btn}</button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-
+// ─── Settings Page ───────────────────────────────────────────────
 function SettingsPage() {
   const [activeSection, setActiveSection] = useState('profile')
   const [saved, setSaved] = useState(false)
@@ -860,10 +1048,11 @@ function SettingsPage() {
   const name = getCookie('fl_operator_name') || 'Admin'
   const role = getCookie('fl_role') || 'operator'
   const state = getCookie('fl_state') || 'Telangana'
-  const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)
-  const SB_URL = 'https://fpwvutdvwnvrunviporz.supabase.co'
-  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk'
-  const sbHeaders = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+  const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const SB_URL2 = SB_URL
+  const SB_KEY2 = SB_KEY
+  const showSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 2500) }
+  const showErr = (m: string) => { setErrMsg(m); setTimeout(() => setErrMsg(''), 3000) }
 
   const navItems = [
     { group: 'Account', items: [{ key: 'profile', label: 'Profile', icon: '👤' }, { key: 'security', label: 'Security', icon: '🔒' }] },
@@ -872,446 +1061,278 @@ function SettingsPage() {
     { group: 'System', items: [{ key: 'billing', label: 'Billing', icon: '💳' }, { key: 'danger', label: 'Danger Zone', icon: '⚠️' }] },
   ]
 
-  const showSaved = () => { setSaved(true); setErrMsg(''); setTimeout(() => setSaved(false), 2500) }
-  const showErr = (msg: string) => { setErrMsg(msg); setTimeout(() => setErrMsg(''), 4000) }
-
-  const handleSave = () => { showSaved() }
-
-  const saveProfile = async (formData: any) => {
-    if (!operatorId) return showErr('Not logged in')
-    setSaving(true)
-    try {
-      const body: any = { name: formData.name, state: formData.state, country: formData.country }
-      const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, {
-        method: 'PATCH', headers: { ...sbHeaders, Prefer: 'return=minimal' },
-        body: JSON.stringify(body)
-      })
-      if (res.ok) {
-        document.cookie = 'fl_operator_name=' + formData.name + '; path=/; max-age=86400'
-        document.cookie = 'fl_state=' + formData.state + '; path=/; max-age=86400'
-        showSaved()
-      } else showErr('Failed to save profile')
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-
-  const savePassword = async (current: string, newPass: string, confirm: string) => {
-    if (newPass !== confirm) return showErr('Passwords do not match')
-    if (newPass.length < 6) return showErr('Password must be at least 6 characters')
-    setSaving(true)
-    try {
-      const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: newPass }) })
-      const { hash } = await hashRes.json()
-      const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, {
-        method: 'PATCH', headers: { ...sbHeaders, Prefer: 'return=minimal' },
-        body: JSON.stringify({ password_hash: hash })
-      })
-      if (res.ok) showSaved()
-      else showErr('Failed to update password')
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-
-  const saveLocations = async (machines: any[]) => {
-    setSaving(true)
-    try {
-      await Promise.all(machines.map(m =>
-        fetch(SB_URL + '/rest/v1/machines?id=eq.' + m.id, {
-          method: 'PATCH', headers: { ...sbHeaders, Prefer: 'return=minimal' },
-          body: JSON.stringify({ display_name: m.display_name, location: m.location })
-        })
-      ))
-      showSaved()
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-
-  const clearAlerts = async () => {
-    if (!confirm('Delete ALL alert history? This cannot be undone.')) return
-    setSaving(true)
-    try {
-      const res = await fetch(SB_URL + '/rest/v1/alerts?id=neq.00000000-0000-0000-0000-000000000000', {
-        method: 'DELETE', headers: sbHeaders
-      })
-      if (res.ok) showSaved()
-      else showErr('Failed to clear alerts')
-    } catch(e: any) { showErr(e.message) } finally { setSaving(false) }
-  }
-
-  const sections: any = {
-    profile: (
-      <ProfileSection operatorId={operatorId} name={name} role={role} state={state} initials={initials} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
-    ),
-    security: (
-      <SecuritySection operatorId={operatorId} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
-    ),
-    thresholds: (
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Alert Thresholds</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Configure when alerts are triggered for your machines</div>
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 0, background: '#f8fafc', padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>
-            {['Alert Type', 'Warn at', 'Stop at'].map(h => <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</div>)}
-          </div>
-          {[['🌡 Temperature High', '15°C', '20°C'], ['❄️ Temperature Low', '2°C', '0°C'], ['📦 Stock Low (per layer)', '20%', '0%'], ['⏰ Machine Offline After', '15 min', '—'], ['🚪 Door Open Alert', '—', 'Immediately']].map(([label, warn, stop]) => (
-            <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 0, padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
-              <div style={{ fontSize: 13, color: '#0f172a' }}>{label}</div>
-              <input defaultValue={warn} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 80, outline: 'none' }} />
-              <input defaultValue={stop} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 80, outline: 'none' }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Saved!' : 'Save thresholds'}</button>
-        </div>
-      </div>
-    ),
-    locations: (
-      <LocationsSection SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
-    ),
-    notifications: (
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Notifications</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Choose which alerts you receive and via which channel</div>
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Notification Channels</div>
-          {[['WhatsApp', 'Instant alerts via WhatsApp message', true], ['Telegram', 'Alerts via Telegram bot', true], ['Email Digest', 'Daily summary at 9am IST', false]].map(([ch, desc, on]: any) => (
-            <div key={ch} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{ch}</div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{desc}</div>
-              </div>
-              <div style={{ width: 40, height: 22, borderRadius: 11, background: on ? '#f97316' : '#e2e8f0', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: '#fff', top: 3, [on ? 'right' : 'left']: 3 }}></div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 24px' }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 16 }}>Alert Types</div>
-          {[['Machine Offline', 'CRITICAL', true], ['Temperature High/Stop', 'CRITICAL', true], ['Stock Empty', 'HIGH', true], ['Door Open', 'HIGH', true], ['Vend Failure', 'HIGH', true], ['Stock Low', 'MEDIUM', false], ['No Orders (4h)', 'MEDIUM', false]].map(([label, sev, on]: any) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ fontSize: 13, color: '#0f172a' }}>{label}</div>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: sev === 'CRITICAL' ? '#fff1f2' : sev === 'HIGH' ? '#fff7ed' : '#fffbeb', color: sev === 'CRITICAL' ? '#dc2626' : sev === 'HIGH' ? '#ea580c' : '#d97706' }}>{sev}</span>
-              </div>
-              <div style={{ width: 40, height: 22, borderRadius: 11, background: on ? '#f97316' : '#e2e8f0', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: '#fff', top: 3, [on ? 'right' : 'left']: 3 }}></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
-    cooldowns: (
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Alert Cooldowns</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>How long to wait before re-sending the same alert</div>
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', background: '#f8fafc', padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>
-            {['Alert Type', 'Cooldown', 'Notify'].map(h => <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</div>)}
-          </div>
-          {[['Machine Offline', '1h', true], ['Temperature High', '1h', true], ['Temperature Low', '2h', true], ['Temperature Stop', '1h', true], ['Stock Empty L1/L2/L3', '4h', true], ['Stock Low L1/L2/L3', '6h', false], ['Door Open', '1h', true], ['Vend Failure', '0.5h', true], ['Cup / Film Empty', '2h', true]].map(([label, cd, notify]: any) => (
-            <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', padding: '11px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
-              <div style={{ fontSize: 13, color: '#0f172a' }}>{label}</div>
-              <input defaultValue={cd} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, width: 64, outline: 'none' }} />
-              <div style={{ width: 36, height: 20, borderRadius: 10, background: notify ? '#f97316' : '#e2e8f0', position: 'relative', cursor: 'pointer' }}>
-                <div style={{ position: 'absolute', width: 14, height: 14, borderRadius: '50%', background: '#fff', top: 3, [notify ? 'right' : 'left']: 3 }}></div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saved ? '✓ Saved!' : 'Save cooldowns'}</button>
-        </div>
-      </div>
-    ),
-    billing: (
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Billing</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Your subscription and usage details</div>
-        <div style={{ background: 'linear-gradient(135deg, #1a1f2e, #2d3748)', borderRadius: 16, padding: '24px', marginBottom: 20, color: '#fff' }}>
-          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Current Plan</div>
-          <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>Starter</div>
-          <div style={{ fontSize: 13, color: '#94a3b8' }}>2 machines · Unlimited alerts · WhatsApp + Telegram</div>
-          <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
-            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 16px' }}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Machines</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>2 / 5</div>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 16px' }}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Next billing</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>Jun 23</div>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 16px' }}>
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Monthly</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>₹999</div>
-            </div>
-          </div>
-        </div>
-        <button style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Upgrade Plan</button>
-      </div>
-    ),
-    danger: (
-      <DangerSection SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} operatorId={operatorId} />
-    ),
-  }
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Sidebar */}
-      <div style={{ width: 220, background: '#fff', borderRight: '1px solid #e2e8f0', padding: '20px 0', flexShrink: 0 }}>
-        <div style={{ padding: '0 16px 16px', borderBottom: '1px solid #f1f5f9', marginBottom: 8 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Settings</div>
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Fruitlink Dashboard</div>
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 20, letterSpacing: '-0.02em' }}>Settings</div>
+      <div style={{ display: 'flex', gap: 24 }}>
+        {/* Settings Nav */}
+        <div style={{ width: 200, flexShrink: 0 }}>
+          {navItems.map(group => (
+            <div key={group.group} style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{group.group}</div>
+              {group.items.map(item => (
+                <button key={item.key} onClick={() => setActiveSection(item.key)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2,
+                  background: activeSection === item.key ? C.orangeBg : 'transparent',
+                  color: activeSection === item.key ? C.orange : C.text2,
+                  fontSize: 13, fontWeight: activeSection === item.key ? 600 : 400, textAlign: 'left' as const,
+                  borderRight: activeSection === item.key ? `3px solid ${C.orange}` : '3px solid transparent',
+                  transition: 'all 0.12s',
+                }}>
+                  <span>{item.icon}</span> {item.label}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
-        {navItems.map(group => (
-          <div key={group.group}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '12px 16px 4px', textTransform: 'uppercase', letterSpacing: 0.8 }}>{group.group}</div>
-            {group.items.map(item => (
-              <div key={item.key} onClick={() => setActiveSection(item.key)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: activeSection === item.key ? 700 : 400, color: activeSection === item.key ? '#f97316' : '#374151', background: activeSection === item.key ? '#fff7ed' : 'transparent', borderRight: activeSection === item.key ? '3px solid #f97316' : '3px solid transparent', transition: 'all 0.1s' }}>
-                <span style={{ fontSize: 15 }}>{item.icon}</span>
-                {item.label}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-      {/* Content */}
-      <div style={{ flex: 1, padding: '32px 40px', overflowY: 'auto' }}>
-        {sections[activeSection]}
+
+        {/* Settings Content */}
+        <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '24px' }}>
+          {(saved || errMsg) && (
+            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 9, background: saved ? C.greenBg : C.redBg, color: saved ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>
+              {saved ? '✓ Changes saved successfully' : errMsg}
+            </div>
+          )}
+          {activeSection === 'profile' && (
+            <ProfileSection operatorId={operatorId} name={name} role={role} state={state} initials={initials} SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
+          )}
+          {activeSection === 'security' && (
+            <SecuritySection operatorId={operatorId} SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
+          )}
+          {activeSection === 'locations' && (
+            <LocationsSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />
+          )}
+          {activeSection === 'danger' && (
+            <DangerSection SB_URL={SB_URL2} SB_KEY={SB_KEY2} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} operatorId={operatorId} />
+          )}
+          {!['profile', 'security', 'locations', 'danger'].includes(activeSection) && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: C.text3 }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Coming Soon</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>This section is being built</div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-
-export default function Dashboard() {
-  const [time, setTime] = useState('');
-  const [machines, setMachines] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [telemetry, setTelemetry] = useState(null);
-  const [telHistory, setTelHistory] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [todayCount, setTodayCount] = useState(0);
-  const [todayRevenue, setTodayRevenue] = useState(0);
-  const [operatorName, setOperatorName] = useState('');
-  const [userRole, setUserRole] = useState('');
-  const [chartRange, setChartRange] = useState('24h');
-  const [activeKey, setActiveKey] = useState('console');
-  const [expandedKeys, setExpandedKeys] = useState(['equipment']);
-  const [collapsed, setCollapsed] = useState(false);
-
-  const toggleExpand = (key) => setExpandedKeys(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key]);
-
-  useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' }));
-    tick(); const t = setInterval(tick, 1000);
-    setOperatorName(getCookie('fl_operator_name') || 'Operator');
-    setUserRole(getCookie('fl_role') || 'operator');
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => { fetchMachines(); const interval = setInterval(fetchMachines, 30000); return () => clearInterval(interval); }, []);
-  useEffect(() => { if (selected) { fetchDetail(selected); fetchHistory(selected, chartRange); } }, [selected]);
-  useEffect(() => { if (selected) fetchHistory(selected, chartRange); }, [chartRange]);
-
-  async function fetchMachines() {
-    const operatorId = getCookie('fl_operator_id');
-    const role = getCookie('fl_role') || 'operator';
-    if (role === 'super_admin') {
-      const { data } = await supabase.from('machines').select('*');
-      if (data) { setMachines(data); if (data.length > 0 && !selected) { const online = data.find(m => m.status === 'online'); setSelected(online || data[0]); } }
-    } else if (operatorId) {
-      const { data: asgn } = await supabase.from('machine_operators').select('machine_id').eq('operator_id', operatorId);
-      const ids = (asgn || []).map((a) => a.machine_id);
-      if (ids.length === 0) { setMachines([]); return; }
-      const { data } = await supabase.from('machines').select('*').in('id', ids);
-      if (data) { setMachines(data); if (data.length > 0 && !selected) { const online = data.find(m => m.status === 'online'); setSelected(online || data[0]); } }
-    } else {
-      setMachines([]);
-    }
+function ProfileSection({ operatorId, name, role, state, initials, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [form, setForm] = useState({ name, state, country: 'India' })
+  const save = async () => {
+    setSaving(true)
+    const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, state: form.state, country: form.country }) })
+    if (res.ok) { document.cookie = 'fl_operator_name=' + form.name + '; path=/; max-age=86400'; document.cookie = 'fl_state=' + form.state + '; path=/; max-age=86400'; showSaved() }
+    else showErr('Failed to save')
+    setSaving(false)
   }
-
-  async function fetchDetail(m) {
-    const { data: tel } = await supabase.from('telemetry').select('*').eq('machine_id', m.id).order('ts', { ascending: false }).limit(1).single();
-    if (tel) setTelemetry(tel);
-    const today = new Date().toISOString().split('T')[0];
-    const { data: tod } = await supabase.from('orders').select('*').eq('machine_id', m.id).gte('created_at', today);
-    if (tod) { setTodayCount(tod.length); setTodayRevenue(tod.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100); }
-    const { data: rec } = await supabase.from('orders').select('*').eq('machine_id', m.id).order('created_at', { ascending: false }).limit(10);
-    if (rec) setOrders(rec);
-  }
-
-  async function fetchHistory(m, range) {
-    const hours = range === '6h' ? 6 : range === '12h' ? 12 : 24;
-    const since = new Date(Date.now() - hours * 3600000).toISOString();
-    const { data } = await supabase.from('telemetry').select('ts, inner_temp_c, stock_l1, stock_l2, stock_l3').eq('machine_id', m.id).gte('ts', since).order('ts', { ascending: true }).limit(200);
-    if (data) setTelHistory(data);
-  }
-
-  function logout() { document.cookie = 'fl_auth=; max-age=0'; document.cookie = 'fl_operator_id=; max-age=0'; document.cookie = 'fl_operator_name=; max-age=0'; window.location.href = '/login'; }
-
-  const getPageLabel = () => { const flat = NAV.flatMap(n => [n, ...(n.children || [])]); return flat.find(n => n.key === activeKey)?.label || 'Console'; };
-
-  const renderPage = () => {
-    if (activeKey === 'fleet') return <FleetMap machines={machines} />;
-    if (activeKey === 'operators-list') return getCookie('fl_role') === 'super_admin' ? <OperatorsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' /> : <div style={{padding:'60px',textAlign:'center',color:'#94a3b8',fontSize:14}}>Access restricted to Super Admins only.</div>
-    if (activeKey === 'alerts') return <AlertsPage supabaseUrl='https://fpwvutdvwnvrunviporz.supabase.co' supabaseKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk' />
-    if (activeKey === 'settings') return <SettingsPage />
-    if (activeKey === 'settings_old') return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 400, gap: 16 }}>
-        <div style={{ fontSize: 52, opacity: 0.2 }}>...</div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#6b7280' }}>{getPageLabel()}</div>
-        <div style={{ fontSize: 15, background: '#fff7ed', padding: '6px 16px', borderRadius: 20, color: '#f97316', fontWeight: 600 }}>Coming soon</div>
-      </div>
-    );
-
-    if (activeKey === 'orders-list') return (
-      <div>
-        <h2 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: '0 0 20px' }}>Orders List</h2>
-        <div style={{ background: '#fff', borderRadius: 16, border: '1.5px solid #e8eaed', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead><tr style={{ background: '#f8f9fb', borderBottom: '1.5px solid #e8eaed' }}>{['Order','Machine','Time','Amount','Status'].map(h => <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>)}</tr></thead>
-            <tbody>
-              {orders.length === 0 ? <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>No orders yet</td></tr> : orders.map(o => (
-                <tr key={o.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>#{o.order_code}</td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{selected?.display_name || selected?.sn || '--'}</td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{o.created_at ? new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }) : '--'}</td>
-                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>Rs {Math.round((o.amount_paise || 0) / 100)}</td>
-                  <td style={{ padding: '12px 16px' }}><span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: o.pay_state === 1 ? '#dcfce7' : '#fef9c3', color: o.pay_state === 1 ? '#15803d' : '#a16207' }}>{o.pay_state === 1 ? 'Paid' : 'Pending'}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-
-    return (
-      <div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 28 }}>
-          {[{ label: 'Total Machines', value: machines.length, icon: '🍊' }, { label: 'Online Now', value: machines.filter(m => m.status === 'online').length, icon: '✅' }, { label: "Today's Orders", value: todayCount, icon: '📦' }, { label: 'Revenue Today', value: 'Rs ' + Math.round(todayRevenue), icon: '💰' }].map(s => (
-            <div key={s.label} style={{ background: '#fff', border: '1.5px solid #e8eaed', borderRadius: 16, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: 28, marginBottom: 10 }}>{s.icon}</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#111827', letterSpacing: '-0.03em' }}>{s.value}</div>
-              <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4, fontWeight: 600 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>Machines</div>
-        {machines.map(m => {
-          const online = m.status === 'online';
-          const isSel = selected && selected.id === m.id;
-          return (
-            <div key={m.id} onClick={() => { setSelected(m); setTelemetry(null); setTelHistory([]); setActiveKey('machines'); }} style={{ background: '#fff', border: '1.5px solid ' + (isSel ? '#f97316' : '#e8eaed'), borderRadius: 16, padding: '20px 24px', cursor: 'pointer', marginBottom: 14, boxShadow: isSel ? '0 0 0 3px #fed7aa' : '0 1px 4px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#111827', marginBottom: 4 }}>{m.display_name || m.sn}</div>
-                  <div style={{ fontSize: 14, color: '#6b7280' }}>{m.location || 'Hyderabad'} · SN: {m.sn}</div>
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 20, background: online ? '#dcfce7' : '#f3f4f6', color: online ? '#15803d' : '#6b7280' }}>{online ? '● Online' : '○ Offline'}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 28 }}>
-                {[{ label: 'Temperature', value: isSel && telemetry ? telemetry.inner_temp_c + 'C' : '--' }, { label: "Today's Orders", value: isSel ? todayCount : '--' }, { label: 'Revenue', value: isSel ? 'Rs ' + Math.round(todayRevenue) : '--' }].map(s => (
-                  <div key={s.label}><div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{s.label}</div><div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{s.value}</div></div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-        {selected && activeKey === 'machines' && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>{selected.display_name || selected.sn} - Detail</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-              <div style={{ background: '#fff', borderRadius: 16, padding: '20px 22px', border: '1.5px solid #e8eaed' }}><div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6, fontWeight: 600 }}>Inner Temperature</div><div style={{ fontSize: 32, fontWeight: 800, color: '#111827' }}>{telemetry ? telemetry.inner_temp_c + 'C' : '--'}</div></div>
-              <div style={{ background: '#fff', borderRadius: 16, padding: '20px 22px', border: '1.5px solid #e8eaed' }}><div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6, fontWeight: 600 }}>Last Seen</div><div style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginTop: 4 }}>{selected.last_seen ? new Date(selected.last_seen).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' }) : '--'}</div></div>
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 22px', border: '1.5px solid #e8eaed', marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Stock Levels</div>
-              {[['L1', telemetry && telemetry.stock_l1], ['L2', telemetry && telemetry.stock_l2], ['L3', telemetry && telemetry.stock_l3]].map(item => (
-                <div key={item[0]} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <span style={{ fontSize: 14, color: '#6b7280', width: 24, fontWeight: 700 }}>{item[0]}</span>
-                  <div style={{ flex: 1, height: 10, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 99, background: item[1] ? '#f97316' : '#ef4444', width: item[1] ? '80%' : '5%', transition: 'width 0.5s' }}></div></div>
-                  <span style={{ fontSize: 13, color: item[1] ? '#16a34a' : '#dc2626', fontWeight: 700, width: 70, textAlign: 'right' }}>{item[1] ? 'Available' : 'Empty'}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 22px', border: '1.5px solid #e8eaed', marginBottom: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Temperature History</div>
-                <div style={{ display: 'flex', gap: 4 }}>{['6h','12h','24h'].map(r => <button key={r} onClick={() => setChartRange(r)} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, background: chartRange === r ? '#f97316' : '#f3f4f6', color: chartRange === r ? '#fff' : '#6b7280' }}>{r}</button>)}</div>
-              </div>
-              <TempChart data={telHistory} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 22px', border: '1.5px solid #e8eaed', marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Stock History</div>
-              <StockChart data={telHistory} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, border: '1.5px solid #e8eaed', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', fontSize: 12, fontWeight: 800, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Recent Orders</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                <thead><tr style={{ background: '#f8f9fb' }}>{['Order','Time','Amount','Status'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#9ca3af' }}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {orders.length === 0 ? <tr><td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>No orders yet</td></tr> : orders.map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid #f9fafb' }}>
-                      <td style={{ padding: '12px 16px', fontWeight: 600 }}>#{o.order_code}</td>
-                      <td style={{ padding: '12px 16px', color: '#6b7280' }}>{o.created_at ? new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }) : '--'}</td>
-                      <td style={{ padding: '12px 16px', fontWeight: 600 }}>Rs {Math.round((o.amount_paise || 0) / 100)}</td>
-                      <td style={{ padding: '12px 16px' }}><span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: o.pay_state === 1 ? '#dcfce7' : '#fef9c3', color: o.pay_state === 1 ? '#15803d' : '#a16207' }}>{o.pay_state === 1 ? 'Paid' : 'Pending'}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#f8f9fb', fontFamily: "'DM Sans', system-ui, sans-serif", overflow: 'hidden' }}>
-      <link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap' />
-      <div style={{ width: collapsed ? 68 : 270, background: '#1a1f2e', borderRight: 'none', display: 'flex', flexDirection: 'column', transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)', overflow: 'hidden', flexShrink: 0, boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}>
-        <div style={{ padding: collapsed ? '16px 0' : '14px 14px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 10, minHeight: 75 }}>
-          <img src='/logo.png' alt='Fruitlink' style={{ height: collapsed ? 34 : 42, width: 'auto', flexShrink: 0, objectFit: 'contain' }} />
-          {!collapsed && <div><div style={{ fontWeight: 900, fontSize: 17, letterSpacing: '0.05em', color: '#f97316', lineHeight: 1 }}>FRUITLINK</div><div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 2 }}>Technologies Pvt Ltd</div><div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} /><span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700 }}>Online</span></div></div>}
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
-          {NAV.map(item => (
-            <div key={item.key} style={{ marginBottom: 2 }}>
-              <div onClick={() => { if (item.children) toggleExpand(item.key); else setActiveKey(item.key); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: collapsed ? '11px 0' : '11px 12px', borderRadius: 10, cursor: 'pointer', justifyContent: collapsed ? 'center' : 'flex-start', background: activeKey === item.key ? 'rgba(249,115,22,0.15)' : 'transparent', borderLeft: activeKey === item.key && !collapsed ? '3px solid #f97316' : '3px solid transparent', transition: 'all 0.15s' }}>
-                <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-                {!collapsed && <><span style={{ fontSize: 15, fontWeight: 600, flex: 1, color: activeKey === item.key ? '#f97316' : '#a0aec0' }}>{item.label}</span>{item.badge && <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: '#fef9c3', color: '#a16207', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{item.badge}</span>}{item.children && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', transform: expandedKeys.includes(item.key) ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>&#9654;</span>}</>}
-              </div>
-              {item.children && expandedKeys.includes(item.key) && !collapsed && (
-                <div style={{ paddingLeft: 16, marginTop: 2, marginBottom: 4 }}>
-                  {item.children.map(child => <div key={child.key} onClick={() => setActiveKey(child.key)} style={{ padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: activeKey === child.key ? '#f97316' : '#8892a4', background: activeKey === child.key ? 'rgba(249,115,22,0.15)' : 'transparent', borderLeft: '2px solid ' + (activeKey === child.key ? '#f97316' : 'rgba(255,255,255,0.1)'), marginBottom: 2, transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 12 }}>{child.icon}</span>{child.label}</div>)}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '12px 10px', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 10 }}>
-          {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(249,115,22,0.2)', border: '1.5px solid rgba(249,115,22,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#f97316', fontWeight: 800 }}>{operatorName.charAt(0).toUpperCase()}</div><div><div style={{ fontSize: 14, fontWeight: 700, color: '#ffffff' }}>{operatorName}</div><div style={{ fontSize: 11, color: '#8892a4' }}>Fruitlink</div></div></div>}
-          <button onClick={() => setCollapsed(v => !v)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: '#a0aec0', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>{collapsed ? '>' : '<'}</button>
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Profile</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Your account details and contact info</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 0', borderBottom: `1px solid ${C.border}`, marginBottom: 22 }}>
+        <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 700 }}>{initials}</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{name}</div>
+          <div style={{ marginTop: 5 }}><Badge color={role === 'super_admin' ? '#7c3aed' : C.blue}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</Badge></div>
         </div>
       </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ height: 64, background: '#fff', borderBottom: '1.5px solid #e8eaed', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
-            <span style={{ color: '#9ca3af', fontWeight: 600 }}>FRUITLINK</span>
-            <span style={{ color: '#d1d5db' }}>›</span>
-            <span style={{ color: '#111827', fontWeight: 700 }}>{getPageLabel()}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
+        {[['Full Name', 'name', 'text', form.name], ['State / Region', 'state', 'text', form.state], ['Country', 'country', 'text', form.country]].map(([label, key, type, val]) => (
+          <div key={key as string}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</label>
+            <input type={type as string} value={val as string} onChange={e => setForm({ ...form, [key as string]: e.target.value })}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 13, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ fontSize: 13, color: '#6b7280', fontFamily: 'monospace' }}>{time}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#dcfce7', padding: '6px 14px', borderRadius: 20 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a' }} /><span style={{ fontSize: 13, color: '#15803d', fontWeight: 700 }}>System Online</span></div>
-            <button onClick={logout} style={{ background: '#f97316', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Logout</button>
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>{renderPage()}</div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: '#fff', color: C.text2, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+        <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Changes'}</button>
       </div>
     </div>
-  );
+  )
+}
+
+function SecuritySection({ operatorId, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [pw, setPw] = useState({ cur: '', new: '', confirm: '' })
+  const save = async () => {
+    if (pw.new !== pw.confirm) { showErr('Passwords do not match'); return }
+    if (pw.new.length < 8) { showErr('Minimum 8 characters'); return }
+    setSaving(true)
+    const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw.new }) })
+    if (!hashRes.ok) { showErr('Failed to hash password'); setSaving(false); return }
+    const { hash } = await hashRes.json()
+    const res = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ password_hash: hash }) })
+    if (res.ok) showSaved(); else showErr('Failed to update')
+    setSaving(false)
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Security</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Update your password</div>
+      {[['New Password', 'new'], ['Confirm Password', 'confirm']].map(([label, key]) => (
+        <div key={key} style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</label>
+          <input type="password" value={(pw as any)[key]} onChange={e => setPw({ ...pw, [key]: e.target.value })} placeholder="••••••••"
+            style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 13, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
+        </div>
+      ))}
+      <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Updated!' : 'Update Password'}</button>
+    </div>
+  )
+}
+
+function LocationsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const [machines, setMachines] = useState<any[]>([])
+  useEffect(() => {
+    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,location,state', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } }).then(r => r.json()).then(d => setMachines(Array.isArray(d) ? d : []))
+  }, [])
+  const save = async () => {
+    setSaving(true)
+    for (const m of machines) {
+      await fetch(SB_URL + '/rest/v1/machines?id=eq.' + m.id, { method: 'PATCH', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ location: m.location, state: m.state }) })
+    }
+    showSaved(); setSaving(false)
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Locations</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Update machine locations</div>
+      {machines.map(m => (
+        <div key={m.id} style={{ marginBottom: 16, padding: 14, background: C.surface2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+          <div style={{ fontWeight: 600, fontSize: 13, color: C.text, marginBottom: 10 }}>{m.display_name}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const }}>Location</label>
+              <input value={m.location || ''} onChange={e => setMachines(machines.map(x => x.id === m.id ? { ...x, location: e.target.value } : x))}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 12, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text2, marginBottom: 4, textTransform: 'uppercase' as const }}>State</label>
+              <input value={m.state || ''} onChange={e => setMachines(machines.map(x => x.id === m.id ? { ...x, state: e.target.value } : x))}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 12, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Locations'}</button>
+    </div>
+  )
+}
+
+function DangerSection({ SB_URL, SB_KEY, operatorId }: any) {
+  const [confirm, setConfirm] = useState('')
+  const deleteAccount = async () => {
+    if (confirm !== 'DELETE') return
+    await fetch(SB_URL + '/rest/v1/operators?id=eq.' + operatorId, { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+    document.cookie.split(';').forEach(c => document.cookie = c.split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/')
+    window.location.href = '/login'
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.red, marginBottom: 4 }}>Danger Zone</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>These actions are irreversible</div>
+      <div style={{ background: C.redBg, border: `1px solid ${C.red}40`, borderRadius: 12, padding: 18 }}>
+        <div style={{ fontWeight: 700, color: C.red, marginBottom: 6 }}>Delete Account</div>
+        <div style={{ fontSize: 13, color: C.text2, marginBottom: 14 }}>Type DELETE to confirm permanent account deletion.</div>
+        <input value={confirm} onChange={e => setConfirm(e.target.value)} placeholder='Type "DELETE"'
+          style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.red}60`, fontSize: 13, outline: 'none', marginBottom: 12, boxSizing: 'border-box', background: '#fff', color: C.text }} />
+        <button onClick={deleteAccount} disabled={confirm !== 'DELETE'} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, fontWeight: 700, cursor: confirm === 'DELETE' ? 'pointer' : 'not-allowed', opacity: confirm === 'DELETE' ? 1 : 0.5 }}>Delete My Account</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main App ────────────────────────────────────────────────────
+export default function Dashboard() {
+  const [active, setActive] = useState('console')
+  const [machines, setMachines] = useState<any[]>([])
+  const [alerts, setAlerts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const role = getCookie('fl_role')
+  const name = getCookie('fl_operator_name') || 'Admin'
+  const operatorId = getCookie('fl_operator_id')
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    let machineIds: string[] = []
+    if (role !== 'super_admin' && operatorId) {
+      const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id', { headers })
+      const moData = await moRes.json()
+      machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
+    }
+    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&id=eq.none' : '')
+    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
+
+    const [mRes, aRes] = await Promise.all([
+      fetch(SB_URL + '/rest/v1/machines?select=*&order=created_at.asc' + idFilter, { headers }),
+      fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
+    ])
+    const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
+
+    // Fetch latest telemetry per machine individually
+    const enriched: any[] = []
+    if (Array.isArray(mData)) {
+      for (const m of mData) {
+        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=created_at.desc&limit=1', { headers })
+        const tData = await tRes.json()
+        const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
+        enriched.push({ ...m, ...tel })
+      }
+    }
+
+    setMachines(enriched)
+    setAlerts(Array.isArray(aData) ? aData : [])
+    setLoading(false)
+  }, [role, operatorId])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const handleLogout = () => {
+    document.cookie.split(';').forEach(c => {
+      document.cookie = c.split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
+    })
+    window.location.href = '/login'
+  }
+
+  const activeAlertCount = alerts.filter(a => !a.resolved_at).length
+
+  const pages: Record<string, React.ReactElement> = {
+    console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
+    alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
+    operators: role === 'super_admin'
+      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    settings: <SettingsPage />,
+    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
+    map: <FleetMapPage machines={machines} />,
+    orders: <OrdersPage />,
+  }
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: ${C.bg}; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
+        @keyframes fl-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+      `}</style>
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        <Sidebar active={active} setActive={setActive} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <TopBar active={active} />
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {pages[active] || <ComingSoon label={active} />}
+          </div>
+        </div>
+      </div>
+    </>
+  )
 }
