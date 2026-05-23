@@ -1427,7 +1427,7 @@ function SettingsPage() {
 
   const navItems = [
     { group: 'Account', items: [{ key: 'profile', label: 'Profile', icon: '👤' }, { key: 'security', label: 'Security', icon: '🔒' }] },
-    { group: 'Machines', items: [{ key: 'thresholds', label: 'Thresholds', icon: '🌡' }, { key: 'locations', label: 'Locations', icon: '📍' }, { key: 'machine_config', label: 'Machine Config', icon: '⚙️' }] },
+    { group: 'Machines', items: [{ key: 'thresholds', label: 'Thresholds', icon: '🌡' }, { key: 'locations', label: 'Locations', icon: '📍' }, { key: 'machine_config', label: 'Machine Config', icon: '⚙' }] },
     { group: 'Alerts', items: [{ key: 'notifications', label: 'Notifications', icon: '🔔' }, { key: 'cooldowns', label: 'Cooldowns', icon: '⏱' }] },
     { group: 'System', items: [{ key: 'billing', label: 'Billing', icon: '💳' }, { key: 'danger', label: 'Danger Zone', icon: '⚠️' }] },
   ]
@@ -1437,7 +1437,7 @@ function SettingsPage() {
       <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 20, letterSpacing: '-0.02em' }}>Settings</div>
       <div style={{ display: 'flex', gap: 24 }}>
         {/* Settings Nav */}
-        <div style={{ width: 200, flexShrink: 0 }}>
+        <div style={{ width: 200, flexShrink: 0, overflowY: 'auto' as const }}>
           {navItems.map(group => (
             <div key={group.group} style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{group.group}</div>
