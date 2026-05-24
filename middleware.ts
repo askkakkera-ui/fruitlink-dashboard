@@ -6,7 +6,7 @@ const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-passwor
 export function middleware(request: NextRequest) {
   const auth = request.cookies.get('fl_auth')?.value;
   const pathname = request.nextUrl.pathname;
-  const validAuth = process.env.FL_AUTH_SECRET || 'fruitlink2026';
+  const validAuth = process.env.FL_AUTH_SECRET || 'fl_secure_2026';
   if (auth === validAuth) return NextResponse.next();
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next();
   const url = request.nextUrl.clone();
@@ -15,5 +15,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png|.*\.svg).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)'],
 };
