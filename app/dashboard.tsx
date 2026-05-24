@@ -283,7 +283,7 @@ function MachineCard({ machine }: { machine: any }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
             { label: 'Temperature', value: temp != null ? `${temp}°C` : '—', color: tempColor, sub: temp != null ? (temp > 12 ? 'High' : temp < 3 ? 'Low' : 'Normal') : '' },
-            { label: 'Location', value: machine.location || '—', color: C.text, sub: machine.state || '' },
+            { label: 'Location', value: machine.location || '—', color: C.text, sub: '' },
             { label: 'Cup Tray', value: machine.cup_present === true ? 'Present' : machine.cup_present === false ? 'Missing' : '—', color: machine.cup_present ? C.green : machine.cup_present === false ? C.red : C.text3, sub: '' },
             { label: 'App Version', value: machine.app_version ? `v${machine.app_version}` : '—', color: C.blue, sub: 'JW Intell' },
           ].map(f => (
