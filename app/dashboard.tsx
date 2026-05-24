@@ -1970,18 +1970,22 @@ export default function Dashboard() {
     ])
     const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
 
-    // Fetch latest telemetry per machine individually
+    // Fetch latest telemetry per machine from VPS API
     const enriched: any[] = []
     if (Array.isArray(mData)) {
       for (const m of mData) {
-        const tRes = await fetch(SB_URL + '/rest/v1/telemetry?select=inner_temp_c,stock_l1,stock_l2,stock_l3,cup_present,cooling_state,scale_weight_g&machine_id=eq.' + m.id + '&order=ts.desc&limit=1', { headers })
-        const tData = await tRes.json()
-        const tel = Array.isArray(tData) && tData.length > 0 ? tData[0] : {}
-        enriched.push({ ...m, ...tel })
+        try {
+          const tRes = await fetch('/api/telemetry/' + m.sn)
+          const tJson = await tRes.json()
+          const tel = tJson.success && tJson.data ? tJson.data : {}
+          enriched.push({ ...m, ...tel })
+        } catch {
+          enriched.push(m)
+        }
       }
     }
 
-    setMachines(enriched)
+        setMachines(enriched)
     setAlerts(Array.isArray(aData) ? aData : [])
     setLoading(false)
   }, [role, operatorId])
