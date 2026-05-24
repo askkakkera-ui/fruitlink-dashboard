@@ -22,7 +22,7 @@ export default function Login() {
         setLoading(false);
         return;
       }
-      document.cookie = 'fl_auth=Fruitlink@2026!; path=/; max-age=86400';
+      document.cookie = 'fl_auth=fl_secure_2026; path=/; max-age=86400';
       document.cookie = 'fl_operator_id=' + data.id + '; path=/; max-age=86400';
       document.cookie = 'fl_operator_name=' + data.name + '; path=/; max-age=86400';
       document.cookie = 'fl_role=' + data.role + '; path=/; max-age=86400';
