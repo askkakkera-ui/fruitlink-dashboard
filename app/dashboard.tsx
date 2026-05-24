@@ -1965,7 +1965,7 @@ export default function Dashboard() {
     const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
 
     const [mRes, aRes] = await Promise.all([
-      fetch(SB_URL + '/rest/v1/machines?select=*&order=created_at.asc' + idFilter, { headers }),
+      fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
       fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
     ])
     const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
