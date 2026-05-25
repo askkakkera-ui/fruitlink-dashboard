@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const SB_URL = process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co'
-const SB_KEY = process.env.NEXT_PUBLIC_SB_KEY || ''
+const SB_URL = '/api/sb?path='
+const SB_KEY = ''
+const _SB_REAL_URL = process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co'
 
 // ─── Design Tokens ───────────────────────────────────────────────
 const C = {
@@ -577,15 +578,15 @@ function OrdersPage() {
   useEffect(() => {
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     const load = async () => {
-      const ms = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location', { headers: h }).then(r => r.json()).then(d => Array.isArray(d) ? d : [])
+      const ms = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,location'), { headers: h }).then(r => r.json()).then(d => Array.isArray(d) ? d : [])
       setMachines(ms)
       let ids: string[] = ms.map((m: any) => m.id)
       if (uRole !== 'super_admin' && uOpId) {
-        const mo = await fetch(SB_URL + '/rest/v1/machine_operators?operator_id=eq.' + uOpId + '&select=machine_id', { headers: h }).then(r => r.json())
+        const mo = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.') + uOpId + '&select=machine_id', { headers: h }).then(r => r.json())
         ids = Array.isArray(mo) ? mo.map((r: any) => r.machine_id) : []
       }
       const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
-      const os = await fetch(SB_URL + '/rest/v1/orders?select=*&order=created_at.desc&limit=500' + f, { headers: h }).then(r => r.json())
+      const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=500') + f, { headers: h }).then(r => r.json())
       setOrders(Array.isArray(os) ? os : [])
       setLoading(false)
     }
@@ -1002,7 +1003,7 @@ function AdsPage({ machines }: { machines: any[] }) {
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
 
   const loadAds = () => {
-    fetch(SB_URL + '/rest/v1/ads?select=*&order=created_at.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads?select=*&order=created_at.desc'), { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
       .then(r => r.json()).then(d => { setAds(Array.isArray(d) ? d : []); setLoading(false) })
       .catch(e => { console.error('ads load error', e); setAds([]); setLoading(false) })
   }
@@ -1011,7 +1012,7 @@ function AdsPage({ machines }: { machines: any[] }) {
   const save = async () => {
     setSaving(true)
     try {
-      await fetch(SB_URL + '/rest/v1/ads', {
+      await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads'), {
         method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ ...form, machine_id: form.machine_id === 'all' ? null : form.machine_id, days: form.days.join(',') })
       })
@@ -1023,12 +1024,12 @@ function AdsPage({ machines }: { machines: any[] }) {
   }
 
   const toggleAd = async (id: string, active: boolean) => {
-    await fetch(SB_URL + '/rest/v1/ads?id=eq.' + id, { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ active: !active }) })
+    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads?id=eq.') + id, { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ active: !active }) })
     loadAds()
   }
 
   const deleteAd = async (id: string) => {
-    await fetch(SB_URL + '/rest/v1/ads?id=eq.' + id, { method: 'DELETE', headers })
+    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads?id=eq.') + id, { method: 'DELETE', headers })
     loadAds()
   }
 
@@ -1165,7 +1166,7 @@ function LoyaltyPage() {
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
 
   const loadCustomers = () => {
-    fetch(SB_URL + '/rest/v1/loyalty?select=*&order=points.desc', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/loyalty?select=*&order=points.desc'), { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
       .then(r => r.json()).then(d => { setCustomers(Array.isArray(d) ? d : []); setLoading(false) })
       .catch(() => { setCustomers([]); setLoading(false) })
   }
@@ -1174,7 +1175,7 @@ function LoyaltyPage() {
   const save = async () => {
     setSaving(true)
     try {
-      await fetch(SB_URL + '/rest/v1/loyalty', {
+      await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/loyalty'), {
         method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify({ phone: form.phone, name: form.name, points: form.points, joined_at: new Date().toISOString() })
       })
@@ -1186,7 +1187,7 @@ function LoyaltyPage() {
   }
 
   const addPoints = async (id: string, current: number, add: number) => {
-    await fetch(SB_URL + '/rest/v1/loyalty?id=eq.' + id, { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ points: current + add }) })
+    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/loyalty?id=eq.') + id, { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ points: current + add }) })
     loadCustomers()
   }
 
@@ -1573,7 +1574,7 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
   const [config, setConfig] = useState<Record<string, any>>({})
 
   useEffect(() => {
-    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location', {
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location'), {
       headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     }).then(r => r.json()).then(d => {
       if (Array.isArray(d)) {
@@ -1595,7 +1596,7 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
     try {
       const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }
       for (const m of machines) {
-        await fetch(SB_URL + '/rest/v1/machines?id=eq.' + m.id, { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify({ machine_config: config[m.id] || {} }) }) })
+        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.') + m.id, { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify({ machine_config: config[m.id] || {} }) }) })
       }
       showSaved()
     } catch { showErr('Save failed') }
@@ -1671,7 +1672,7 @@ function ThresholdsSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setSavi
   const [machines, setMachines] = useState<any[]>([])
   const [thresholds, setThresholds] = useState<Record<string, any>>({})
   useEffect(() => {
-    fetch(SB_URL + '/rest/v1/machines?select=id,display_name', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name'), { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
       .then(r => r.json()).then(d => {
         if (Array.isArray(d)) {
           setMachines(d)
@@ -1858,7 +1859,7 @@ function SettingsPage() {
           <div style={{ fontSize: 15, fontWeight: 700, color: C.red, marginBottom: 16 }}>⚠️ Danger Zone</div>
           <div style={{ background: C.surface, border: '1px solid ' + C.red + '40', borderRadius: 12, padding: 20 }}>
             <div style={{ fontSize: 13, color: C.text2, marginBottom: 12 }}>Destructive actions. Cannot be undone.</div>
-            <button onClick={() => { if (confirm('Clear ALL alerts from database?')) { fetch(SB_URL + '/rest/v1/alerts', { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, Prefer: 'return=minimal' } }).then(() => showSaved()).catch(() => showErr()) } }}
+            <button onClick={() => { if (confirm('Clear ALL alerts from database?')) { fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts'), { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, Prefer: 'return=minimal' } }).then(() => showSaved()).catch(() => showErr()) } }}
               style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
               🗑️ Clear All Alerts
             </button>
@@ -1879,7 +1880,7 @@ function BillingSection({ role }: any) {
     enterprise: { name: 'Enterprise', color: C.blue, bg: C.blueBg, icon: '🏢', features: ['Everything in Professional','White-label dashboard','REST API + Webhooks','SAML SSO','Dedicated infrastructure','Unlimited operators'] },
   }
   useEffect(() => {
-    fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location,state', { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location,state'), { headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY } })
       .then(r => r.json()).then(d => { setMachines(Array.isArray(d) ? d : []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
@@ -1957,7 +1958,7 @@ export default function Dashboard() {
     const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     let machineIds: string[] = []
     if (role !== 'super_admin' && operatorId) {
-      const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id', { headers })
+      const moRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.') + operatorId + '&select=machine_id', { headers })
       const moData = await moRes.json()
       machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
     }
@@ -1966,7 +1967,7 @@ export default function Dashboard() {
 
     const [mRes, aRes] = await Promise.all([
       fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
-      fetch(SB_URL + '/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter, { headers }),
+      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500') + alertFilter, { headers }),
     ])
     const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
 
