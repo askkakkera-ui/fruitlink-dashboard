@@ -333,7 +333,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
     door_open: 'Door Open', vend_failure: 'Vend Failure', cup_empty: 'Cups Empty',
     film_empty: 'Film Empty', temperature_stop: 'Temp Stop', cooling_off: 'Cooling Off',
   }
-  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   const fmtAgo = (t: string) => {
     const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000)
     if (m < 60) return `${m}m ago`
@@ -425,7 +425,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     stock_low_l3: 'Layer 3 Low', door_open: 'Door Open', vend_failure: 'Vend Failure',
     cup_empty: 'Cups Empty', film_empty: 'Film Empty', cooling_off: 'Cooling Off',
   }
-  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => {
     const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000)
@@ -501,7 +501,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {machines.map((m: any) => {
-            const machAlerts = filtered.filter((a: any) => a.machine_id === m.id)
+            const machAlerts = filtered.filter((a: any) => a.machine_id === (m.machine_id || m.id))
             if (machAlerts.length === 0) return null
             const isOpen = expandedM[m.id] !== false
             return (
@@ -602,7 +602,7 @@ function OrdersPage() {
     load()
   }, [uRole, uOpId])
 
-  const getMachine = (id: string) => machines.find((m: any) => m.id === id) || {} as any
+  const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   const fmtAmt = (p: number) => '₹' + (p / 100).toFixed(0)
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
@@ -1993,7 +1993,7 @@ export default function Dashboard() {
           const tRes = await fetch('/api/telemetry?sn=' + m.sn)
           const tJson = await tRes.json()
           const tel = tJson.success && tJson.data ? tJson.data : {}
-          enriched.push({ ...m, ...tel })
+          enriched.push({ ...tel, ...m, telemetry_id: tel.id })
         } catch {
           enriched.push(m)
         }
