@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 const SB_URL = process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co'
-const SB_KEY = process.env.NEXT_PUBLIC_SB_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwd3Z1dGR2d252cnVudmlwb3J6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTIwOTQ4NSwiZXhwIjoyMDk0Nzg1NDg1fQ.q65HEk_-yOlTfy4dpDE7BqcDjkyePJeHr8faWR_A6kk'
+const SB_KEY = process.env.NEXT_PUBLIC_SB_KEY || 'PLACEHOLDER_KEY'
 
 // ─── Design Tokens ───────────────────────────────────────────────
 const C = {
