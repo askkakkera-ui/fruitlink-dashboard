@@ -2016,7 +2016,7 @@ export default function Dashboard() {
     ads: <AdsPage machines={machines} />,
     loyalty: <LoyaltyPage />,
     settings: <SettingsPage />,
-    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
+    machines: <ErrorBoundary><MachinesPage machines={machines} loading={loading} fetchData={fetchData} /></ErrorBoundary>,
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
   }
