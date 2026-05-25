@@ -797,21 +797,13 @@ function OrdersPage() {
 
 
 function MachinesPage({ machines, loading, fetchData }: any) {
-  // Defensively parse machine data
-  const safeMachines = (machines || []).map((m: any) => {
-    let state = m.state
-    if (typeof state === 'string') {
-      try { state = JSON.parse(state) } catch { state = {} }
-    }
-    return { ...m, state: state || {} }
-  })
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Machine List</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>{machines.length} machines · {machines.filter((m: any) => m.status === 'online').length} online</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{safeMachines.length} machines · {safeMachines.filter((m: any) => m.status === 'online').length} online</div>
         </div>
         <button onClick={fetchData} style={{ background: C.sidebar, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh</button>
       </div>
@@ -826,7 +818,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading machines...</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {machines.map((m: any) => {
+          {safeMachines.map((m: any) => {
             const online = m.status === 'online'
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
