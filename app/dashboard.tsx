@@ -797,6 +797,11 @@ function OrdersPage() {
 
 
 function MachinesPage({ machines, loading, fetchData }: any) {
+  const safeMachines = (machines || []).map((m: any) => {
+    let st = m.state
+    if (typeof st === 'string') { try { st = JSON.parse(st) } catch { st = {} } }
+    return { ...m, state: st || {} }
+  })
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
   return (
     <div style={{ padding: '24px 28px' }}>
