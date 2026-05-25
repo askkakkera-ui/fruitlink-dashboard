@@ -1,6 +1,15 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
+class ErrorBoundary extends React.Component<{children: React.ReactNode},{error:string|null}> {
+  constructor(props: any){super(props);this.state={error:null}}
+  static getDerivedStateFromError(e: any){return {error:e?.message||String(e)}}
+  render(){
+    if(this.state.error) return <div style={{padding:40,color:'#ff6b6b',background:'#1c2333',borderRadius:12,margin:20}}><b>Error: </b>{this.state.error}</div>
+    return this.props.children
+  }
+}
+
 const SB_URL = '/api/sb?path='
 const SB_KEY = ''
 const _SB_REAL_URL = process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co'
