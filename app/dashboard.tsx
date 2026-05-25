@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode},{error:string|null}> {
   constructor(props: any){super(props);this.state={error:null}}
