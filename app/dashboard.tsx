@@ -2002,18 +2002,19 @@ export default function Dashboard() {
 
   const activeAlertCount = alerts.filter(a => !a.resolved_at).length
 
-  const pages: Record<string, React.ReactElement> = {
-    console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
-    alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
-    operators: role === 'super_admin'
-      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    ads: <AdsPage machines={machines} />,
-    loyalty: <LoyaltyPage />,
-    settings: <SettingsPage />,
-    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
-    map: <FleetMapPage machines={machines} />,
-    orders: <OrdersPage />,
+  const renderPage = () => {
+    switch(active) {
+      case 'console': return <ConsolePage machines={machines} alerts={alerts} loading={loading} />
+      case 'alerts': return <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />
+      case 'operators': return role === 'super_admin' ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} /> : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>
+      case 'ads': return <AdsPage machines={machines} />
+      case 'loyalty': return <LoyaltyPage />
+      case 'settings': return <SettingsPage />
+      case 'machines': return <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />
+      case 'map': return <FleetMapPage machines={machines} />
+      case 'orders': return <OrdersPage />
+      default: return <ComingSoon label={active} />
+    }
   }
 
   return (
@@ -2032,7 +2033,7 @@ export default function Dashboard() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <TopBar active={active} />
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {pages[active] || <ComingSoon label={active} />}
+            {renderPage()}
           </div>
         </div>
       </div>
