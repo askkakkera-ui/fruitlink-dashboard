@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 const SB_URL = process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co'
-const SB_KEY = process.env.NEXT_PUBLIC_SB_KEY || 'PLACEHOLDER_KEY'
+const SB_KEY = process.env.NEXT_PUBLIC_SB_KEY || ''
 
 // ─── Design Tokens ───────────────────────────────────────────────
 const C = {
