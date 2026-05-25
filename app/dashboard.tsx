@@ -797,6 +797,14 @@ function OrdersPage() {
 
 
 function MachinesPage({ machines, loading, fetchData }: any) {
+  // Defensively parse machine data
+  const safeMachines = (machines || []).map((m: any) => {
+    let state = m.state
+    if (typeof state === 'string') {
+      try { state = JSON.parse(state) } catch { state = {} }
+    }
+    return { ...m, state: state || {} }
+  })
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -2002,19 +2010,18 @@ export default function Dashboard() {
 
   const activeAlertCount = alerts.filter(a => !a.resolved_at).length
 
-  const renderPage = () => {
-    switch(active) {
-      case 'console': return <ConsolePage machines={machines} alerts={alerts} loading={loading} />
-      case 'alerts': return <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />
-      case 'operators': return role === 'super_admin' ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} /> : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>
-      case 'ads': return <AdsPage machines={machines} />
-      case 'loyalty': return <LoyaltyPage />
-      case 'settings': return <SettingsPage />
-      case 'machines': return <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />
-      case 'map': return <FleetMapPage machines={machines} />
-      case 'orders': return <OrdersPage />
-      default: return <ComingSoon label={active} />
-    }
+  const pages: Record<string, React.ReactElement> = {
+    console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
+    alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
+    operators: role === 'super_admin'
+      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    ads: <AdsPage machines={machines} />,
+    loyalty: <LoyaltyPage />,
+    settings: <SettingsPage />,
+    machines: <MachinesPage machines={machines} loading={loading} fetchData={fetchData} />,
+    map: <FleetMapPage machines={machines} />,
+    orders: <OrdersPage />,
   }
 
   return (
@@ -2033,7 +2040,7 @@ export default function Dashboard() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <TopBar active={active} />
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {renderPage()}
+            {pages[active] || <ComingSoon label={active} />}
           </div>
         </div>
       </div>
