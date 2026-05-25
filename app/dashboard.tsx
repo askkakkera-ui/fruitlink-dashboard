@@ -877,7 +877,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                   </div>
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border, display: 'flex', gap: 20 }}>
                     {[
-                      { label: 'Machine ID', value: m.id.slice(0,8) + '...' },
+                      { label: 'Machine ID', value: (m.id || '').slice(0,8) + '...' },
                       { label: 'Scale', value: m.scale_weight_g != null ? m.scale_weight_g + 'g' : '--' },
                       { label: 'Cooling', value: m.cooling_state === true ? 'Active' : m.cooling_state === false ? 'Off' : '--' },
                     ].map(f => (
