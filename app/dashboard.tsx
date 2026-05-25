@@ -1975,7 +1975,7 @@ export default function Dashboard() {
     if (Array.isArray(mData)) {
       for (const m of mData) {
         try {
-          const tRes = await fetch('/api/telemetry/' + m.sn)
+          const tRes = await fetch('/api/telemetry?sn=' + m.sn)
           const tJson = await tRes.json()
           const tel = tJson.success && tJson.data ? tJson.data : {}
           enriched.push({ ...m, ...tel })
