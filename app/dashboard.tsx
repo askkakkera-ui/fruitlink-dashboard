@@ -809,9 +809,9 @@ function MachinesPage({ machines, loading, fetchData }: any) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         {[
-          { label: 'Total Machines', value: machines.length, color: C.blue, icon: '🖥', pct: 100 },
-          { label: 'Online', value: machines.filter((m: any) => m.status === 'online').length, color: C.green, icon: '📡', pct: machines.length > 0 ? (machines.filter((m: any) => m.status === 'online').length / machines.length) * 100 : 0 },
-          { label: 'Offline', value: machines.filter((m: any) => m.status !== 'online').length, color: C.red, icon: '📴', pct: machines.length > 0 ? (machines.filter((m: any) => m.status !== 'online').length / machines.length) * 100 : 0 },
+          { label: 'Total Machines', value: safeMachines.length, color: C.blue, icon: '🖥', pct: 100 },
+          { label: 'Online', value: safeMachines.filter((m: any) => m.status === 'online').length, color: C.green, icon: '📡', pct: safeMachines.length > 0 ? (safeMachines.filter((m: any) => m.status === 'online').length / safeMachines.length) * 100 : 0 },
+          { label: 'Offline', value: safeMachines.filter((m: any) => m.status !== 'online').length, color: C.red, icon: '📴', pct: safeMachines.length > 0 ? (safeMachines.filter((m: any) => m.status !== 'online').length / safeMachines.length) * 100 : 0 },
         ].map(s => <StatCard key={s.label} {...s} sub="" />)}
       </div>
       {loading ? (
