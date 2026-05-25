@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/api/forgot-password', '/api/reset-password', '/api/login'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/api/'];
 
 export function middleware(request: NextRequest) {
   const auth = request.cookies.get('fl_auth')?.value;
