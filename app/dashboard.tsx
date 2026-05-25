@@ -833,7 +833,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                       <div>
                         <div style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{m.display_name}</div>
                         <div style={{ fontSize: 11, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
-                        <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>📍 {m.location || '--'} · {m.state}</div>
+                        <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>📍 {m.location || '--'}</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
