@@ -980,7 +980,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                     <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
                   </div>
                   <div style={{ fontSize: 12, color: C.text2, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>📍 {m.location || '--'}, {m.state}</span>
+                    <span>📍 {m.location || '--'}</span>
                     {(() => { const co = getCoords(m); return co ? <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng + '&z=17'} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none' }}>Open Maps →</a> : null })()}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
@@ -1948,7 +1948,7 @@ function BillingSection({ role }: any) {
               <div>
                 <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 4 }}>{m.display_name}</div>
                 <div style={{ fontSize: 13, color: C.text2, fontFamily: 'monospace', marginBottom: 4 }}>SN: {m.sn}</div>
-                <div style={{ fontSize: 13, color: C.text2 }}>location {m.location}, {m.state}</div>
+                <div style={{ fontSize: 13, color: C.text2 }}>{m.location || '--'}</div>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 8 }}>
