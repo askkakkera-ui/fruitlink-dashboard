@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const MACHINE_API = 'http://187.127.167.187:3001';
+const MACHINE_API = 'https://api.fruitlinktech.in';
 
 export async function GET(request: NextRequest) {
   try {
