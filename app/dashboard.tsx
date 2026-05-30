@@ -2006,7 +2006,7 @@ export default function Dashboard() {
           const tRes = await fetch('/api/telemetry/' + m.sn)
           const tJson = await tRes.json()
           const tel = tJson.success && tJson.data ? tJson.data : {}
-          enriched.push({ ...tel, ...m, telemetry_id: tel.id })
+          enriched.push({ ...m, ...tel, telemetry_id: tel.id })
         } catch {
           enriched.push(m)
         }
