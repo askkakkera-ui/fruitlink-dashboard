@@ -1588,16 +1588,29 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
   const [config, setConfig] = useState<Record<string, any>>({})
 
   useEffect(() => {
-    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location'), {
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location,state'), {
       headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     }).then(r => r.json()).then(d => {
       if (Array.isArray(d)) {
         setMachines(d)
         const c: Record<string, any> = {}
         d.forEach((m: any) => {
-          c[m.id] = {
-            price_200ml: 80, price_250ml: 100, price_300ml: 120,
-            default_volume: 250, max_daily_cups: 200, maintenance_mode: false
+          try {
+            const st = m.state ? JSON.parse(m.state) : {}
+            const mc = st.machine_config || {}
+            c[m.id] = {
+              price_200ml: mc.price_200ml ?? 80,
+              price_250ml: mc.price_250ml ?? 100,
+              price_300ml: mc.price_300ml ?? 120,
+              default_volume: mc.default_volume ?? 250,
+              max_daily_cups: mc.max_daily_cups ?? 200,
+              maintenance_mode: mc.maintenance_mode ?? false
+            }
+          } catch {
+            c[m.id] = {
+              price_200ml: 80, price_250ml: 100, price_300ml: 120,
+              default_volume: 250, max_daily_cups: 200, maintenance_mode: false
+            }
           }
         })
         setConfig(c)
