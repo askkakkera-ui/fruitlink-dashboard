@@ -353,7 +353,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Dot color={C.orange} pulse size={6} />
-          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced from JW Intell · every 2 min</span>
+          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced from machine · every 2 min</span>
         </div>
       </div>
 
@@ -587,7 +587,11 @@ function OrdersPage() {
   useEffect(() => {
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     const load = async () => {
-      const ms = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,location'), { headers: h }).then(r => r.json()).then(d => Array.isArray(d) ? d : [])
+      const msRaw = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,location,state'), { headers: h }).then(r => r.json()).then(d => Array.isArray(d) ? d : [])
+      const ms = msRaw.filter((m: any) => {
+        let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {}
+        return st.hidden !== true
+      })
       setMachines(ms)
       let ids: string[] = ms.map((m: any) => m.id)
       if (uRole !== 'super_admin' && uOpId) {
