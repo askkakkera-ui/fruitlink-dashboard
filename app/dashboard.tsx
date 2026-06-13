@@ -2000,7 +2000,13 @@ export default function Dashboard() {
       fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
       fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter), { headers }),
     ])
-    const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
+    const [mDataRaw, aData] = await Promise.all([mRes.json(), aRes.json()])
+
+    // Filter out machines flagged hidden in state JSON (e.g. Fruitful-1)
+    const mData = Array.isArray(mDataRaw) ? mDataRaw.filter((m: any) => {
+      let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {}
+      return st.hidden !== true
+    }) : []
 
     // Fetch latest telemetry per machine from VPS API
     const enriched: any[] = []
