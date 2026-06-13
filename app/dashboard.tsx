@@ -1338,11 +1338,11 @@ function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
   useEffect(() => {
     const load = async () => {
       const [mRes, aRes] = await Promise.all([
-        fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location', { headers }),
+        fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location,state', { headers }),
         fetch(supabaseUrl + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + op.id, { headers }),
       ])
       const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
-      setMachines(Array.isArray(mData) ? mData : [])
+      setMachines(Array.isArray(mData) ? mData.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true }) : [])
       setAssigned(Array.isArray(aData) ? aData.map((r: any) => r.machine_id) : [])
     }
     load()
@@ -1596,7 +1596,7 @@ function MachineConfigSection({ SB_URL, SB_KEY, showSaved, showErr, saving, setS
       headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     }).then(r => r.json()).then(d => {
       if (Array.isArray(d)) {
-        setMachines(d)
+        setMachines(Array.isArray(d) ? d.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true }) : [])
         const c: Record<string, any> = {}
         d.forEach((m: any) => {
           try {
@@ -1912,7 +1912,7 @@ function BillingSection({ role }: any) {
   }
   useEffect(() => {
     fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location,state'))
-      .then(r => r.json()).then(d => { setMachines(Array.isArray(d) ? d : []); setLoading(false) })
+      .then(r => r.json()).then(d => { setMachines(Array.isArray(d) ? d.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true }) : []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
   return (
