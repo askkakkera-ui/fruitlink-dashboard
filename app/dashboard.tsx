@@ -580,6 +580,10 @@ function OrdersPage() {
   const [filter, setFilter] = useState('all')
   const [view, setView] = useState<'analytics' | 'orders'>('analytics')
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
+  const [allowedIds, setAllowedIds] = useState<string[]>([])
+  const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
+  const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
+  const [exporting, setExporting] = useState('')
 
   const [uRole] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || 'operator') : 'operator')
   const [uOpId] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '')
@@ -599,6 +603,7 @@ function OrdersPage() {
         ids = Array.isArray(mo) ? mo.map((r: any) => r.machine_id) : []
       }
       const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
+      setAllowedIds(ids)
       const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=500' + f), { headers: h }).then(r => r.json())
       setOrders(Array.isArray(os) ? os : [])
       setLoading(false)
@@ -658,6 +663,111 @@ function OrdersPage() {
 
   const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
   const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  // ─── Export: CSV (all rows) + PDF (summary). Pulls fresh from DB for the chosen range ───
+  const _esc = (v: any) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  const _istLabel = (t: string) => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+  const _payLabel = (s: number) => s === 1 ? 'Paid' : s === 0 ? 'Pending' : 'Failed'
+  const _delLabel = (s: number) => s === 1 ? 'Delivered' : s === 0 ? 'Pending' : 'Failed'
+
+  const fetchRange = async () => {
+    const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    const startISO = new Date(exFrom + 'T00:00:00').toISOString()
+    const endISO = new Date(exTo + 'T23:59:59.999').toISOString()
+    const idf = allowedIds.length > 0 ? '&machine_id=in.(' + allowedIds.join(',') + ')' : ''
+    const path = '/rest/v1/orders?select=*&created_at=gte.' + startISO + '&created_at=lte.' + endISO + idf + '&order=created_at.desc&limit=10000'
+    const res = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h })
+    const d = await res.json()
+    return Array.isArray(d) ? d : []
+  }
+
+  const _download = (content: BlobPart, filename: string, type: string) => {
+    const blob = new Blob([content], { type })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const exportCSV = async () => {
+    if (exFrom > exTo) { alert('From date is after To date'); return }
+    setExporting('csv')
+    try {
+      const rows = await fetchRange()
+      if (rows.length === 0) { alert('No orders found in that date range.'); setExporting(''); return }
+      const head = ['Order Code', 'Machine', 'Location', 'Amount (INR)', 'Payment', 'Delivery', 'Cups', 'Created (IST)', 'Paid (IST)', 'Delivered (IST)', 'PayU ID']
+      const lines = [head.join(',')]
+      rows.forEach((o: any) => {
+        const m = getMachine(o.machine_id)
+        lines.push([o.order_code, m.display_name || '', m.location || '', ((o.amount_paise || 0) / 100).toFixed(2), _payLabel(o.pay_state), _delLabel(o.delivery_state), o.cup_num || 1, _istLabel(o.created_at), _istLabel(o.paid_at), _istLabel(o.delivered_at), o.mihpayid || ''].map(_esc).join(','))
+      })
+      _download('\uFEFF' + lines.join('\n'), 'Fruitlink_Orders_' + exFrom + '_to_' + exTo + '.csv', 'text/csv;charset=utf-8;')
+    } catch (e: any) { alert('Export failed: ' + (e?.message || e)) }
+    setExporting('')
+  }
+
+  const _loadJsPDF = () => new Promise<any>((resolve, reject) => {
+    if ((window as any).jspdf) return resolve((window as any).jspdf)
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
+    s.onload = () => resolve((window as any).jspdf)
+    s.onerror = () => reject(new Error('Could not load PDF library'))
+    document.body.appendChild(s)
+  })
+
+  const exportPDF = async () => {
+    if (exFrom > exTo) { alert('From date is after To date'); return }
+    setExporting('pdf')
+    try {
+      const rows = await fetchRange()
+      if (rows.length === 0) { alert('No orders found in that date range.'); setExporting(''); return }
+      const lib = await _loadJsPDF()
+      const doc = new lib.jsPDF({ unit: 'mm', format: 'a4' })
+      const paid = rows.filter((o: any) => o.pay_state === 1)
+      const revenue = paid.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0) / 100
+      const cups = paid.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
+      const conv = rows.length ? (paid.length / rows.length * 100) : 0
+      const avg = paid.length ? revenue / paid.length : 0
+      doc.setFillColor(249, 115, 22); doc.rect(0, 0, 210, 28, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
+      doc.text('FRUITLINK TECHNOLOGIES', 14, 13)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11)
+      doc.text('Revenue & Orders Report', 14, 21)
+      let y = 40
+      doc.setTextColor(40, 40, 40); doc.setFontSize(10)
+      doc.text('Period:  ' + exFrom + '  to  ' + exTo, 14, y)
+      doc.text('Generated:  ' + new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), 14, y + 5)
+      y += 16
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
+      doc.text('Summary', 14, y); y += 8
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40)
+      const kpis = [['Total Revenue (paid)', 'Rs ' + revenue.toFixed(0)], ['Paid Orders', String(paid.length)], ['Orders Placed', String(rows.length)], ['Conversion', conv.toFixed(0) + '%'], ['Cups Served', String(cups)], ['Avg Order Value', 'Rs ' + avg.toFixed(0)]]
+      kpis.forEach(k => { doc.text(k[0] + ':', 16, y); doc.setFont('helvetica', 'bold'); doc.text(k[1], 80, y); doc.setFont('helvetica', 'normal'); y += 6 })
+      y += 8
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
+      doc.text('By Machine', 14, y); y += 7
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120)
+      doc.text('Machine', 16, y); doc.text('Placed', 92, y); doc.text('Paid', 116, y); doc.text('Cups', 140, y); doc.text('Revenue', 166, y); y += 5
+      doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
+      const byM: any = {}
+      rows.forEach((o: any) => { const id = o.machine_id; if (!byM[id]) byM[id] = { placed: 0, paid: 0, cups: 0, rev: 0 }; byM[id].placed++; if (o.pay_state === 1) { byM[id].paid++; byM[id].cups += (o.cup_num || 1); byM[id].rev += (o.amount_paise || 0) / 100 } })
+      Object.keys(byM).forEach(id => { const m = getMachine(id); const r = byM[id]; doc.text(String(m.display_name || id.slice(0, 8)).slice(0, 30), 16, y); doc.text(String(r.placed), 92, y); doc.text(String(r.paid), 116, y); doc.text(String(r.cups), 140, y); doc.text('Rs ' + r.rev.toFixed(0), 166, y); y += 5; if (y > 270) { doc.addPage(); y = 20 } })
+      y += 8
+      if (y > 250) { doc.addPage(); y = 20 }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
+      doc.text('Daily Breakdown (paid)', 14, y); y += 7
+      doc.setFontSize(9); doc.setTextColor(120, 120, 120)
+      doc.text('Date', 16, y); doc.text('Paid', 92, y); doc.text('Cups', 120, y); doc.text('Revenue', 150, y); y += 5
+      doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
+      const byD: any = {}
+      paid.forEach((o: any) => { const key = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); if (!byD[key]) byD[key] = { paid: 0, cups: 0, rev: 0 }; byD[key].paid++; byD[key].cups += (o.cup_num || 1); byD[key].rev += (o.amount_paise || 0) / 100 })
+      Object.keys(byD).sort().forEach(key => { const r = byD[key]; doc.text(key, 16, y); doc.text(String(r.paid), 92, y); doc.text(String(r.cups), 120, y); doc.text('Rs ' + r.rev.toFixed(0), 150, y); y += 5; if (y > 280) { doc.addPage(); y = 20 } })
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150)
+      doc.text('Fruitlink Technologies Pvt Ltd - Confidential', 14, 290)
+      doc.save('Fruitlink_Revenue_' + exFrom + '_to_' + exTo + '.pdf')
+    } catch (e: any) { alert('PDF export failed: ' + (e?.message || e)) }
+    setExporting('')
+  }
 
   return (
     <div style={{ padding: '22px 28px' }}>
@@ -682,6 +792,21 @@ function OrdersPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Export bar */}
+      <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'flex-end', gap: 10, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>From</label>
+          <input type="date" value={exFrom} onChange={e => setExFrom(e.target.value)} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, outline: 'none' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>To</label>
+          <input type="date" value={exTo} onChange={e => setExTo(e.target.value)} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, outline: 'none' }} />
+        </div>
+        <button onClick={exportCSV} disabled={!!exporting} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: C.green, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: exporting ? 0.6 : 1 }}>{exporting === 'csv' ? 'Exporting…' : '⬇ CSV (all rows)'}</button>
+        <button onClick={exportPDF} disabled={!!exporting} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: exporting ? 0.6 : 1 }}>{exporting === 'pdf' ? 'Building…' : '⬇ PDF (summary)'}</button>
+        <div style={{ fontSize: 11, color: C.text3, marginLeft: 'auto', alignSelf: 'center' }}>Pulls fresh from database for the chosen dates</div>
       </div>
 
       {view === 'analytics' ? (
