@@ -728,6 +728,16 @@ function OrdersPage() {
       const cups = paid.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
       const conv = rows.length ? (paid.length / rows.length * 100) : 0
       const avg = paid.length ? revenue / paid.length : 0
+      const _isTest = (n: string) => /test/i.test(n || '')
+      const refDone = rows.filter((o: any) => o.refund_state === 1)
+      const refGenuine = refDone.filter((o: any) => !_isTest(o.refund_note))
+      const refTest = refDone.filter((o: any) => _isTest(o.refund_note))
+      const refFailed = rows.filter((o: any) => o.refund_state === 2)
+      const sumP = (a: any[]) => a.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0) / 100
+      const refGenuineAmt = sumP(refGenuine)
+      const refTestAmt = sumP(refTest)
+      const refFailedAmt = sumP(refFailed)
+      const netRevenue = revenue - refGenuineAmt
       doc.setFillColor(249, 115, 22); doc.rect(0, 0, 210, 28, 'F')
       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
       doc.text('FRUITLINK TECHNOLOGIES', 14, 13)
@@ -741,7 +751,9 @@ function OrdersPage() {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
       doc.text('Summary', 14, y); y += 8
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40)
-      const kpis = [['Total Revenue (paid)', 'Rs ' + revenue.toFixed(0)], ['Paid Orders', String(paid.length)], ['Orders Placed', String(rows.length)], ['Conversion', conv.toFixed(0) + '%'], ['Cups Served', String(cups)], ['Avg Order Value', 'Rs ' + avg.toFixed(0)]]
+      const kpis = [['Gross Revenue (paid)', 'Rs ' + revenue.toFixed(0)], ['Less: Refunds (genuine)', '- Rs ' + refGenuineAmt.toFixed(0) + '  (' + refGenuine.length + ' orders)'], ['Net Revenue', 'Rs ' + netRevenue.toFixed(0)], ['Paid Orders', String(paid.length)], ['Orders Placed', String(rows.length)], ['Conversion', conv.toFixed(0) + '%'], ['Cups Served', String(cups)], ['Avg Order Value', 'Rs ' + avg.toFixed(0)]]
+      if (refTest.length > 0) kpis.push(['Test refunds (excl.)', 'Rs ' + refTestAmt.toFixed(0) + '  (' + refTest.length + ' orders)'])
+      if (refFailed.length > 0) kpis.push(['FAILED refunds - owed', 'Rs ' + refFailedAmt.toFixed(0) + '  (' + refFailed.length + ' customers)'])
       kpis.forEach(k => { doc.text(k[0] + ':', 16, y); doc.setFont('helvetica', 'bold'); doc.text(k[1], 80, y); doc.setFont('helvetica', 'normal'); y += 6 })
       y += 8
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
