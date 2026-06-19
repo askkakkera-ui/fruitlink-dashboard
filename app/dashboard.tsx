@@ -1525,7 +1525,7 @@ function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
   )
 }
 
-function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
+function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -1574,6 +1574,11 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
 
   const deleteOperator = async () => {
     if (!delOp) return
+    // Guard: never allow deleting yourself, or the last remaining super admin
+    if (delOp.id === myId) { setMsg('You cannot delete your own account while logged in.'); return }
+    if (delOp.role === 'super_admin' && operators.filter(o => o.role === 'super_admin').length <= 1) {
+      setMsg('Cannot delete the last Super Admin — at least one must remain.'); return
+    }
     await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + delOp.id, { method: 'DELETE', headers })
     setDelOp(null); fetchOperators()
   }
@@ -1652,7 +1657,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => setAssignOp(op)} style={{ background: C.blueBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.blue, cursor: 'pointer' }}>🖥 Machines</button>
                       <button onClick={() => openEdit(op)} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>✏️ Edit</button>
-                      <button onClick={() => setDelOp(op)} style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.red, cursor: 'pointer' }}>🗑 Del</button>
+                      <button onClick={() => { setMsg(''); setDelOp(op) }} style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.red, cursor: 'pointer' }}>🗑 Del</button>
                     </div>
                   </td>
                 </tr>
@@ -1713,6 +1718,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey }: any) {
             <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
             <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Delete Operator?</div>
             <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Permanently delete <b>{delOp.name || delOp.email}</b>. Cannot be undone.</div>
+            {msg && <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: C.redBg, color: C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setDelOp(null)} style={{ padding: '9px 22px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
               <button onClick={deleteOperator} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.red, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
@@ -2183,7 +2189,7 @@ export default function Dashboard() {
     console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
     alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
     operators: role === 'super_admin'
-      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} />
+      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} myId={operatorId} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     ads: <AdsPage machines={machines} />,
     loyalty: <LoyaltyPage />,
