@@ -611,13 +611,16 @@ function OrdersPage() {
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
 
-  // Period filter
+  // Period filter — calendar-day floors so the KPI totals match the daily chart bars
   const now = new Date()
+  const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x }
+  const weekFloor = startOfDay(new Date()); weekFloor.setDate(weekFloor.getDate() - 6)
+  const monthFloor = startOfDay(new Date()); monthFloor.setDate(monthFloor.getDate() - 29)
   const periodOrders = orders.filter((o: any) => {
     const d = new Date(o.created_at)
     if (period === 'today') return d.toDateString() === now.toDateString()
-    if (period === 'week') return (now.getTime() - d.getTime()) < 7 * 86400000
-    return (now.getTime() - d.getTime()) < 30 * 86400000
+    if (period === 'week') return d >= weekFloor
+    return d >= monthFloor
   })
 
   const paidOrders = periodOrders.filter((o: any) => o.pay_state === 1)
@@ -687,7 +690,7 @@ function OrdersPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
             {[
               { label: 'Total Revenue', value: fmtAmt(totalRevenue), sub: period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : 'last 30 days', color: C.green, icon: '₹', pct: 75 },
-              { label: 'Paid Orders', value: paidOrders.length.toString(), sub: periodOrders.length + ' total', color: C.blue, icon: '✅', pct: convRate },
+              { label: 'Paid Orders', value: paidOrders.length.toString(), sub: periodOrders.length + ' placed · ' + convRate.toFixed(0) + '% paid', color: C.blue, icon: '✅', pct: convRate },
               { label: 'Avg Order Value', value: fmtAmt(avgOrder), sub: 'per transaction', color: C.orange, icon: '📈', pct: 60 },
               { label: 'Cups Served', value: totalCups.toString(), sub: 'juice cups', color: C.amber, icon: '🥤', pct: 80 },
             ].map(s => <StatCard key={s.label} {...s} />)}
