@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-
 const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
@@ -27,13 +26,14 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value: [
-              "default-src \'self\'",
-              "script-src \'self\' \'unsafe-inline\' \'unsafe-eval\'",
-              "style-src \'self\' \'unsafe-inline\'",
-              "img-src \'self\' data: https:",
-              "font-src \'self\' data:",
-              "connect-src \'self\' https://api.fruitlinktech.in https://fpwvutdvwnvrunviporz.supabase.co",
-              "frame-ancestors \'none\'",
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net blob:",
+              "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://api.mapbox.com",
+              "img-src 'self' data: https:",
+              "font-src 'self' data:",
+              "worker-src 'self' blob:",
+              "connect-src 'self' https://api.fruitlinktech.in https://fpwvutdvwnvrunviporz.supabase.co https://api.mapbox.com https://events.mapbox.com",
+              "frame-ancestors 'none'",
             ].join("; "),
           },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
@@ -45,5 +45,4 @@ const nextConfig: NextConfig = {
     ];
   },
 };
-
 export default nextConfig;
