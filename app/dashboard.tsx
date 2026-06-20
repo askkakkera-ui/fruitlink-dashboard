@@ -1152,165 +1152,329 @@ function FleetMapPage({ machines }: { machines: any[] }) {
 
 
 
+// ═══════════════════════════════════════════════════════════════════════
+//  AdsPage — DROP-IN REPLACEMENT for the existing AdsPage in dashboard.tsx
+//
+//  Replace your current `function AdsPage({ machines }...) { ... }` block
+//  with everything below (up to the matching closing brace).
+//
+//  Uses: the new ad_campaign schema, the /api/sb proxy, your C.* tokens,
+//  and your Pill / Badge / StatCard / Dot components (already in the file).
+//  Signature is unchanged, so the line
+//      ads: <AdsPage machines={machines} />
+//  in the pages map keeps working with no edit.
+// ═══════════════════════════════════════════════════════════════════════
 function AdsPage({ machines }: { machines: any[] }) {
-  const [ads, setAds] = useState<any[]>([])
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const SCREENS = ['idle', 'ordering', 'dispensing', 'thanks']
+  const role = getCookie('fl_role') || 'operator'
+
+  const [campaigns, setCampaigns] = useState<any[]>([])
+  const [perf, setPerf] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
+  const [machineFilter, setMachineFilter] = useState('all')
+  const [editing, setEditing] = useState<any>(null)   // campaign being edited, or {} for new
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ machine_id: 'all', title: '', media_url: '', media_type: 'image', start_time: '00:00', end_time: '23:59', days: ['mon','tue','wed','thu','fri','sat','sun'], active: true })
+
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
 
-  const loadAds = () => {
-    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads?select=*&order=created_at.desc'))
-      .then(r => r.json()).then(d => { setAds(Array.isArray(d) ? d : []); setLoading(false) })
-      .catch(e => { console.error('ads load error', e); setAds([]); setLoading(false) })
+  const load = () => {
+    setLoading(true)
+    Promise.all([
+      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?select=*&order=created_at.desc'), { headers })
+        .then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign_performance?select=*'), { headers })
+        .then(r => r.json()).then(d => Array.isArray(d) ? d : []).catch(() => []),
+    ]).then(([camps, perfRows]) => {
+      setCampaigns(camps)
+      const pm: Record<string, any> = {}
+      perfRows.forEach((p: any) => { pm[p.campaign_id] = p })
+      setPerf(pm)
+      setLoading(false)
+    }).catch(e => { console.error('ads load error', e); setCampaigns([]); setLoading(false) })
   }
-  useEffect(() => { loadAds() }, [])
+  useEffect(() => { load() }, [])
 
-  const save = async () => {
+  const visible = machineFilter === 'all'
+    ? campaigns
+    : campaigns.filter(c => (c.machine_sns || []).includes(machineFilter))
+
+  // KPIs
+  const activeCount = campaigns.filter(c => c.status === 'active').length
+  const pendingCount = campaigns.filter(c => c.approval === 'pending').length
+  const totalImpr = Object.values(perf).reduce((s: number, p: any) => s + (p.impressions || 0), 0)
+  const totalRev = Object.values(perf).reduce((s: number, p: any) => s + (Number(p.revenue) || 0), 0)
+
+  const fmtK = (n: number) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '' + n
+  const fmtINR = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN')
+  const hh = (h: number) => String(h).padStart(2, '0') + ':00'
+  const snName = (sn: string) => machines.find(m => m.sn === sn)?.display_name || sn
+
+  const save = async (c: any) => {
     setSaving(true)
     try {
-      await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads'), {
-        method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
-        body: JSON.stringify({ ...form, machine_id: form.machine_id === 'all' ? null : form.machine_id, days: form.days.join(',') })
-      })
-      setShowForm(false)
-      setForm({ machine_id: 'all', title: '', media_url: '', media_type: 'image', start_time: '00:00', end_time: '23:59', days: ['mon','tue','wed','thu','fri','sat','sun'], active: true })
-      loadAds()
-    } catch(e) { alert('Save failed — make sure the ads table exists in Supabase') }
+      const isOwn = (c.advertiser || '').trim().toLowerCase() === 'fruitlink'
+      const body: any = {
+        name: c.name, advertiser: c.advertiser, is_own: isOwn,
+        media_type: c.media_type, media_url: c.media_url || null, media_name: c.media_name || null,
+        duration_s: c.duration_s || 15, screen: c.screen,
+        machine_sns: c.machine_sns || [], days: c.days || [],
+        start_hour: c.start_hour, end_hour: c.end_hour, weight: c.weight,
+        status: c.status, rate_cpm: isOwn ? null : (c.rate_cpm ? Number(c.rate_cpm) : null),
+      }
+      if (c.id) {
+        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + c.id),
+          { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(body) })
+      } else {
+        // approval defaulting is handled by the DB trigger (own->approved, third-party->pending)
+        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign'),
+          { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(body) })
+      }
+      setEditing(null); load()
+    } catch (e: any) { alert('Save failed: ' + (e?.message || e)) }
     setSaving(false)
   }
 
-  const toggleAd = async (id: string, active: boolean) => {
-    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads?id=eq.' + id), { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ active: !active }) })
-    loadAds()
+  const setStatus = async (id: string, status: string) => {
+    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + id),
+      { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ status }) })
+    load()
   }
-
-  const deleteAd = async (id: string) => {
-    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ads?id=eq.' + id), { method: 'DELETE', headers })
-    loadAds()
+  const setApproval = async (id: string, approval: string) => {
+    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + id),
+      { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ approval }) })
+    load()
   }
-
-  const DAYS = ['mon','tue','wed','thu','fri','sat','sun']
-  const DAY_LABELS: any = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' }
+  const remove = async (id: string) => {
+    if (!confirm('Delete this campaign permanently?')) return
+    await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + id), { method: 'DELETE', headers })
+    setEditing(null); load()
+  }
 
   return (
     <div style={{ padding: '22px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Ad Manager</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>Schedule ads by machine, time, and day</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>In-machine advertising — schedule by machine, screen, time &amp; day</div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Ad</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {pendingCount > 0 && (
+            <Pill color={C.amber} bg={C.amberBg}><Dot color={C.amber} pulse size={5} /> {pendingCount} pending approval</Pill>
+          )}
+          <button onClick={() => setEditing({ _new: true, name: '', advertiser: 'Fruitlink', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: machines.map((m: any) => m.sn), days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
+            style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Campaign</button>
+        </div>
       </div>
 
-      {/* Create Ad Form */}
-      {showForm && (
-        <div style={{ background: C.surface, border: '1px solid ' + C.orange + '60', borderRadius: 14, padding: '20px 24px', marginBottom: 22 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 18 }}>New Ad Campaign</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Title</label>
-              <input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Summer Promo Ad"
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Machine</label>
-              <select value={form.machine_id} onChange={e => setForm({...form, machine_id: e.target.value})}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2 }}>
-                <option value="all">All Machines</option>
-                {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Media URL (JPEG / MP4)</label>
-              <input value={form.media_url} onChange={e => setForm({...form, media_url: e.target.value})} placeholder="https://..."
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Media Type</label>
-              <select value={form.media_type} onChange={e => setForm({...form, media_type: e.target.value})}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2 }}>
-                <option value="image">Image (JPEG/PNG)</option>
-                <option value="video">Video (MP4)</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>Start Time</label>
-              <input type="time" value={form.start_time} onChange={e => setForm({...form, start_time: e.target.value})}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>End Time</label>
-              <input type="time" value={form.end_time} onChange={e => setForm({...form, end_time: e.target.value})}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }} />
-            </div>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>Active Days</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {DAYS.map(d => {
-                const on = form.days.includes(d)
-                return (
-                  <button key={d} onClick={() => setForm({...form, days: on ? form.days.filter(x => x !== d) : [...form.days, d]})}
-                    style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid ' + (on ? C.orange : C.border), background: on ? C.orange : C.surface2, color: on ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    {DAY_LABELS[d]}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={save} disabled={saving || !form.title || !form.media_url} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Saving...' : 'Save Ad'}
-            </button>
-            <button onClick={() => setShowForm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text2, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-          </div>
-        </div>
-      )}
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+        <StatCard label="Active Campaigns" value={activeCount} sub={campaigns.length + ' total'} color={C.orange} icon="🎬" pct={campaigns.length ? (activeCount / campaigns.length) * 100 : 0} />
+        <StatCard label="Impressions" value={fmtK(totalImpr)} sub="all-time plays" color={C.blue} icon="👁" pct={70} />
+        <StatCard label="Ad Revenue" value={fmtINR(totalRev)} sub="third-party brands" color={C.green} icon="₹" pct={60} />
+        <StatCard label="Pending Approval" value={pendingCount} sub={pendingCount ? 'needs review' : 'all clear'} color={pendingCount ? C.amber : C.green} icon="⏳" pct={pendingCount ? 100 : 0} />
+      </div>
 
+      {/* Machine filter */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' as const }}>
+        <button onClick={() => setMachineFilter('all')} style={chip(machineFilter === 'all')}>All Machines</button>
+        {machines.map((m: any) => (
+          <button key={m.id} onClick={() => setMachineFilter(m.sn)} style={chip(machineFilter === m.sn)}>{m.display_name}</button>
+        ))}
+      </div>
 
-
-      {/* Ad list */}
+      {/* List */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading ads...</div>
-      ) : ads.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading campaigns...</div>
+      ) : visible.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: '1px solid ' + C.border }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🎬</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No ads scheduled yet</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>Create your first ad campaign to monetize the machine screen</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>No campaigns yet</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Create your first campaign to monetize the machine screen</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {ads.map((ad: any) => {
-            const machine = machines.find((m: any) => m.id === ad.machine_id)
+          {visible.map((c: any) => {
+            const p = perf[c.id] || {}
             return (
-              <div key={ad.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div key={c.id} onClick={() => setEditing({ ...c, rate_cpm: c.rate_cpm ?? '' })}
+                style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}>
                 <div style={{ width: 48, height: 48, borderRadius: 10, background: C.orangeBg, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                  {ad.media_type === 'video' ? '🎥' : '🖼'}
+                  {c.media_type === 'video' ? '🎥' : '🖼'}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{ad.title}</div>
-                  <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>
-                    {machine ? machine.display_name : 'All Machines'} · {ad.start_time} – {ad.end_time} · {ad.days}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{c.name}</span>
+                    {!c.is_own && <Badge color={C.blue}>{c.advertiser}</Badge>}
                   </div>
-                  <div style={{ fontSize: 12, color: C.blue, marginTop: 2, fontFamily: 'monospace' }}>{ad.media_url?.slice(0,50)}...</div>
+                  <div style={{ fontSize: 11, color: C.text3 }}>
+                    {(c.machine_sns || []).length === 0 ? 'No machines' : (c.machine_sns || []).map(snName).join(', ')}
+                    {' · '}{c.screen}{' · '}{hh(c.start_hour)}–{hh(c.end_hour)}
+                    {' · '}{(c.days || []).length === 7 ? 'every day' : (c.days || []).map((d: number) => DAYS[d]).join(' ')}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 3, display: 'flex', gap: 12 }}>
+                    <span>{fmtK(p.impressions || 0)} impressions</span>
+                    {!c.is_own && c.rate_cpm && <span style={{ color: C.green }}>{fmtINR(Number(p.revenue) || 0)} · ₹{c.rate_cpm} CPM</span>}
+                    <span>weight {c.weight}×</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                  <Pill color={ad.active ? C.green : C.text3} bg={ad.active ? C.greenBg : C.surface2}>{ad.active ? 'Active' : 'Paused'}</Pill>
-                  <div onClick={() => toggleAd(ad.id, ad.active)} style={{ width: 36, height: 20, borderRadius: 10, background: ad.active ? C.orange : C.border2, cursor: 'pointer', position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
-                    <div style={{ position: 'absolute' as const, top: 2, left: ad.active ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  {c.approval === 'pending' ? (
+                    <>
+                      <Pill color={C.amber} bg={C.amberBg}>Pending</Pill>
+                      {role === 'super_admin' && (
+                        <button onClick={() => setApproval(c.id, 'approved')} style={{ background: C.green, color: '#fff', border: 'none', borderRadius: 8, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>Approve</button>
+                      )}
+                    </>
+                  ) : c.approval === 'rejected' ? (
+                    <Pill color={C.red} bg={C.redBg}>Rejected</Pill>
+                  ) : (
+                    <Pill color={c.status === 'active' ? C.green : C.text3} bg={c.status === 'active' ? C.greenBg : C.surface2}>{c.status === 'active' ? 'Active' : 'Paused'}</Pill>
+                  )}
+                  <div onClick={() => setStatus(c.id, c.status === 'active' ? 'paused' : 'active')}
+                    style={{ width: 36, height: 20, borderRadius: 10, background: c.status === 'active' ? C.orange : C.border2, cursor: 'pointer', position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute' as const, top: 2, left: c.status === 'active' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
                   </div>
-                  <button onClick={() => deleteAd(ad.id)} style={{ background: C.redBg, color: C.red, border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Delete</button>
                 </div>
               </div>
             )
           })}
         </div>
       )}
+
+      {/* Editor drawer */}
+      {editing && (
+        <AdEditor
+          campaign={editing} machines={machines} saving={saving}
+          onClose={() => setEditing(null)} onSave={save} onDelete={remove}
+        />
+      )}
+    </div>
+  )
+
+  function chip(on: boolean) {
+    return { padding: '6px 14px', borderRadius: 8, border: '1px solid ' + (on ? C.orange : C.border), background: on ? C.orange : C.surface2, color: on ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, cursor: 'pointer' } as const
+  }
+}
+
+// ── Ad editor drawer (right-side slide-over) ──
+function AdEditor({ campaign, machines, saving, onClose, onSave, onDelete }: any) {
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const SCREENS = ['idle', 'ordering', 'dispensing', 'thanks']
+  const [f, setF] = useState<any>(campaign)
+  const isNew = !!campaign._new
+  const isOwn = (f.advertiser || '').trim().toLowerCase() === 'fruitlink'
+  const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }))
+  const tDay = (d: number) => setF((s: any) => ({ ...s, days: (s.days || []).includes(d) ? s.days.filter((x: number) => x !== d) : [...(s.days || []), d].sort() }))
+  const tMac = (sn: string) => setF((s: any) => ({ ...s, machine_sns: (s.machine_sns || []).includes(sn) ? s.machine_sns.filter((x: string) => x !== sn) : [...(s.machine_sns || []), sn] }))
+  const valid = (f.name || '').trim() && (f.machine_sns || []).length > 0 && f.end_hour > f.start_hour
+
+  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }
+  const inp = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: '#00000070', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 560, maxWidth: '95vw', height: '100%', background: C.surface, borderLeft: '1px solid ' + C.border, display: 'flex', flexDirection: 'column', boxShadow: '-20px 0 60px #00000040' }}>
+        {/* head */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid ' + C.border }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: C.orange, fontWeight: 700 }}>{isNew ? 'New Campaign' : 'Edit Campaign'}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginTop: 2 }}>{f.name || 'Untitled campaign'}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: C.surface2, border: '1px solid ' + C.border, color: C.text, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* body */}
+        <div style={{ padding: 22, overflowY: 'auto', flex: 1 }}>
+          {!isNew && f.approval === 'pending' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 13px', background: C.amberBg, border: '1px solid ' + C.amber + '40', borderRadius: 10, fontSize: 12.5, color: C.text, marginBottom: 16 }}>
+              <Dot color={C.amber} pulse size={6} /> Third-party ad awaiting approval before it serves.
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13, marginBottom: 14 }}>
+            <div><label style={lbl}>Campaign name</label><input style={inp} value={f.name} onChange={e => set('name', e.target.value)} placeholder="Summer Fresh Push" /></div>
+            <div><label style={lbl}>Advertiser</label><input style={inp} value={f.advertiser} onChange={e => set('advertiser', e.target.value)} placeholder="Fruitlink or brand name" /></div>
+          </div>
+          <div style={{ fontSize: 11, color: isOwn ? C.green : C.blue, marginTop: -6, marginBottom: 14 }}>
+            {isOwn ? '✓ Own-brand — auto-approved, no ad revenue' : '◷ Third-party — needs approval, earns CPM revenue'}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13, marginBottom: 14 }}>
+            <div><label style={lbl}>Media type</label>
+              <select style={inp as any} value={f.media_type} onChange={e => set('media_type', e.target.value)}>
+                <option value="image">Image (JPEG/PNG)</option>
+                <option value="video">Video (MP4)</option>
+              </select>
+            </div>
+            <div><label style={lbl}>Show on screen</label>
+              <select style={inp as any} value={f.screen} onChange={e => set('screen', e.target.value)}>
+                {SCREENS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}><label style={lbl}>Media URL</label><input style={inp} value={f.media_url} onChange={e => set('media_url', e.target.value)} placeholder="https://...supabase.co/storage/v1/object/public/ad-media/..." /></div>
+          <div style={{ marginBottom: 14 }}><label style={lbl}>Media filename (label)</label><input style={inp} value={f.media_name} onChange={e => set('media_name', e.target.value)} placeholder="summer_orange_15s.jpg" /></div>
+
+          {!isOwn && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13, marginBottom: 14 }}>
+              <div><label style={lbl}>Rate (₹ CPM)</label><input type="number" style={inp} value={f.rate_cpm} onChange={e => set('rate_cpm', e.target.value)} placeholder="e.g. 300" /></div>
+              <div><label style={lbl}>Ad duration (sec)</label><input type="number" style={inp} value={f.duration_s} onChange={e => set('duration_s', +e.target.value)} /></div>
+            </div>
+          )}
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={lbl}>Target machines</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {machines.map((m: any) => {
+                const on = (f.machine_sns || []).includes(m.sn)
+                return (
+                  <button key={m.id} onClick={() => tMac(m.sn)} style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start', gap: 1, padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const, background: on ? C.orangeBg : C.surface2, border: '1px solid ' + (on ? C.orange : C.border), borderRadius: 9, color: C.text }}>
+                    <span style={{ fontWeight: 700, fontSize: 12.5 }}>{m.display_name}</span>
+                    <span style={{ fontSize: 10, color: C.text3 }}>{m.location || m.sn}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={lbl}>Days</label>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {DAYS.map((d, i) => {
+                const on = (f.days || []).includes(i)
+                return <button key={d} onClick={() => tDay(i)} style={{ flex: 1, height: 36, fontSize: 12, fontWeight: 700, background: on ? C.orange : C.surface2, color: on ? '#fff' : C.text2, border: '1px solid ' + (on ? C.orange : C.border), borderRadius: 8, cursor: 'pointer' }}>{d}</button>
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13, marginBottom: 14 }}>
+            <div><label style={lbl}>Start hour · {String(f.start_hour).padStart(2, '0')}:00</label><input type="range" min={0} max={23} value={f.start_hour} onChange={e => set('start_hour', Math.min(+e.target.value, f.end_hour - 1))} style={{ width: '100%', accentColor: C.orange }} /></div>
+            <div><label style={lbl}>End hour · {String(f.end_hour).padStart(2, '0')}:00</label><input type="range" min={1} max={24} value={f.end_hour} onChange={e => set('end_hour', Math.max(+e.target.value, f.start_hour + 1))} style={{ width: '100%', accentColor: C.orange }} /></div>
+          </div>
+
+          <div style={{ marginBottom: 6 }}>
+            <label style={lbl}>Rotation weight · {f.weight}× {f.weight >= 4 ? '(shows often)' : f.weight === 1 ? '(shows rarely)' : ''}</label>
+            <input type="range" min={1} max={5} value={f.weight} onChange={e => set('weight', +e.target.value)} style={{ width: '100%', accentColor: C.orange }} />
+          </div>
+        </div>
+
+        {/* foot */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '15px 22px', borderTop: '1px solid ' + C.border }}>
+          {!isNew && <button onClick={() => onDelete(f.id)} style={{ padding: '9px 15px', background: 'transparent', border: '1px solid ' + C.red + '44', borderRadius: 9, color: C.red, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Delete</button>}
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ padding: '9px 15px', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 9, color: C.text2, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={() => valid && onSave(f)} disabled={!valid || saving} style={{ padding: '9px 20px', background: C.orange, border: 'none', borderRadius: 9, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: (valid && !saving) ? 1 : 0.45 }}>
+            {saving ? 'Saving...' : isNew ? 'Create campaign' : 'Save changes'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
+
 
 
 function LoyaltyPage() {
