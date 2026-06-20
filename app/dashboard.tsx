@@ -1263,7 +1263,7 @@ function AdsPage({ machines }: { machines: any[] }) {
           {pendingCount > 0 && (
             <Pill color={C.amber} bg={C.amberBg}><Dot color={C.amber} pulse size={5} /> {pendingCount} pending approval</Pill>
           )}
-          <button onClick={() => setEditing({ _new: true, name: '', advertiser: 'Fruitlink', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: [], days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
+          <button onClick={() => setEditing({ _new: true, name: '', advertiser: 'Fruitlink', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: machines.map((m: any) => m.sn), days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
             style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Campaign</button>
         </div>
       </div>
