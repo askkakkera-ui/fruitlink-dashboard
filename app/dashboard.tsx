@@ -159,8 +159,8 @@ export default function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   // ── Marketing / ads state ──
   const [campaigns, setCampaigns] = useState([]);
-  const [adForm, setAdForm] = useState({ name: '', advertiser: '', duration_s: 15, machine_sns: [] });
-  const [adFile, setAdFile] = useState(null);
+  const [adForm, setAdForm] = useState<{ name: string; advertiser: string; duration_s: any; machine_sns: string[] }>({ name: '', advertiser: '', duration_s: 15, machine_sns: [] });
+  const [adFile, setAdFile] = useState<any>(null);
   const [adBusy, setAdBusy] = useState(false);
   const [adMsg, setAdMsg] = useState('');
   // ── Machine screens state ──
@@ -285,7 +285,7 @@ export default function Dashboard() {
       const { url } = await uploadMedia(file);
       // Read current state, merge screen_config, write back (preserve machine_config).
       const { data: m } = await supabase.from('machines').select('state').eq('id', screenMachine.id).single();
-      let state = {};
+      let state: any = {};
       try { state = m?.state ? JSON.parse(m.state) : {}; } catch { state = {}; }
       const sc = state.screen_config || {};
       if (slot === 'left') sc.bottom_left_url = url;
