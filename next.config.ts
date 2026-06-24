@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "fpwvutdvwnvrunviporz.supabase.co",
       },
+      {
+        protocol: "https",
+        hostname: "pub-4fca72024723498ea61f717d65c985e3.r2.dev",
+      },
     ],
   },
   async headers() {
@@ -30,9 +34,10 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net blob:",
               "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://api.mapbox.com",
               "img-src 'self' data: https:",
+              "media-src 'self' https://pub-4fca72024723498ea61f717d65c985e3.r2.dev",
               "font-src 'self' data:",
               "worker-src 'self' blob:",
-              "connect-src 'self' https://api.fruitlinktech.in https://fpwvutdvwnvrunviporz.supabase.co https://api.mapbox.com https://events.mapbox.com",
+              "connect-src 'self' https://api.fruitlinktech.in https://fpwvutdvwnvrunviporz.supabase.co https://api.mapbox.com https://events.mapbox.com https://b2d542f2726cff56a09392fdc78367b6.r2.cloudflarestorage.com https://fruitlink-ad-media.b2d542f2726cff56a09392fdc78367b6.r2.cloudflarestorage.com https://pub-4fca72024723498ea61f717d65c985e3.r2.dev",
               "frame-ancestors 'none'",
             ].join("; "),
           },
