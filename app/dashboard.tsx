@@ -1247,7 +1247,19 @@ function AdsPage({ machines }: { machines: any[] }) {
   }
   const remove = async (id: string) => {
     if (!confirm('Delete this campaign permanently?')) return
+    // Find this campaign's media URL, and check whether any OTHER campaign
+    // still uses the same file before deleting it from storage.
+    const target = campaigns.find(c => c.id === id)
+    const url = target?.media_url || ''
+    const sharedByOthers = !!url && campaigns.some(c => c.id !== id && c.media_url === url)
+    // Delete the campaign row first.
     await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + id), { method: 'DELETE', headers })
+    // Then remove the stored file, but only if nothing else references it.
+    if (url && !sharedByOthers) {
+      try {
+        await fetch('/api/upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) })
+      } catch (e) { /* file cleanup is best-effort; ignore */ }
+    }
     setEditing(null); load()
   }
 
@@ -1417,29 +1429,53 @@ function AdEditor({ campaign, machines, saving, onClose, onSave, onDelete }: any
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={lbl}>Ad image</label>
+            <label style={lbl}>Ad image / video</label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-              <input id="ad-file-input" type="file" accept="image/*" style={{ display: 'none' }}
+              <input id="ad-file-input" type="file" accept="image/*,video/*" style={{ display: 'none' }}
                 onChange={async e => {
                   const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return
+                  const MAX_MB = 100
+                  if (file.size > MAX_MB * 1024 * 1024) {
+                    alert('That file is ' + (file.size / 1048576).toFixed(1) + ' MB. Please keep ad media under ' + MAX_MB + ' MB.')
+                    ;(e.target as HTMLInputElement).value = ''
+                    return
+                  }
+                  const isVid = (file.type || '').startsWith('video')
                   setUploading(true)
                   try {
-                    const fd = new FormData()
-                    fd.append('file', file)
-                    fd.append('operator_id', getCookie('fl_operator_id') || 'shared')
-                    const r = await fetch('/api/upload', { method: 'POST', body: fd })
-                    const d = await r.json()
-                    if (d.url) { set('media_url', d.url); set('media_name', d.name) }
-                    else alert('Upload failed: ' + (d.error || 'unknown'))
+                    // Step 1: ask our API for a presigned PUT URL (tiny request, no file).
+                    const presignRes = await fetch('/api/upload', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        filename: file.name,
+                        contentType: file.type || 'application/octet-stream',
+                        operator_id: getCookie('fl_operator_id') || 'shared',
+                      }),
+                    })
+                    const presign = await presignRes.json()
+                    if (!presign.uploadUrl) { alert('Upload failed: ' + (presign.error || 'no upload url')); setUploading(false); return }
+                    // Step 2: PUT the file bytes straight to R2 (no size limit through our server).
+                    const put = await fetch(presign.uploadUrl, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                      body: file,
+                    })
+                    if (!put.ok) { alert('Upload to storage failed (' + put.status + ')'); setUploading(false); return }
+                    // Step 3: save the public URL on the campaign.
+                    set('media_url', presign.publicUrl); set('media_name', presign.name); set('media_type', isVid ? 'video' : 'image')
                   } catch (err: any) { alert('Upload failed: ' + (err?.message || err)) }
                   setUploading(false)
                 }} />
               <button type="button" onClick={() => document.getElementById('ad-file-input')?.click()} disabled={uploading}
                 style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid ' + C.orange, background: uploading ? C.surface2 : C.orangeBg, color: C.orange, fontSize: 13, fontWeight: 700, cursor: uploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
-                {uploading ? 'Uploading...' : '⬆ Upload image'}
+                {uploading ? 'Uploading...' : '⬆ Upload image / video'}
               </button>
-              {f.media_url && <img src={f.media_url} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid ' + C.border }} />}
+              {f.media_url && (f.media_type === 'video'
+                ? <video src={f.media_url} muted style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid ' + C.border }} />
+                : <img src={f.media_url} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid ' + C.border }} />)}
             </div>
+            <div style={{ fontSize: 10.5, color: C.text3, marginBottom: 8 }}>Images or videos · max 100 MB per file. Keep videos short (10-30s) for fast machine loading.</div>
             <label style={lbl}>Media URL</label>
             <input style={inp} value={f.media_url} onChange={e => set('media_url', e.target.value)} placeholder="Upload above, or paste a URL" />
           </div>
