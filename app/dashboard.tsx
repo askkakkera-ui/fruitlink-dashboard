@@ -29,9 +29,9 @@ const C = {
   text:      '#1f2533',
   text2:     '#5b6478',
   text3:     '#9099ac',
-  textSide:  '#4a4470',
-  textSide2: '#4a4470',
-  textSide3: '#8b85ac',
+  textSide:  '#2a2550',
+  textSide2: '#3a3560',
+  textSide3: '#6b6592',
   green:     '#198754',
   greenBg:   '#e7f8ef',
   red:       '#DC3545',
@@ -87,7 +87,7 @@ function Pill({ children, color, bg }: any) {
 
 function SectionLabel({ children }: any) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: C.textSide3, padding: '12px 16px 4px', textTransform: 'uppercase' as const }}>{children}</div>
+    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.07em', color: C.textSide3, padding: '14px 16px 5px', textTransform: 'uppercase' as const }}>{children}</div>
   )
 }
 
@@ -154,7 +154,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
                   padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                   background: isActive ? C.activeGlow : 'transparent',
                   color: isActive ? C.orange : C.textSide2,
-                  fontSize: 14.5, fontWeight: isActive ? 600 : 400,
+                  fontSize: 15.5, fontWeight: isActive ? 700 : 500,
                   transition: 'all 0.15s', marginBottom: 1,
                   borderLeft: isActive ? `3px solid ${C.orange}` : '3px solid transparent',
                   paddingLeft: isActive ? 9 : 12,
@@ -208,9 +208,9 @@ function TopBar({ active }: { active: string }) {
       boxShadow: '0 1px 4px #00000010',
     }}>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.04em' }}>FRUITLINK</span>
-        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>›</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{labels[active] || active}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.04em' }}>FRUITLINK</span>
+        <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13 }}>›</span>
+        <span style={{ fontSize: 14.5, fontWeight: 700, color: '#fff' }}>{labels[active] || active}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: '4px 12px' }}>
         <Dot color={'#fff'} pulse size={6} />
@@ -230,7 +230,7 @@ function StatCard({ label, value, sub, color, icon, pct }: any) {
     }}>
       <div style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.9 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>{label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{label}</div>
         <div style={{ width: 32, height: 32, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
       </div>
       <div style={{ fontSize: 36, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
