@@ -5,7 +5,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode},{error:s
   constructor(props: any){super(props);this.state={error:null}}
   static getDerivedStateFromError(e: any){return {error:e?.message||String(e)}}
   render(){
-    if(this.state.error) return <div style={{padding:40,color:'#ff6b6b',background:'#1c2333',borderRadius:12,margin:20}}><b>Error: </b>{this.state.error}</div>
+    if(this.state.error) return <div style={{padding:40,color:'#DC3545',background:'#fdeaec',border:'1px solid #f5c2c7',borderRadius:12,margin:20}}><b>Error: </b>{this.state.error}</div>
     return this.props.children
   }
 }
@@ -16,32 +16,33 @@ const _SB_REAL_URL = process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunvi
 
 // ─── Design Tokens ───────────────────────────────────────────────
 const C = {
-  sidebar:   '#1c2333',
-  sidebarB:  '#161b27',
-  sidebarT:  '#2a3649',
-  active:    '#f97316',
-  activeGlow:'#f9731618',
-  bg:        '#0f1117',
-  surface:   '#161b27',
-  surface2:  '#1c2333',
-  border:    '#2a3649',
-  border2:   '#374461',
-  text:      '#f0f2ff',
-  text2:     '#b0b8d8',
-  text3:     '#7a84a8',
-  textSide:  '#e0e4f8',
-  textSide2: '#a8b0d0',
-  textSide3: '#7a84a8',
-  green:     '#22c55e',
-  greenBg:   '#16a34a30',
-  red:       '#f87171',
-  redBg:     '#dc262630',
-  amber:     '#fbbf24',
-  amberBg:   '#d9770630',
-  blue:      '#60a5fa',
-  blueBg:    '#2563eb30',
-  orange:    '#f97316',
-  orangeBg:  '#f9731630',
+  sidebar:   '#e9e7f5',
+  sidebarB:  '#dcd9ee',
+  sidebarT:  '#dcd9ee',
+  active:    '#FE6505',
+  activeGlow:'#FE650518',
+  bg:        '#f4f5f9',
+  surface:   '#ffffff',
+  surface2:  '#f4f5f9',
+  border:    '#e8eaf0',
+  border2:   '#dcdfe9',
+  text:      '#1f2533',
+  text2:     '#5b6478',
+  text3:     '#9099ac',
+  textSide:  '#4a4470',
+  textSide2: '#4a4470',
+  textSide3: '#8b85ac',
+  green:     '#198754',
+  greenBg:   '#e7f8ef',
+  red:       '#DC3545',
+  redBg:     '#fdeaec',
+  amber:     '#c98a00',
+  amberBg:   '#fff7e0',
+  blue:      '#0D6EFD',
+  blueBg:    '#e7f0ff',
+  orange:    '#FE6505',
+  orangeBg:  '#fff3ea',
+  topbar:    '#FE6505',
 }
 
 function getCookie(name: string): string {
@@ -129,11 +130,11 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
             boxShadow: '0 2px 8px #f9731640',
           }}>F</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>FRUITLINK</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, letterSpacing: '-0.01em' }}>FRUITLINK</div>
             <div style={{ fontSize: 12.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff12', borderRadius: 8, padding: '6px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', border: `1px solid ${C.sidebarB}`, borderRadius: 8, padding: '6px 10px' }}>
           <Dot color={C.green} pulse size={6} />
           <span style={{ fontSize: 11, color: C.textSide, fontWeight: 500 }}>Online</span>
           <span style={{ marginLeft: 'auto', fontSize: 12, color: C.textSide3 }}>System OK</span>
@@ -173,14 +174,14 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
 
       {/* User */}
       <div style={{ padding: '12px', borderTop: `1px solid ${C.sidebarT}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#ffffff10', borderRadius: 9, padding: '8px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#ffffff', border: `1px solid ${C.sidebarB}`, borderRadius: 9, padding: '8px 10px' }}>
           <div style={{
             width: 30, height: 30, borderRadius: '50%', background: C.orange,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
           }}>{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
             <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
           </div>
           <button onClick={onLogout} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textSide3, fontSize: 16, padding: 2 }} title="Logout">⏻</button>
@@ -202,20 +203,20 @@ function TopBar({ active }: { active: string }) {
   const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alert Center', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List' }
   return (
     <div style={{
-      height: 52, background: C.surface, borderBottom: `1px solid ${C.border}`,
+      height: 52, background: C.topbar, borderBottom: `1px solid ${C.orange}`,
       display: 'flex', alignItems: 'center', padding: '0 24px', gap: 14, flexShrink: 0,
-      boxShadow: '0 1px 4px #00000008',
+      boxShadow: '0 1px 4px #00000010',
     }}>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 11, color: C.text3, letterSpacing: '0.04em' }}>FRUITLINK</span>
-        <span style={{ color: C.text3, fontSize: 12 }}>›</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{labels[active] || active}</span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.04em' }}>FRUITLINK</span>
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>›</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{labels[active] || active}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.greenBg, borderRadius: 20, padding: '4px 12px' }}>
-        <Dot color={C.green} pulse size={6} />
-        <span style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>System Online</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: '4px 12px' }}>
+        <Dot color={'#fff'} pulse size={6} />
+        <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>System Online</span>
       </div>
-      <span style={{ fontSize: 11, color: C.text3 }}>{time}</span>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)' }}>{time}</span>
     </div>
   )
 }
@@ -456,7 +457,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
           <div style={{ fontSize: 13, color: C.text2 }}>{counts.active} active · {counts.resolved} resolved</div>
         </div>
         <button onClick={fetchAlerts} style={{
-          display: 'flex', alignItems: 'center', gap: 6, background: C.sidebar, color: '#fff',
+          display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
           border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
         }}>↻ Refresh</button>
       </div>
@@ -482,8 +483,8 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
         {([['active', `Active (${counts.active})`], ['resolved', `Resolved (${counts.resolved})`], ['all', 'All']] as const).map(([f, label]) => (
           <button key={f} onClick={() => setFilter(f as any)} style={{
             padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
-            background: filter === f ? C.sidebar : 'transparent',
-            color: filter === f ? C.surface : C.text2,
+            background: filter === f ? C.orange : 'transparent',
+            color: filter === f ? '#fff' : C.text2,
             fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
           }}>{label}</button>
         ))}
@@ -792,7 +793,7 @@ function OrdersPage() {
           {/* View toggle */}
           <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
             {[['analytics', '📊 Analytics'], ['orders', '📋 Orders']].map(([v, l]) => (
-              <button key={v} onClick={() => setView(v as any)} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: view === v ? C.sidebar : 'transparent', color: view === v ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
+              <button key={v} onClick={() => setView(v as any)} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: view === v ? C.orange : 'transparent', color: view === v ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
             ))}
           </div>
           {/* Period toggle */}
@@ -888,7 +889,7 @@ function OrdersPage() {
           {/* Order list filter tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: '1px solid ' + C.border }}>
             {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered']].map(([f, label]) => (
-              <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === f ? C.sidebar : 'transparent', color: filter === f ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>{label}</button>
+              <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === f ? C.orange : 'transparent', color: filter === f ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>{label}</button>
             ))}
           </div>
 
@@ -963,7 +964,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Machine List</div>
           <div style={{ fontSize: 13, color: C.text2 }}>{safeMachines.length} machines · {safeMachines.filter((m: any) => m.status === 'online').length} online</div>
         </div>
-        <button onClick={fetchData} style={{ background: C.sidebar, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh</button>
+        <button onClick={fetchData} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         {[
@@ -1387,7 +1388,7 @@ function AdEditor({ campaign, machines, saving, onClose, onSave, onDelete }: any
   const inp = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: '#00000070', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.45)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 560, maxWidth: '95vw', height: '100%', background: C.surface, borderLeft: '1px solid ' + C.border, display: 'flex', flexDirection: 'column', boxShadow: '-20px 0 60px #00000040' }}>
         {/* head */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid ' + C.border }}>
@@ -1727,7 +1728,7 @@ function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
     setSaving(false)
   }
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: C.surface, borderRadius: 20, padding: 28, width: 420, boxShadow: '0 20px 60px #00000030' }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6 }}>Assign Machines</div>
         <div style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>Assigning to {op.name || op.email}</div>
@@ -1896,7 +1897,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
 
       {/* Add/Edit Modal */}
       {showAdd && (
-        <div style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: C.surface, borderRadius: 20, padding: 30, width: 460, boxShadow: '0 20px 60px #00000030' }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 20 }}>{editOp ? 'Edit Operator' : 'Add New Operator'}</div>
             {[
@@ -1940,7 +1941,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
       {assignOp && <AssignMachinesModal op={assignOp} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} onClose={() => setAssignOp(null)} />}
 
       {delOp && (
-        <div style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: C.surface, borderRadius: 20, padding: 30, width: 360, textAlign: 'center', boxShadow: '0 20px 60px #00000030' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
             <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Delete Operator?</div>
