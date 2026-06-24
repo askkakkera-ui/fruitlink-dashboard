@@ -1363,6 +1363,7 @@ function AdEditor({ campaign, machines, saving, onClose, onSave, onDelete }: any
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const SCREENS = ['idle', 'ordering', 'dispensing', 'thanks']
   const [f, setF] = useState<any>(campaign)
+  const [uploading, setUploading] = useState(false)
   const isNew = !!campaign._new
   const isOwn = (f.advertiser || '').trim().toLowerCase() === 'fruitlink'
   const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }))
@@ -1415,7 +1416,33 @@ function AdEditor({ campaign, machines, saving, onClose, onSave, onDelete }: any
             </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}><label style={lbl}>Media URL</label><input style={inp} value={f.media_url} onChange={e => set('media_url', e.target.value)} placeholder="https://...supabase.co/storage/v1/object/public/ad-media/..." /></div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lbl}>Ad image</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <input id="ad-file-input" type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={async e => {
+                  const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return
+                  setUploading(true)
+                  try {
+                    const fd = new FormData()
+                    fd.append('file', file)
+                    fd.append('operator_id', getCookie('fl_operator_id') || 'shared')
+                    const r = await fetch('/api/upload', { method: 'POST', body: fd })
+                    const d = await r.json()
+                    if (d.url) { set('media_url', d.url); set('media_name', d.name) }
+                    else alert('Upload failed: ' + (d.error || 'unknown'))
+                  } catch (err: any) { alert('Upload failed: ' + (err?.message || err)) }
+                  setUploading(false)
+                }} />
+              <button type="button" onClick={() => document.getElementById('ad-file-input')?.click()} disabled={uploading}
+                style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid ' + C.orange, background: uploading ? C.surface2 : C.orangeBg, color: C.orange, fontSize: 13, fontWeight: 700, cursor: uploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                {uploading ? 'Uploading...' : '⬆ Upload image'}
+              </button>
+              {f.media_url && <img src={f.media_url} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid ' + C.border }} />}
+            </div>
+            <label style={lbl}>Media URL</label>
+            <input style={inp} value={f.media_url} onChange={e => set('media_url', e.target.value)} placeholder="Upload above, or paste a URL" />
+          </div>
           <div style={{ marginBottom: 14 }}><label style={lbl}>Media filename (label)</label><input style={inp} value={f.media_name} onChange={e => set('media_name', e.target.value)} placeholder="summer_orange_15s.jpg" /></div>
 
           {!isOwn && (
