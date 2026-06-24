@@ -650,7 +650,7 @@ function OrdersPage() {
   })
   const dailyData = days.map(day => {
     const dayOrders = orders.filter((o: any) => new Date(o.created_at).toDateString() === day && o.pay_state === 1)
-    return { day: new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.length }
+    return { day: new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
   })
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
 
@@ -843,9 +843,13 @@ function OrdersPage() {
                 const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 4 : 2)
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    {d.revenue > 0 && <div style={{ fontSize: 11, color: C.text3, fontWeight: 600 }}>{fmtAmt(d.revenue)}</div>}
+                    {d.revenue > 0 && (
+                      <div style={{ textAlign: 'center', lineHeight: 1.25 }}>
+                        <div style={{ fontSize: 11, color: C.text2, fontWeight: 700 }}>{fmtAmt(d.revenue)}</div>
+                        {d.cups > 0 && <div style={{ fontSize: 10, color: C.orange, fontWeight: 700 }}>{d.cups}🥤</div>}
+                      </div>
+                    )}
                     <div style={{ width: '100%', height: h, background: d.revenue > 0 ? C.orange : C.border, borderRadius: '4px 4px 0 0', transition: 'height .4s', position: 'relative' as const }}>
-                      {d.cups > 0 && <div style={{ position: 'absolute' as const, top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: C.orange, fontWeight: 700 }}>{d.cups}🥤</div>}
                     </div>
                     <div style={{ fontSize: 12, color: C.text3, textAlign: 'center', fontWeight: 500 }}>{d.day}</div>
                   </div>
