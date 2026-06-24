@@ -775,6 +775,64 @@ function OrdersPage() {
       const byD: any = {}
       paid.forEach((o: any) => { const key = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); if (!byD[key]) byD[key] = { paid: 0, cups: 0, rev: 0 }; byD[key].paid++; byD[key].cups += (o.cup_num || 1); byD[key].rev += (o.amount_paise || 0) / 100 })
       Object.keys(byD).sort().forEach(key => { const r = byD[key]; doc.text(key, 16, y); doc.text(String(r.paid), 92, y); doc.text(String(r.cups), 120, y); doc.text('Rs ' + r.rev.toFixed(0), 150, y); y += 5; if (y > 280) { doc.addPage(); y = 20 } })
+
+      // ── Full transaction list (all orders: paid + failed + refunded) ──
+      doc.addPage(); y = 20
+      doc.setFillColor(249, 115, 22); doc.rect(0, 0, 210, 16, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
+      doc.text('Transaction List — All Orders', 14, 11)
+      y = 26
+      const _txnStatus = (o: any) => {
+        if (o.refund_state === 1) return 'Refunded'
+        if (o.refund_state === 2) return 'Refund Failed'
+        if (o.pay_state === 1) return 'Paid'
+        if (o.pay_state === 2) return 'Failed'
+        return 'Pending'
+      }
+      // Column header
+      const drawTxnHeader = (yy: number) => {
+        doc.setFontSize(7.5); doc.setTextColor(120, 120, 120); doc.setFont('helvetica', 'bold')
+        doc.text('Date (IST)', 12, yy)
+        doc.text('Txn / Order', 44, yy)
+        doc.text('Machine', 84, yy)
+        doc.text('Store / Place', 120, yy)
+        doc.text('Amount', 162, yy)
+        doc.text('Status', 184, yy)
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40)
+        return yy + 5
+      }
+      y = drawTxnHeader(y)
+      doc.setFontSize(7)
+      // Newest first
+      const txns = [...rows].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      txns.forEach((o: any) => {
+        const m = getMachine(o.machine_id)
+        const dateStr = o.created_at ? new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+        const txnNo = (o.mihpayid || o.order_code || '').toString().slice(0, 20)
+        const midShort = String(o.machine_id || '').slice(0, 8)
+        const mName = (m.display_name || '').slice(0, 14)
+        const store = (m.location || '').slice(0, 22)
+        const amt = 'Rs ' + ((o.amount_paise || 0) / 100).toFixed(0)
+        const status = _txnStatus(o)
+        doc.setTextColor(40, 40, 40)
+        doc.text(dateStr, 12, y)
+        doc.text(txnNo, 44, y)
+        doc.text(midShort + ' ' + mName, 84, y)
+        doc.text(store, 120, y)
+        doc.text(amt, 162, y)
+        // colored status
+        if (status === 'Paid') doc.setTextColor(25, 135, 84)
+        else if (status === 'Refunded') doc.setTextColor(13, 110, 253)
+        else if (status === 'Failed' || status === 'Refund Failed') doc.setTextColor(220, 53, 69)
+        else doc.setTextColor(150, 150, 150)
+        doc.text(status, 184, y)
+        doc.setTextColor(40, 40, 40)
+        y += 4.5
+        if (y > 285) { doc.addPage(); y = 20; y = drawTxnHeader(y); doc.setFontSize(7) }
+      })
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150)
+      doc.text('Total transactions listed: ' + txns.length, 12, y + 4)
+
       doc.setFontSize(8); doc.setTextColor(150, 150, 150)
       doc.text('Fruitlink Technologies Pvt Ltd - Confidential', 14, 290)
       doc.save('Fruitlink_Revenue_' + exFrom + '_to_' + exTo + '.pdf')
