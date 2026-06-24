@@ -87,7 +87,7 @@ function Pill({ children, color, bg }: any) {
 
 function SectionLabel({ children }: any) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.07em', color: '#5a5480', padding: '14px 16px 5px', textTransform: 'uppercase' as const }}>{children}</div>
+    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.07em', color: '#3a3560', padding: '14px 16px 5px', textTransform: 'uppercase' as const }}>{children}</div>
   )
 }
 
@@ -130,7 +130,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
             boxShadow: '0 2px 8px #f9731640',
           }}>F</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, letterSpacing: '-0.01em' }}>FRUITLINK</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>FRUITLINK</div>
             <div style={{ fontSize: 12.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
           </div>
         </div>
@@ -153,7 +153,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                   padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                   background: isActive ? C.activeGlow : 'transparent',
-                  color: isActive ? C.orange : '#454065',
+                  color: isActive ? C.orange : C.text,
                   fontSize: 15.5, fontWeight: isActive ? 700 : 600,
                   transition: 'all 0.15s', marginBottom: 1,
                   borderLeft: isActive ? `3px solid ${C.orange}` : '3px solid transparent',
@@ -230,7 +230,7 @@ function StatCard({ label, value, sub, color, icon, pct }: any) {
     }}>
       <div style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.9 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{label}</div>
         <div style={{ width: 32, height: 32, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
       </div>
       <div style={{ fontSize: 36, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
