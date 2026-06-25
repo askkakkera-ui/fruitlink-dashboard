@@ -1085,7 +1085,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border, display: 'flex', gap: 20 }}>
                     {[
                       { label: 'Machine ID', value: String(m.machine_id || m.id || '').slice(0,8) + '...' },
-                      { label: 'Scale', value: m.scale_weight_g != null ? m.scale_weight_g + 'g' : '--' },
+                      { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--' },
                       { label: 'Cooling', value: m.cooling_state === true ? 'Active' : m.cooling_state === false ? 'Off' : '--' },
                     ].map(f => (
                       <div key={f.label}>
@@ -1194,7 +1194,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                     {[
                       { label: 'Temperature', value: temp != null ? temp + 'C' : '--', color: tempColor },
                       { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
-                      { label: 'Scale', value: m.scale_weight_g != null ? m.scale_weight_g + 'g' : '--', color: C.text },
+                      { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--', color: C.text },
                       { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
                     ].map(f => (
                       <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 9px' }}>
