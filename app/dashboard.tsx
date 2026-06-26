@@ -1019,6 +1019,31 @@ function MachinesPage({ machines, loading, fetchData }: any) {
     return { ...m, state: st || {} }
   })
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
+  // ─── Edit machine name + location (super_admin only) ───
+  const role = getCookie('fl_role') || 'operator'
+  const canEdit = role === 'super_admin'
+  const [editM, setEditM] = useState<any>(null)   // machine being edited, or null
+  const [eName, setEName] = useState('')
+  const [eLoc, setELoc] = useState('')
+  const [eSaving, setESaving] = useState(false)
+  const [eErr, setEErr] = useState('')
+  const openEdit = (m: any) => { setEditM(m); setEName(m.display_name || ''); setELoc(m.location || ''); setEErr('') }
+  const closeEdit = () => { setEditM(null); setEErr(''); setESaving(false) }
+  const saveEdit = async () => {
+    if (!editM) return
+    if (!eName.trim()) { setEErr('Name cannot be empty'); return }
+    setESaving(true); setEErr('')
+    try {
+      const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + editM.id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ display_name: eName.trim(), location: eLoc.trim() })
+      })
+      if (!res.ok) { const t = await res.text().catch(() => ''); setEErr('Save failed: ' + (t || res.status)); setESaving(false); return }
+      closeEdit()
+      if (typeof fetchData === 'function') fetchData()
+    } catch (e: any) { setEErr('Save failed: ' + (e?.message || 'error')); setESaving(false) }
+  }
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
@@ -1060,6 +1085,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
                       {m.app_version && <Badge color={C.blue}>v{m.app_version}</Badge>}
+                      {canEdit && <button onClick={() => openEdit(m)} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr) 2fr 2fr 2fr', gap: 10 }}>
@@ -1098,6 +1124,30 @@ function MachinesPage({ machines, loading, fetchData }: any) {
               </div>
             )
           })}
+        </div>
+      )}
+      {editM && (
+        <div onClick={closeEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>Edit Machine</div>
+            <div style={{ fontSize: 12, color: C.text3, fontFamily: 'monospace', marginBottom: 18 }}>{editM.sn}</div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 6 }}>Machine Name</label>
+              <input value={eName} onChange={e => setEName(e.target.value)} placeholder="e.g. Fruitful-2"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 6 }}>Location</label>
+              <input value={eLoc} onChange={e => setELoc(e.target.value)} placeholder="e.g. SR Nagar, Ameerpet"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>Note: the Fleet Map pin is positioned by serial number and will not move when location text changes.</div>
+            </div>
+            {eErr && <div style={{ fontSize: 13, color: C.red, marginBottom: 12 }}>{eErr}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={closeEdit} disabled={eSaving} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 9, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+              <button onClick={saveEdit} disabled={eSaving} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontWeight: 600, cursor: eSaving ? 'default' : 'pointer', fontSize: 13, opacity: eSaving ? 0.6 : 1 }}>{eSaving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
