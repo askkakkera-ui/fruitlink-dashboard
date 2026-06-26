@@ -1160,7 +1160,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
   const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'NEXT_PUBLIC_MAPBOX_TOKEN_HERE'
   // Machine coords by SN (most reliable) then by location string
   const MACHINE_COORDS: Record<string, {lat: number, lng: number}> = {
-    'C3B31F38D1C07A76': { lat: 17.442822793310572, lng: 78.44438079543997 }, // Fruitful-2 Tim Cafe SR Nagar exact
+    'C3B31F38D1C07A76': { lat: 17.45437171063268, lng: 78.36593749556503 }, // Fruitful-2 HITEC City, Kondapur exact
     '9E3D050CEF2EEC7B': { lat: 17.4702, lng: 78.5607 }, // Fruitful-1 ECIL
   }
   const COORDS: Record<string, {lat: number, lng: number}> = {
