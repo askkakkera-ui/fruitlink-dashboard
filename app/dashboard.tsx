@@ -1034,7 +1034,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
     if (!eName.trim()) { setEErr('Name cannot be empty'); return }
     setESaving(true); setEErr('')
     try {
-      const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + editM.id), {
+      const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?sn=eq.' + editM.sn), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify({ display_name: eName.trim(), location: eLoc.trim() })
