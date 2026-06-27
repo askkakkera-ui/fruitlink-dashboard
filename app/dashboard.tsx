@@ -664,6 +664,7 @@ function OrdersPage() {
     if (filter === 'paid') return o.pay_state === 1
     if (filter === 'pending') return o.pay_state === 0
     if (filter === 'delivered') return o.delivery_state === 1
+    if (filter === 'refunded') return (o.refund_state || 0) >= 1
     return o.pay_state !== 0
   })
 
