@@ -622,11 +622,14 @@ function OrdersPage() {
   // Period filter — calendar-day floors so the KPI totals match the daily chart bars
   const now = new Date()
   const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x }
-  const weekFloor = startOfDay(new Date()); weekFloor.setDate(weekFloor.getDate() - 6)
-  const monthFloor = startOfDay(new Date()); monthFloor.setDate(monthFloor.getDate() - 29)
+  const istKey = (dt: any) => new Date(dt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  const todayKey = istKey(now)
+  const istToday = new Date(todayKey + 'T00:00:00+05:30')
+  const weekFloor = new Date(istToday.getTime() - 6 * 86400000)
+  const monthFloor = new Date(istToday.getTime() - 29 * 86400000)
   const periodOrders = orders.filter((o: any) => {
     const d = new Date(o.created_at)
-    if (period === 'today') return d.toDateString() === now.toDateString()
+    if (period === 'today') return istKey(o.created_at) === todayKey
     if (period === 'week') return d >= weekFloor
     return d >= monthFloor
   })
@@ -648,11 +651,11 @@ function OrdersPage() {
   // Daily revenue chart data (last 7 days)
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (6 - i))
-    return d.toDateString()
+    return istKey(new Date(istToday.getTime() - (6 - i) * 86400000))
   })
   const dailyData = days.map(day => {
-    const dayOrders = orders.filter((o: any) => new Date(o.created_at).toDateString() === day && o.pay_state === 1)
-    return { day: new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
+    const dayOrders = orders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
+    return { day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
   })
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
 
