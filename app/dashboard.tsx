@@ -1851,19 +1851,18 @@ function ComingSoon({ label }: { label: string }) {
 }
 
 // ─── Operators Page (super_admin only) ───────────────────────────
-function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
+function AssignMachinesModal({ op, onClose }: any) {
   const [machines, setMachines] = useState<any[]>([])
   const [assigned, setAssigned] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
+  const J = { 'Content-Type': 'application/json' }
   useEffect(() => {
     const load = async () => {
-      const [mRes, aRes] = await Promise.all([
-        fetch(supabaseUrl + '/rest/v1/machines?select=id,display_name,sn,location,state', { headers }),
-        fetch(supabaseUrl + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + op.id, { headers }),
+      const [mData, aData] = await Promise.all([
+        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,location,state')).then(r => r.json()).catch(() => []),
+        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + op.id)).then(r => r.json()).catch(() => []),
       ])
-      const [mData, aData] = await Promise.all([mRes.json(), aRes.json()])
       setMachines(Array.isArray(mData) ? mData.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true }) : [])
       setAssigned(Array.isArray(aData) ? aData.map((r: any) => r.machine_id) : [])
     }
@@ -1873,11 +1872,13 @@ function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
   const save = async () => {
     setSaving(true); setMsg('')
     try {
-      await fetch(supabaseUrl + '/rest/v1/machine_operators?operator_id=eq.' + op.id, { method: 'DELETE', headers })
+      const delRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + op.id), { method: 'DELETE', headers: J })
+      if (!delRes.ok) { setMsg('Error: could not clear old assignments (' + delRes.status + ')'); setSaving(false); return }
       if (assigned.length > 0) {
-        await fetch(supabaseUrl + '/rest/v1/machine_operators', { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id }))) })
+        const insRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id }))) })
+        if (!insRes.ok) { const t = await insRes.text().catch(() => ''); setMsg('Error saving: ' + (t || insRes.status)); setSaving(false); return }
       }
-      setMsg('✓ Saved'); setTimeout(onClose, 800)
+      setMsg('\u2713 Saved'); setTimeout(onClose, 800)
     } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
   }
@@ -1897,7 +1898,7 @@ function AssignMachinesModal({ op, supabaseUrl, supabaseKey, onClose }: any) {
             </label>
           ))}
         </div>
-        {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+        {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('\u2713') ? C.greenBg : C.redBg, color: msg.startsWith('\u2713') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
           <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>
