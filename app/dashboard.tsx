@@ -804,7 +804,7 @@ function OrdersPage() {
       y = drawTxnHeader(y)
       doc.setFontSize(7)
       // Newest first
-      const txns = [...rows].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      const txns = [...rows].filter((o: any) => _txnStatus(o) !== 'Pending').sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       txns.forEach((o: any) => {
         const m = getMachine(o.machine_id)
         const dateStr = o.created_at ? new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
