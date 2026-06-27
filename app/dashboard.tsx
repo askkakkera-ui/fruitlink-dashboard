@@ -672,8 +672,8 @@ function OrdersPage() {
 
   const fetchRange = async () => {
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
-    const startISO = new Date(exFrom + 'T00:00:00').toISOString()
-    const endISO = new Date(exTo + 'T23:59:59.999').toISOString()
+    const startISO = new Date(exFrom + 'T00:00:00+05:30').toISOString()
+    const endISO = new Date(exTo + 'T23:59:59.999+05:30').toISOString()
     const idf = allowedIds.length > 0 ? '&machine_id=in.(' + allowedIds.join(',') + ')' : ''
     const path = '/rest/v1/orders?select=*&created_at=gte.' + startISO + '&created_at=lte.' + endISO + idf + '&order=created_at.desc&limit=10000'
     const res = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h })
