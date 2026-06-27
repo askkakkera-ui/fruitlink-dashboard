@@ -703,7 +703,7 @@ function OrdersPage() {
       if (rows.length === 0) { alert('No orders found in that date range.'); setExporting(''); return }
       const head = ['Order Code', 'Machine', 'Location', 'Amount (INR)', 'Payment', 'Delivery', 'Cups', 'Created (IST)', 'Paid (IST)', 'Delivered (IST)', 'PayU ID']
       const lines = [head.join(',')]
-      rows.filter((o: any) => _txnStatus(o) !== 'Pending').forEach((o: any) => {
+      rows.filter((o: any) => o.pay_state === 1).forEach((o: any) => {
         const m = getMachine(o.machine_id)
         lines.push([o.order_code, m.display_name || '', m.location || '', ((o.amount_paise || 0) / 100).toFixed(2), _payLabel(o.pay_state), _delLabel(o.delivery_state), o.cup_num || 1, _istLabel(o.created_at), _istLabel(o.paid_at), _istLabel(o.delivered_at), o.mihpayid || ''].map(_esc).join(','))
       })
