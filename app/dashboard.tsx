@@ -664,7 +664,7 @@ function OrdersPage() {
     if (filter === 'paid') return o.pay_state === 1
     if (filter === 'pending') return o.pay_state === 0
     if (filter === 'delivered') return o.delivery_state === 1
-    return true
+    return o.pay_state !== 0
   })
 
   const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
@@ -1355,7 +1355,7 @@ function AdsPage({ machines }: { machines: any[] }) {
 
   // KPIs
   const activeCount = campaigns.filter(c => c.status === 'active').length
-  const pendingCount = campaigns.filter(c => c.approval === 'pending').length
+    const pendingCount = campaigns.filter(c => c.approval === 'pending').length
   const totalImpr = Object.values(perf).reduce((s: number, p: any) => s + (p.impressions || 0), 0)
   const totalRev = Object.values(perf).reduce((s: number, p: any) => s + (Number(p.revenue) || 0), 0)
 
