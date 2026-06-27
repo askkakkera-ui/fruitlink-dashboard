@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
-const SB_KEY = process.env.SB_KEY || process.env.NEXT_PUBLIC_SB_KEY || '';
+const SB_KEY = process.env.SB_KEY || '';
 
 // Tables that only a super_admin may WRITE to (POST/PATCH/DELETE).
 // Reads (GET) are allowed for any logged-in user.
