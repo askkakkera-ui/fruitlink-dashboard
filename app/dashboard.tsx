@@ -956,7 +956,7 @@ function OrdersPage() {
         <div>
           {/* Order list filter tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: '1px solid ' + C.border }}>
-            {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered']].map(([f, label]) => (
+            {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered'], ['refunded','Refunded']].map(([f, label]) => (
               <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === f ? C.orange : 'transparent', color: filter === f ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>{label}</button>
             ))}
           </div>
