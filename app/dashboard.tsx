@@ -2435,7 +2435,6 @@ function CooldownsSection({ showSaved }: any) {
   return (
     <div>
       <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Alert Cooldowns</div>
-      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>How long to wait before re-firing the same alert. Configured in alert.js on VPS.</div>
       <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -2460,9 +2459,6 @@ function CooldownsSection({ showSaved }: any) {
             ))}
           </tbody>
         </table>
-      </div>
-      <div style={{ marginTop: 14, padding: '12px 16px', background: C.surface2, borderRadius: 10, border: '1px solid ' + C.border, fontSize: 12, color: C.text3 }}>
-        To change cooldowns, edit <code style={{ fontFamily: 'monospace', background: C.border, padding: '1px 6px', borderRadius: 4 }}>/root/fruitlink/machine-api/alert.js</code> on the VPS and restart PM2.
       </div>
     </div>
   )
