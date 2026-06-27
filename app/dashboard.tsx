@@ -2093,7 +2093,7 @@ function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
         </div>
       )}
 
-      {assignOp && <AssignMachinesModal op={assignOp} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} onClose={() => setAssignOp(null)} />}
+      {assignOp && <AssignMachinesModal op={assignOp} onClose={() => setAssignOp(null)} />}
 
       {delOp && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
