@@ -1025,9 +1025,11 @@ function MachinesPage({ machines, loading, fetchData }: any) {
   const [editM, setEditM] = useState<any>(null)   // machine being edited, or null
   const [eName, setEName] = useState('')
   const [eLoc, setELoc] = useState('')
+  const [eLat, setELat] = useState('')
+  const [eLng, setELng] = useState('')
   const [eSaving, setESaving] = useState(false)
   const [eErr, setEErr] = useState('')
-  const openEdit = (m: any) => { setEditM(m); setEName(m.display_name || ''); setELoc(m.location || ''); setEErr('') }
+  const openEdit = (m: any) => { setEditM(m); setEName(m.display_name || ''); setELoc(m.location || ''); setELat(m.location_lat != null ? String(m.location_lat) : ''); setELng(m.location_lng != null ? String(m.location_lng) : ''); setEErr('') }
   const closeEdit = () => { setEditM(null); setEErr(''); setESaving(false) }
   const saveEdit = async () => {
     if (!editM) return
@@ -1037,7 +1039,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
       const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?sn=eq.' + editM.sn), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ display_name: eName.trim(), location: eLoc.trim() })
+        body: JSON.stringify({ display_name: eName.trim(), location: eLoc.trim(), location_lat: eLat.trim() === '' ? null : Number(eLat), location_lng: eLng.trim() === '' ? null : Number(eLng) })
       })
       if (!res.ok) { const t = await res.text().catch(() => ''); setEErr('Save failed: ' + (t || res.status)); setESaving(false); return }
       closeEdit()
@@ -1140,8 +1142,21 @@ function MachinesPage({ machines, loading, fetchData }: any) {
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 6 }}>Location</label>
               <input value={eLoc} onChange={e => setELoc(e.target.value)} placeholder="e.g. SR Nagar, Ameerpet"
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
-              <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>Note: the Fleet Map pin is positioned by serial number and will not move when location text changes.</div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>This is the address label shown on the dashboard.</div>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 6 }}>Latitude</label>
+                <input value={eLat} onChange={e => setELat(e.target.value)} placeholder="17.45437"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 6 }}>Longitude</label>
+                <input value={eLng} onChange={e => setELng(e.target.value)} placeholder="78.36594"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 14, boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: C.text3, marginBottom: 14, marginTop: -8 }}>Right-click the spot in Google Maps → click the numbers to copy. First is Latitude, second is Longitude. Leave blank to keep the default map position.</div>
             {eErr && <div style={{ fontSize: 13, color: C.red, marginBottom: 12 }}>{eErr}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={closeEdit} disabled={eSaving} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 9, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
@@ -1157,8 +1172,10 @@ function MachinesPage({ machines, loading, fetchData }: any) {
 function FleetMapPage({ machines }: { machines: any[] }) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [scriptLoaded, setScriptLoaded] = useState(false)
+  // Coordinates pulled straight from Supabase by serial number (no VPS dependency).
+  const [dbCoords, setDbCoords] = useState<Record<string, {lat: number, lng: number}>>({})
   const MB = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'NEXT_PUBLIC_MAPBOX_TOKEN_HERE'
-  // Machine coords by SN (most reliable) then by location string
+  // Hardcoded fallback coords by SN, then by location string
   const MACHINE_COORDS: Record<string, {lat: number, lng: number}> = {
     'C3B31F38D1C07A76': { lat: 17.45437171063268, lng: 78.36593749556503 }, // Fruitful-2 HITEC City, Kondapur exact
     '9E3D050CEF2EEC7B': { lat: 17.4702, lng: 78.5607 }, // Fruitful-1 ECIL
@@ -1171,7 +1188,24 @@ function FleetMapPage({ machines }: { machines: any[] }) {
     'ECIL': { lat: 17.4702, lng: 78.5607 },
     'Cheeriyal': { lat: 17.4702, lng: 78.5607 },
   }
+  // Load saved lat/lng for every machine directly from Supabase (via the working /api/sb proxy)
+  useEffect(() => {
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=sn,location_lat,location_lng'))
+      .then(r => r.json())
+      .then(d => {
+        if (!Array.isArray(d)) return
+        const map: Record<string, {lat: number, lng: number}> = {}
+        d.forEach((row: any) => {
+          if (row && row.sn && row.location_lat != null && row.location_lng != null) {
+            map[row.sn] = { lat: Number(row.location_lat), lng: Number(row.location_lng) }
+          }
+        })
+        setDbCoords(map)
+      })
+      .catch(() => {})
+  }, [])
   const getCoords = (m: any) => {
+    if (dbCoords[m.sn]) return dbCoords[m.sn]
     if (MACHINE_COORDS[m.sn]) return MACHINE_COORDS[m.sn]
     if (m.location) {
       if (COORDS[m.location]) return COORDS[m.location]
@@ -1207,7 +1241,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
     })
     map.addControl(new mgl.NavigationControl(), 'bottom-right')
     return () => map.remove()
-  }, [scriptLoaded, machines])
+  }, [scriptLoaded, machines, dbCoords])
   const fmtTime = (t: string) => { if (!t) return '--'; const mins = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (mins < 60) return mins + 'm ago'; if (mins < 1440) return Math.floor(mins/60) + 'h ago'; return Math.floor(mins/1440) + 'd ago' }
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -1262,6 +1296,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
     </div>
   )
 }
+
 
 
 
