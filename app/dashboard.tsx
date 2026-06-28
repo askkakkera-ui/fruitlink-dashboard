@@ -2707,6 +2707,14 @@ export default function Dashboard() {
             gap: 12px !important;
           }
           table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+
+          /* Operators & data tables: stack each row as a card on phones */
+          table.fl-stack { white-space: normal; }
+          table.fl-stack thead { display: none; }
+          table.fl-stack tr { display: block; margin-bottom: 12px; border: 1px solid ${C.border}; border-radius: 12px; overflow: hidden; }
+          table.fl-stack td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px !important; border-bottom: 1px solid ${C.border}; }
+          table.fl-stack td:last-child { border-bottom: none; }
+        }
         }
       `}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' }}>
