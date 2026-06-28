@@ -2012,7 +2012,7 @@ function OperatorsPage({ myId }: any) {
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading...</div>
       ) : (
         <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
                 {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
