@@ -112,6 +112,7 @@ const NAV_ITEMS = [
   { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
   { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
+  { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
@@ -1853,6 +1854,101 @@ function LoyaltyPage() {
   )
 }
 
+// ─── Comm Log (super admin only) ─────────────────────────────────
+function CommLogPage({ machines }: any) {
+  const [sn, setSn] = useState('')
+  const [log, setLog] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+  const [fetchedAt, setFetchedAt] = useState('')
+
+  useEffect(() => {
+    if (!sn && machines && machines.length > 0) setSn(machines[0].sn)
+  }, [machines])
+
+  const loadLog = async (forSn: string) => {
+    if (!forSn) return
+    setLoading(true); setErr(''); setLog('')
+    try {
+      const res = await fetch('/api/sb?path=' + encodeURIComponent('/storage/v1/object/commlogs/' + forSn + '.txt'))
+      if (res.status === 403) { setErr('Access restricted to Super Admins.'); setLoading(false); return }
+      if (res.status === 404 || res.status === 400) { setErr('No comm log found for this machine yet. (The machine app has not uploaded one.)'); setLoading(false); return }
+      if (!res.ok) { setErr('Could not load log (status ' + res.status + ').'); setLoading(false); return }
+      const text = await res.text()
+      if (!text || text.trim() === '' || text.trim().startsWith('{"error"')) {
+        setErr('No comm log found for this machine yet.')
+      } else {
+        setLog(text)
+        setFetchedAt(new Date().toLocaleString('en-IN', { hour12: true }))
+      }
+    } catch (e: any) {
+      setErr('Error: ' + e.message)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { if (sn) loadLog(sn) }, [sn])
+
+  const download = () => {
+    const blob = new Blob([log], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = (sn || 'machine') + '_commlog.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const selected = machines?.find((m: any) => m.sn === sn)
+  const lineCount = log ? log.split('\n').length : 0
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Comm Log</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Serial communication log pulled from the machine{selected ? ' — ' + (selected.display_name || selected.sn) : ''}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={sn} onChange={e => setSn(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, background: C.surface, color: C.text, cursor: 'pointer', minWidth: 180 }}>
+            {(!machines || machines.length === 0) && <option value="">No machines</option>}
+            {machines && machines.map((m: any) => (
+              <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>
+            ))}
+          </select>
+          <button onClick={() => loadLog(sn)} disabled={loading || !sn}
+            style={{ padding: '9px 16px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13, opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Loading…' : '↻ Refresh'}
+          </button>
+          <button onClick={download} disabled={!log}
+            style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: log ? C.text2 : C.text3, fontWeight: 600, cursor: log ? 'pointer' : 'not-allowed', fontSize: 13 }}>
+            ⬇ Download
+          </button>
+        </div>
+      </div>
+
+      {sn && (
+        <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 12, color: C.text3, flexWrap: 'wrap' }}>
+          <span><b style={{ color: C.text2 }}>SN:</b> <span style={{ fontFamily: 'monospace' }}>{sn}</span></span>
+          {log && <span><b style={{ color: C.text2 }}>Lines:</b> {lineCount.toLocaleString('en-IN')}</span>}
+          {fetchedAt && <span><b style={{ color: C.text2 }}>Fetched:</b> {fetchedAt}</span>}
+        </div>
+      )}
+
+      {err ? (
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 14 }}>{err}</div>
+      ) : loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading comm log…</div>
+      ) : log ? (
+        <div style={{ background: '#0d1117', borderRadius: 14, border: '1px solid ' + C.border2, overflow: 'hidden' }}>
+          <pre style={{ margin: 0, padding: '18px 20px', maxHeight: '70vh', overflow: 'auto', fontSize: 12.5, lineHeight: 1.55, color: '#c9d1d9', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', whiteSpace: 'pre', WebkitOverflowScrolling: 'touch' }}>{log}</pre>
+        </div>
+      ) : (
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 14 }}>Select a machine to view its comm log.</div>
+      )}
+    </div>
+  )
+}
 function ComingSoon({ label }: { label: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
