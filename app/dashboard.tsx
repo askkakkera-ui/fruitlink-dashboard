@@ -2723,7 +2723,7 @@ export default function Dashboard() {
           position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 1100,
           transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
-        } : {}}>
+        } : { height: '100%' }}>
           <Sidebar active={active} setActive={(k: string) => { setActive(k); setMenuOpen(false) }} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
         </div>
         {/* Dark overlay behind the drawer on mobile */}
