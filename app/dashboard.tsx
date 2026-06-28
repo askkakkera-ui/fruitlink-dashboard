@@ -1908,7 +1908,7 @@ function AssignMachinesModal({ op, onClose }: any) {
   )
 }
 
-function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
+function OperatorsPage({ myId }: any) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -1918,35 +1918,34 @@ function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const headers = { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey, 'Content-Type': 'application/json' }
-
+  const J = { 'Content-Type': 'application/json' }
   const fetchOperators = async () => {
     setLoading(true)
-    const res = await fetch(supabaseUrl + '/rest/v1/operators?select=id,name,email,role,state,country,created_at&order=created_at.desc', { headers: { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey } })
+    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,created_at&order=created_at.desc'))
     const data = await res.json()
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
   useEffect(() => { fetchOperators() }, [])
-
   const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' }); setEditOp(null); setShowAdd(true); setMsg('') }
   const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India' }); setEditOp(op); setShowAdd(true); setMsg('') }
-
   const saveOperator = async () => {
     setSaving(true); setMsg('')
     try {
       if (editOp) {
         const body: any = { name: form.name, role: form.role, state: form.state, country: form.country }
         if (form.password) {
-          const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: form.password }) })
+          const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
         }
-        await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + editOp.id, { method: 'PATCH', headers, body: JSON.stringify(body) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + editOp.id), { method: 'PATCH', headers: J, body: JSON.stringify(body) })
+        if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Updated')
       } else {
-        const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: form.password }) })
+        const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
-        await fetch(supabaseUrl + '/rest/v1/operators', { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country }) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country }) })
+        if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Added')
       }
       await fetchOperators()
@@ -1954,7 +1953,6 @@ function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
     } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
   }
-
   const deleteOperator = async () => {
     if (!delOp) return
     // Guard: never allow deleting yourself, or the last remaining super admin
@@ -1962,7 +1960,8 @@ function OperatorsPage({ supabaseUrl, supabaseKey, myId }: any) {
     if (delOp.role === 'super_admin' && operators.filter(o => o.role === 'super_admin').length <= 1) {
       setMsg('Cannot delete the last Super Admin — at least one must remain.'); return
     }
-    await fetch(supabaseUrl + '/rest/v1/operators?id=eq.' + delOp.id, { method: 'DELETE', headers })
+    const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + delOp.id), { method: 'DELETE', headers: J })
+    if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Delete failed: ' + (t || r.status)); return }
     setDelOp(null); fetchOperators()
   }
 
@@ -2663,7 +2662,7 @@ export default function Dashboard() {
     console: <ConsolePage machines={machines} alerts={alerts} loading={loading} />,
     alerts: <AlertsPage machines={machines} alerts={alerts} loading={loading} fetchAlerts={fetchData} />,
     operators: role === 'super_admin'
-      ? <OperatorsPage supabaseUrl={SB_URL} supabaseKey={SB_KEY} myId={operatorId} />
+      ? <OperatorsPage myId={operatorId} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     ads: <AdsPage machines={machines} />,
     loyalty: <LoyaltyPage />,
