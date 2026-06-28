@@ -1233,6 +1233,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
     const mgl = (window as any).mapboxgl
     mgl.accessToken = MB
     const map = new mgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.44438079543997, 17.442822793310572], zoom: 10.5 })
+    const esc = (s: any) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
     machines.forEach((m: any) => {
       const co = getCoords(m); if (!co) return
       const online = m.status === 'online'
