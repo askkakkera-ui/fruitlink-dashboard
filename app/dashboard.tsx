@@ -2775,6 +2775,9 @@ export default function Dashboard() {
     operators: role === 'super_admin'
       ? <OperatorsPage myId={operatorId} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    commlog: role === 'super_admin'
+      ? <CommLogPage machines={machines} />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     ads: <AdsPage machines={machines} />,
     loyalty: <LoyaltyPage />,
     settings: <SettingsPage />,
