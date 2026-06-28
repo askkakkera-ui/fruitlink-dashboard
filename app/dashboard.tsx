@@ -2697,15 +2697,14 @@ export default function Dashboard() {
         ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
         @keyframes fl-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 
-        /* ── Mobile responsive (phones, < 768px) ── */
+/* ── Mobile responsive (phones, < 768px) ── */
         @media (max-width: 768px) {
-          [style*="repeat(3,1fr)"],
-          [style*="repeat(4,1fr)"] {
+          [style*="repeat(2,1fr)"], [style*="repeat(2, 1fr)"],
+          [style*="repeat(3,1fr)"], [style*="repeat(3, 1fr)"],
+          [style*="repeat(4,1fr)"], [style*="repeat(4, 1fr)"],
+          [style*="1fr 1fr"] {
             grid-template-columns: 1fr !important;
-          }
-          [style*="grid-template-columns: 1fr 1fr"],
-          [style*="gridTemplateColumns: '1fr 1fr'"] {
-            grid-template-columns: 1fr !important;
+            gap: 12px !important;
           }
           table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
         }
