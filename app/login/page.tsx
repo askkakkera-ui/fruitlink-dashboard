@@ -1,12 +1,23 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
 const MACHINE = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/machine.jpg';
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 860);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   async function handleLogin() {
     setLoading(true);
     setError('');
@@ -34,8 +45,11 @@ export default function Login() {
       setLoading(false);
     }
   }
+
   return (
     <div style={{display:'flex',minHeight:'100vh',fontFamily:'sans-serif'}}>
+      {/* Left promo panel — hidden on mobile */}
+      {!isMobile && (
       <div style={{flex:1,background:'linear-gradient(135deg,#E8650A 0%,#BF4F00 100%)',display:'flex',flexDirection:'column',justifyContent:'space-between',padding:'3rem',position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',top:'-80px',left:'-80px',width:'400px',height:'400px',borderRadius:'50%',border:'50px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'absolute',bottom:'-60px',left:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
@@ -64,10 +78,12 @@ export default function Login() {
           </div>
         </div>
       </div>
-      <div style={{width:'420px',background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'3rem 2.5rem'}}>
-        <div style={{width:'100%',maxWidth:'340px'}}>
+      )}
+      {/* Right form panel — full width on mobile, fixed 420 on desktop */}
+      <div style={{width:isMobile?'100%':'420px',flexShrink:0,background:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:isMobile?'2rem 1.25rem':'3rem 2.5rem'}}>
+        <div style={{width:'100%',maxWidth:'360px'}}>
           <div style={{textAlign:'center',marginBottom:'2rem'}}>
-            <img src={LOGO} alt="Fruitlink" style={{width:'240px',objectFit:'contain',marginBottom:'0.5rem'}}/>
+            <img src={LOGO} alt="Fruitlink" style={{width:'100%',maxWidth:'240px',objectFit:'contain',marginBottom:'0.5rem'}}/>
             <div style={{fontSize:'20px',fontWeight:600,color:'#D45A00'}}>Welcome back</div>
             <div style={{fontSize:'13px',color:'#999',marginTop:'4px'}}>Sign in to your operator account</div>
           </div>
@@ -87,7 +103,7 @@ export default function Login() {
             <label style={{fontSize:'12px',color:'#888',display:'block',marginBottom:'6px'}}>Password</label>
             <input
               type="password"
-              placeholder="••••••••"
+              placeholder="********"
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
@@ -109,7 +125,7 @@ export default function Login() {
             <a href="/register" style={{fontSize:'12px',color:'#F5820D',textDecoration:'none'}}>Create account</a>
           </div>
           <div style={{borderTop:'1px solid #F0F0F0',marginTop:'1.5rem',paddingTop:'1rem',textAlign:'center'}}>
-            <div style={{fontSize:'11px',color:'#CCC'}}>Fruitlink Technologies Pvt Ltd · Hyderabad</div>
+            <div style={{fontSize:'11px',color:'#CCC'}}>Fruitlink Technologies Pvt Ltd &middot; Hyderabad</div>
           </div>
         </div>
       </div>
