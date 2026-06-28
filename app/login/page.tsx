@@ -54,7 +54,7 @@ export default function Login() {
         <div style={{position:'absolute',top:'-80px',left:'-80px',width:'400px',height:'400px',borderRadius:'50%',border:'50px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'absolute',bottom:'-60px',left:'-60px',width:'300px',height:'300px',borderRadius:'50%',border:'40px solid rgba(255,255,255,0.06)'}}/>
         <div style={{position:'relative',zIndex:2}}>
-          <div style={{display:'inline-block',background:'rgba(255,255,255,0.15)',borderRadius:'16px',padding:'10px 16px',backdropFilter:'blur(4px)'}}>
+          <div style={{display:'inline-block',background:'rgba(255,255,255,0.95)',borderRadius:'16px',padding:'14px 20px',boxShadow:'0 4px 16px rgba(0,0,0,0.12)'}}>
             <img src={LOGO} alt="Fruitlink" style={{width:'200px',objectFit:'contain',display:'block'}}/>
           </div>
         </div>
