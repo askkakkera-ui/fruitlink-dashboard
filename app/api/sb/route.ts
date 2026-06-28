@@ -41,7 +41,17 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+    const path = pathParam(request);
+    // Storage (comm logs) and other non-REST paths return raw text, not JSON.
+    // Comm logs are super-admin only.
+    if (path.startsWith('/storage/')) {
+      if (session.role !== 'super_admin') {
+        return NextResponse.json({ error: 'Forbidden: super admin only' }, { status: 403 });
+      }
+      const res = await fetch(SB_URL + path, { headers: sbHeaders() });
+      const text = await res.text();
+      return new NextResponse(text, { status: res.status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
     const url = buildUrl(request);
     const res = await fetch(url, { headers: sbHeaders() });
     const data = await res.json();
