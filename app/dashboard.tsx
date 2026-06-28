@@ -131,6 +131,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
     <div style={{
       width: 230, flexShrink: 0, background: C.sidebar,
       display: 'flex', flexDirection: 'column',
+      height: '100vh',
       boxShadow: '2px 0 12px #00000018',
     }}>
       {/* Logo */}
