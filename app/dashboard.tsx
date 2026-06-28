@@ -53,6 +53,17 @@ function getCookie(name: string): string {
   return match ? match[2] : ''
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  return isMobile
+}
+
 // ─── Tiny Components ─────────────────────────────────────────────
 function Dot({ color, pulse = false, size = 7 }: { color: string; pulse?: boolean; size?: number }) {
   return (
@@ -2594,6 +2605,8 @@ export default function Dashboard() {
   const [machines, setMachines] = useState<any[]>([])
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const isMobile = useIsMobile()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const [role, setRole] = useState('operator')
   const [name, setName] = useState('Admin')
@@ -2697,10 +2710,26 @@ export default function Dashboard() {
           table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
         }
       `}</style>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar active={active} setActive={setActive} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <TopBar active={active} />
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+        {/* Sidebar: fixed drawer on mobile, normal column on desktop */}
+        <div style={isMobile ? {
+          position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 1100,
+          transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s ease',
+        } : {}}>
+          <Sidebar active={active} setActive={(k: string) => { setActive(k); setMenuOpen(false) }} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
+        </div>
+        {/* Dark overlay behind the drawer on mobile */}
+        {isMobile && menuOpen && (
+          <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1050 }} />
+        )}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isMobile && (
+              <button onClick={() => setMenuOpen(true)} style={{ background: C.topbar, color: '#fff', border: 'none', height: 52, width: 50, fontSize: 22, cursor: 'pointer', flexShrink: 0 }}>☰</button>
+            )}
+            <div style={{ flex: 1 }}><TopBar active={active} /></div>
+          </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {pages[active] || <ComingSoon label={active} />}
           </div>
