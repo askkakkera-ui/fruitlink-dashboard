@@ -132,7 +132,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
     <div style={{
       width: 230, flexShrink: 0, background: C.sidebar,
       display: 'flex', flexDirection: 'column',
-      height: '100vh',
+      height: '100%', minHeight: 0,
       boxShadow: '2px 0 12px #00000018',
     }}>
       {/* Logo */}
@@ -3032,7 +3032,7 @@ export default function Dashboard() {
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' }}>
         {/* Sidebar: fixed drawer on mobile, normal column on desktop */}
         <div style={isMobile ? {
-          position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 1100,
+          position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 1100, height: '100vh',
           transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
         } : { height: '100%' }}>
