@@ -460,6 +460,31 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     const d = Math.floor(h / 24), hh = h % 24
     return hh ? d + 'd ' + hh + 'h' : d + 'd'
   }
+  // Effective start of an alert. For offline alerts, back-date to the last heartbeat
+  // (created_at minus the gap stated in the message) so the duration shows TRUE downtime,
+  // not just how long the alert row was open (which omits the 15-min detection delay).
+  const alertStartMs = (a: any) => {
+    if (a.alert_type === 'machine_offline') {
+      const mm = /(\d+)\s*minutes/.exec(a.message || '')
+      if (mm) return new Date(a.created_at).getTime() - parseInt(mm[1], 10) * 60000
+    }
+    return new Date(a.created_at).getTime()
+  }
+  const fmtDurationMs = (startMs: number, endMs: number) => {
+    let mins = Math.round((endMs - startMs) / 60000)
+    if (mins < 1) mins = 1
+    if (mins < 60) return mins + ' min'
+    const h = Math.floor(mins / 60), mm = mins % 60
+    if (h < 24) return mm ? h + 'h ' + mm + 'm' : h + 'h'
+    const d = Math.floor(h / 24), hh = h % 24
+    return hh ? d + 'd ' + hh + 'h' : d + 'd'
+  }
+  const openText = (a: any) => {
+    const offline = a.alert_type === 'machine_offline'
+    const verb = a.resolved_at ? (offline ? 'was offline' : 'was open') : (offline ? 'offline' : 'open')
+    const endMs = a.resolved_at ? new Date(a.resolved_at).getTime() : Date.now()
+    return verb + ' ' + fmtDurationMs(alertStartMs(a), endMs)
+  }
   const counts: any = {
     CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
     HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
@@ -582,16 +607,16 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                                 <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
                               )}
                             </td>
-                            <td style={{ padding: '12px 16px' }}>
+                           <td style={{ padding: '12px 16px' }}>
                               {!a.resolved_at ? (
                                 <>
                                   <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
-                                  <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>open {fmtDuration(a.created_at)}</div>
+                                  <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{openText(a)}</div>
                                 </>
                               ) : (
                                 <>
                                   <Pill color={C.green} bg={C.greenBg}>✓ Resolved</Pill>
-                                  <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>was open {fmtDuration(a.created_at, a.resolved_at)}</div>
+                                  <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{openText(a)}</div>
                                 </>
                               )}
                             </td>
