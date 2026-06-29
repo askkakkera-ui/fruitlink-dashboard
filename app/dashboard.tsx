@@ -2266,7 +2266,7 @@ function MachineConfigSection({ role, SB_URL, SB_KEY, showSaved, showErr, saving
     try {
       const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' }
       const hg = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
-      for (const m of machines) {
+        await Promise.all(machines.map(async (m: any) => {
         // Merge pricing/volume into existing machine_config so thresholds & notifications survive
         const cur = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id + '&select=state'), { headers: hg }).then(r => r.json()).then(d => Array.isArray(d) && d[0] ? d[0] : {})
         let st: any = {}; try { st = typeof cur.state === 'string' ? JSON.parse(cur.state || '{}') : (cur.state || {}) } catch (e) {}
@@ -2274,7 +2274,7 @@ function MachineConfigSection({ role, SB_URL, SB_KEY, showSaved, showErr, saving
         const incoming = config[m.id] || {}
         st.machine_config = { ...mc, ...incoming }
         await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id), { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify(st) }) })
-      }
+      }))
       showSaved()
     } catch { showErr('Save failed') }
     setSaving(false)
@@ -2376,7 +2376,7 @@ function ThresholdsSection({ role, SB_URL, SB_KEY, showSaved, showErr, saving, s
     setSaving(true)
     try {
       const h = { ...headers, Prefer: 'return=minimal' }
-      for (const m of machines) {
+      await Promise.all(machines.map(async (m: any) => {
         // Merge thresholds into existing machine_config without wiping other keys
         const cur = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id + '&select=state'), { headers }).then(r => r.json()).then(d => Array.isArray(d) && d[0] ? d[0] : {})
         let st: any = {}; try { st = typeof cur.state === 'string' ? JSON.parse(cur.state || '{}') : (cur.state || {}) } catch (e) {}
@@ -2384,7 +2384,7 @@ function ThresholdsSection({ role, SB_URL, SB_KEY, showSaved, showErr, saving, s
         mc.thresholds = thresholds[m.id] || {}
         st.machine_config = mc
         await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id), { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify(st) }) })
-      }
+      }))
       showSaved()
     } catch { showErr('Save failed') }
     setSaving(false)
@@ -2738,19 +2738,19 @@ export default function Dashboard() {
       return st.hidden !== true
     }) : []
 
-    // Fetch latest telemetry per machine from VPS API
-    const enriched: any[] = []
-    if (Array.isArray(mData)) {
-      for (const m of mData) {
+    // Fetch latest telemetry per machine from VPS API — in parallel (scales to ~100 machines)
+    let enriched: any[] = mData
+    if (Array.isArray(mData) && mData.length > 0) {
+      enriched = await Promise.all(mData.map(async (m: any) => {
         try {
           const tRes = await fetch('/api/telemetry?sn=' + m.sn)
           const tJson = await tRes.json()
           const tel = tJson.success && tJson.data ? tJson.data : {}
-          enriched.push({ ...m, ...tel, telemetry_id: tel.id })
+          return { ...m, ...tel, telemetry_id: tel.id }
         } catch {
-          enriched.push(m)
+          return m
         }
-      }
+      }))
     }
 
         setMachines(enriched)
