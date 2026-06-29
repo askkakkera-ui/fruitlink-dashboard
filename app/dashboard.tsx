@@ -2520,56 +2520,122 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
   )
 }
 
-function CooldownsSection({ showSaved }: any) {
-  const COOLDOWNS = [
-    { type: 'machine_offline', label: 'Machine Offline', hours: 1, severity: 'CRITICAL' },
-    { type: 'temperature_high', label: 'High Temperature', hours: 1, severity: 'CRITICAL' },
-    { type: 'temperature_low', label: 'Low Temperature', hours: 2, severity: 'HIGH' },
-    { type: 'temperature_stop', label: 'Temp Stop Selling', hours: 1, severity: 'CRITICAL' },
-    { type: 'stock_empty_l1', label: 'Layer 1 Empty', hours: 4, severity: 'HIGH' },
-    { type: 'stock_empty_l2', label: 'Layer 2 Empty', hours: 4, severity: 'HIGH' },
-    { type: 'stock_empty_l3', label: 'Layer 3 Empty', hours: 4, severity: 'HIGH' },
-    { type: 'stock_low_l1', label: 'Layer 1 Low', hours: 6, severity: 'MEDIUM' },
-    { type: 'stock_low_l2', label: 'Layer 2 Low', hours: 6, severity: 'MEDIUM' },
-    { type: 'stock_low_l3', label: 'Layer 3 Low', hours: 6, severity: 'MEDIUM' },
-    { type: 'door_open', label: 'Door Open', hours: 1, severity: 'HIGH' },
-    { type: 'vend_failure', label: 'Vend Failure', hours: 0.5, severity: 'HIGH' },
-    { type: 'cup_empty', label: 'Cups Empty', hours: 2, severity: 'HIGH' },
-    { type: 'film_empty', label: 'Film Empty', hours: 2, severity: 'HIGH' },
-    { type: 'waste_bin_full', label: 'Waste Bin Full', hours: 4, severity: 'HIGH' },
-    { type: 'power_loss', label: 'Power Loss', hours: 0.5, severity: 'CRITICAL' },
-    { type: 'unusual_access', label: 'Unusual Cabinet Access', hours: 1, severity: 'HIGH' },
+function CooldownsSection({ role, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const canEdit = role === 'super_admin'
+  // The 17 standard alert types + their default cooldown hours and severity.
+  const DEFAULTS: { type: string, label: string, severity: string, hours: number }[] = [
+    { type: 'machine_offline', label: 'Machine Offline', severity: 'CRITICAL', hours: 1 },
+    { type: 'temperature_high', label: 'High Temperature', severity: 'CRITICAL', hours: 1 },
+    { type: 'temperature_low', label: 'Low Temperature', severity: 'HIGH', hours: 2 },
+    { type: 'temperature_stop', label: 'Temp Stop Selling', severity: 'CRITICAL', hours: 1 },
+    { type: 'stock_empty_l1', label: 'Layer 1 Empty', severity: 'HIGH', hours: 4 },
+    { type: 'stock_empty_l2', label: 'Layer 2 Empty', severity: 'HIGH', hours: 4 },
+    { type: 'stock_empty_l3', label: 'Layer 3 Empty', severity: 'HIGH', hours: 4 },
+    { type: 'stock_low_l1', label: 'Layer 1 Low', severity: 'MEDIUM', hours: 6 },
+    { type: 'stock_low_l2', label: 'Layer 2 Low', severity: 'MEDIUM', hours: 6 },
+    { type: 'stock_low_l3', label: 'Layer 3 Low', severity: 'MEDIUM', hours: 6 },
+    { type: 'door_open', label: 'Door Open', severity: 'HIGH', hours: 1 },
+    { type: 'vend_failure', label: 'Vend Failure', severity: 'HIGH', hours: 0.5 },
+    { type: 'cup_empty', label: 'Cups Empty', severity: 'HIGH', hours: 2 },
+    { type: 'film_empty', label: 'Film Empty', severity: 'HIGH', hours: 2 },
+    { type: 'waste_bin_full', label: 'Waste Bin Full', severity: 'HIGH', hours: 4 },
+    { type: 'power_loss', label: 'Power Loss', severity: 'CRITICAL', hours: 0.5 },
+    { type: 'unusual_access', label: 'Unusual Cabinet Access', severity: 'HIGH', hours: 1 },
   ]
   const SEV_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue }
   const SEV_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg }
+  const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+
+  const [machines, setMachines] = useState<any[]>([])
+  const [cooldowns, setCooldowns] = useState<Record<string, any>>({})
+  const [openM, setOpenM] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,state'))
+      .then(r => r.json()).then(d => {
+        if (Array.isArray(d)) {
+          const visible = d.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true })
+          setMachines(visible)
+          const c: Record<string, any> = {}
+          visible.forEach((m: any) => {
+            let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {}
+            const saved = (st.machine_config && st.machine_config.cooldowns) || {}
+            const row: Record<string, number> = {}
+            DEFAULTS.forEach(d => { row[d.type] = Number.isFinite(saved[d.type]) ? saved[d.type] : d.hours })
+            c[m.id] = row
+          })
+          setCooldowns(c)
+        }
+      })
+  }, [])
+
+  const save = async () => {
+    if (!canEdit) return
+    setSaving(true)
+    try {
+      const h = { ...headers, Prefer: 'return=minimal' }
+      await Promise.all(machines.map(async (m: any) => {
+        const cur = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id + '&select=state'), { headers }).then(r => r.json()).then(d => Array.isArray(d) && d[0] ? d[0] : {})
+        let st: any = {}; try { st = typeof cur.state === 'string' ? JSON.parse(cur.state || '{}') : (cur.state || {}) } catch (e) {}
+        const mc = st.machine_config || {}
+        mc.cooldowns = cooldowns[m.id] || {}
+        st.machine_config = mc
+        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id), { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify(st) }) })
+      }))
+      showSaved()
+    } catch { showErr('Save failed') }
+    setSaving(false)
+  }
+
+  const setVal = (mid: string, type: string, v: number) => setCooldowns(prev => ({ ...prev, [mid]: { ...prev[mid], [type]: v } }))
+  const resetMachine = (mid: string) => { const row: Record<string, number> = {}; DEFAULTS.forEach(d => row[d.type] = d.hours); setCooldowns(prev => ({ ...prev, [mid]: row })) }
+
   return (
     <div>
       <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Alert Cooldowns</div>
-      <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
-              {['Alert Type', 'Severity', 'Cooldown'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.text3, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {COOLDOWNS.map((c, i) => (
-              <tr key={c.type} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? C.surface : C.surface2 }}>
-                <td style={{ padding: '10px 16px' }}>
-                  <div style={{ fontWeight: 600, color: C.text }}>{c.label}</div>
-                  <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace' }}>{c.type}</div>
-                </td>
-                <td style={{ padding: '10px 16px' }}>
-                  <span style={{ background: SEV_BG[c.severity], color: SEV_COLOR[c.severity], padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{c.severity}</span>
-                </td>
-                <td style={{ padding: '10px 16px', fontWeight: 600, color: C.text }}>{c.hours}h</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>How long before the same alert can fire again, per machine{!canEdit && ' · view only'}. Lower = more frequent reminders; higher = less spam.</div>
+      {!canEdit && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: C.blueBg, border: '1px solid ' + C.blue + '40', borderRadius: 10, fontSize: 12.5, color: C.text2, marginBottom: 16 }}>
+          🔒 Cooldowns are managed by the Super Admin. You can view them but not change them.
+        </div>
+      )}
+      {machines.map(m => {
+        const isOpen = openM[m.id] === true
+        return (
+          <div key={m.id} style={{ marginBottom: 14, background: C.surface, borderRadius: 12, border: '1px solid ' + C.border, overflow: 'hidden' }}>
+            <div onClick={() => setOpenM(prev => ({ ...prev, [m.id]: !isOpen }))}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', cursor: 'pointer', background: C.surface2, userSelect: 'none' as const, borderBottom: isOpen ? '1px solid ' + C.border : 'none' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                <div style={{ fontSize: 11, color: C.text3, fontFamily: 'monospace', marginTop: 1 }}>{m.sn}</div>
+              </div>
+              {canEdit && isOpen && <button onClick={(e) => { e.stopPropagation(); resetMachine(m.id) }} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>↺ Reset to defaults</button>}
+              <span style={{ fontSize: 16, color: C.text3, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▾</span>
+            </div>
+            {isOpen && (
+              <div style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
+                  {DEFAULTS.map(d => (
+                    <div key={d.type} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: C.surface2, borderRadius: 9, border: '1px solid ' + C.border }}>
+                      <span style={{ background: SEV_BG[d.severity], color: SEV_COLOR[d.severity], padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{d.severity}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{d.label}</div>
+                        <div style={{ fontSize: 10.5, color: C.text3, fontFamily: 'monospace' }}>{d.type}</div>
+                      </div>
+                      <input type="number" step="0.5" min="0" value={cooldowns[m.id]?.[d.type] ?? d.hours} disabled={!canEdit}
+                        onChange={e => setVal(m.id, d.type, parseFloat(e.target.value))}
+                        style={{ width: 64, padding: '6px 8px', borderRadius: 7, border: '1px solid ' + C.border, fontSize: 13, textAlign: 'right', color: C.text, background: canEdit ? C.surface : C.surface2, cursor: canEdit ? 'text' : 'not-allowed' }} />
+                      <span style={{ fontSize: 12, color: C.text3, flexShrink: 0 }}>h</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {canEdit && <button onClick={save} disabled={saving} style={{ marginTop: 6, padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Cooldowns'}</button>}
+      <div style={{ marginTop: 10, fontSize: 11, color: C.text3 }}>Changes apply on the next alert cycle (~2 min). Cooldown = minimum gap before the same alert repeats for that machine.</div>
     </div>
   )
 }
@@ -2611,7 +2677,7 @@ function SettingsPage() {
       {active === 'machine_config' && <MachineConfigSection role={role} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
       {active === 'thresholds' && <ThresholdsSection role={role} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
       {active === 'notifications' && <NotificationsSection role={role} operatorId={operatorId} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
-      {active === 'cooldowns' && <CooldownsSection showSaved={showSaved} />}
+      {active === 'cooldowns' && <CooldownsSection role={role} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
       {active === 'billing' && <BillingSection role={role} />}
       {active === 'danger' && role === 'super_admin' && (
         <div>
