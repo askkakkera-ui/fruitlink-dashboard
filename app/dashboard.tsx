@@ -541,7 +541,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
       y = drawHeader(y); doc.setFontSize(7)
       rows.forEach((a: any) => {
         const m = getMachine(a.machine_id)
-        const opened = a.created_at ? new Date(a.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+        const opened = a.created_at ? new Date(alertStartMs(a)).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
         const closed = a.resolved_at ? new Date(a.resolved_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'active'
         const dur = fmtDurationMs(alertStartMs(a), a.resolved_at ? new Date(a.resolved_at).getTime() : Date.now())
         doc.setTextColor(40, 40, 40)
@@ -693,14 +693,14 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                             </td>
                             <td style={{ padding: '12px 16px' }}>
                               <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>Opened</div>
-                              <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
+                              <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{new Date(alertStartMs(a)).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
                               {a.resolved_at ? (
                                 <>
                                   <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em', marginTop: 6 }}>Closed</div>
                                   <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.resolved_at)}</div>
                                 </>
                               ) : (
-                                <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
+                                <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(new Date(alertStartMs(a)).toISOString())}</div>
                               )}
                             </td>
                            <td style={{ padding: '12px 16px' }}>
