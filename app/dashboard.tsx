@@ -432,6 +432,9 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
   const [sevFilter, setSevFilter] = useState('all')
   const [expandedM, setExpandedM] = useState<Record<string, boolean>>({})
+  const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
+  const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
+  const [exporting, setExporting] = useState(false)
   const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
   const SEVERITY_BG: any = { CRITICAL: C.redBg, HIGH: C.amberBg, MEDIUM: C.blueBg, LOW: C.greenBg }
   const ALERT_LABELS: any = {
@@ -485,6 +488,81 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     const endMs = a.resolved_at ? new Date(a.resolved_at).getTime() : Date.now()
     return verb + ' ' + fmtDurationMs(alertStartMs(a), endMs)
   }
+  const loadJsPDF = () => new Promise<any>((resolve, reject) => {
+    if ((window as any).jspdf) return resolve((window as any).jspdf)
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
+    s.onload = () => resolve((window as any).jspdf)
+    s.onerror = () => reject(new Error('Could not load PDF library'))
+    document.body.appendChild(s)
+  })
+  const exportPDF = async () => {
+    if (exFrom > exTo) { alert('From date is after To date'); return }
+    setExporting(true)
+    try {
+      const fromMs = new Date(exFrom + 'T00:00:00+05:30').getTime()
+      const toMs = new Date(exTo + 'T23:59:59.999+05:30').getTime()
+      const rows = alerts.filter((a: any) => { const t = new Date(a.created_at).getTime(); return t >= fromMs && t <= toMs })
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      if (rows.length === 0) { alert('No alerts in that date range.'); setExporting(false); return }
+      const lib = await loadJsPDF()
+      const doc = new lib.jsPDF({ unit: 'mm', format: 'a4' })
+      const sevCount: any = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
+      rows.forEach((a: any) => { sevCount[a.severity] = (sevCount[a.severity] || 0) + 1 })
+      const active = rows.filter((a: any) => !a.resolved_at).length
+      doc.addImage(FL_LOGO, 'JPEG', 14, 8, 50, 21.4)
+      doc.setTextColor(28, 35, 51); doc.setFont('helvetica', 'bold'); doc.setFontSize(15)
+      doc.text('Alert & Downtime Report', 196, 16, { align: 'right' })
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120, 120, 120)
+      doc.text('Fruitlink Technologies Pvt Ltd', 196, 22, { align: 'right' })
+      doc.setDrawColor(249, 115, 22); doc.setLineWidth(0.6); doc.line(14, 31, 196, 31)
+      let y = 40
+      doc.setTextColor(40, 40, 40); doc.setFontSize(10)
+      doc.text('Period:  ' + exFrom + '  to  ' + exTo, 14, y)
+      doc.text('Generated:  ' + new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), 14, y + 5)
+      y += 16
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
+      doc.text('Summary', 14, y); y += 8
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40)
+      const kpis = [['Total alerts', String(rows.length)], ['Active (unresolved)', String(active)], ['Resolved', String(rows.length - active)], ['Critical', String(sevCount.CRITICAL || 0)], ['High', String(sevCount.HIGH || 0)], ['Medium', String(sevCount.MEDIUM || 0)], ['Low', String(sevCount.LOW || 0)]]
+      kpis.forEach(k => { doc.text(k[0] + ':', 16, y); doc.setFont('helvetica', 'bold'); doc.text(k[1], 80, y); doc.setFont('helvetica', 'normal'); y += 6 })
+      doc.addPage(); y = 20
+      doc.setFillColor(249, 115, 22); doc.rect(0, 0, 210, 16, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
+      doc.text('Alert Log', 14, 11)
+      y = 26
+      const drawHeader = (yy: number) => {
+        doc.setFontSize(7.5); doc.setTextColor(120, 120, 120); doc.setFont('helvetica', 'bold')
+        doc.text('Opened (IST)', 12, yy); doc.text('Closed (IST)', 50, yy); doc.text('Machine', 88, yy)
+        doc.text('Type', 118, yy); doc.text('Sev', 158, yy); doc.text('Duration', 176, yy)
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40)
+        return yy + 5
+      }
+      y = drawHeader(y); doc.setFontSize(7)
+      rows.forEach((a: any) => {
+        const m = getMachine(a.machine_id)
+        const opened = a.created_at ? new Date(a.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+        const closed = a.resolved_at ? new Date(a.resolved_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'active'
+        const dur = fmtDurationMs(alertStartMs(a), a.resolved_at ? new Date(a.resolved_at).getTime() : Date.now())
+        doc.setTextColor(40, 40, 40)
+        doc.text(opened, 12, y); doc.text(closed, 50, y)
+        doc.text(String(m.display_name || '').slice(0, 16), 88, y)
+        doc.text(String(a.alert_type || '').slice(0, 20), 118, y)
+        if (a.severity === 'CRITICAL') doc.setTextColor(220, 53, 69)
+        else if (a.severity === 'HIGH') doc.setTextColor(201, 138, 0)
+        else doc.setTextColor(13, 110, 253)
+        doc.text(String(a.severity || '').slice(0, 4), 158, y)
+        doc.setTextColor(40, 40, 40); doc.text(dur, 176, y)
+        y += 4.5
+        if (y > 285) { doc.addPage(); y = 20; y = drawHeader(y); doc.setFontSize(7) }
+      })
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150)
+      doc.text('Total alerts listed: ' + rows.length, 12, y + 4)
+      doc.text('Fruitlink Technologies Pvt Ltd - Confidential', 14, 290)
+      doc.save('Fruitlink_Alerts_' + exFrom + '_to_' + exTo + '.pdf')
+    } catch (e: any) { alert('PDF export failed: ' + (e?.message || e)) }
+    setExporting(false)
+  }
   const counts: any = {
     CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
     HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
@@ -493,10 +571,14 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     active: alerts.filter((a: any) => !a.resolved_at).length,
     resolved: alerts.filter((a: any) => a.resolved_at).length,
   }
+  const fromMs = new Date(exFrom + 'T00:00:00+05:30').getTime()
+  const toMs = new Date(exTo + 'T23:59:59.999+05:30').getTime()
   const filtered = alerts.filter((a: any) => {
     if (filter === 'active' && a.resolved_at) return false
     if (filter === 'resolved' && !a.resolved_at) return false
     if (sevFilter !== 'all' && a.severity !== sevFilter) return false
+    const t = new Date(a.created_at).getTime()
+    if (t < fromMs || t > toMs) return false
     return true
   })
 
@@ -511,6 +593,20 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
           display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
           border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
         }}>↻ Refresh</button>
+      </div>
+
+      {/* Date range + PDF export */}
+      <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'flex-end', gap: 10, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>From</label>
+          <input type="date" value={exFrom} onChange={e => setExFrom(e.target.value)} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, outline: 'none' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>To</label>
+          <input type="date" value={exTo} onChange={e => setExTo(e.target.value)} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, outline: 'none' }} />
+        </div>
+        <button onClick={exportPDF} disabled={exporting} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: exporting ? 0.6 : 1 }}>{exporting ? 'Building…' : '⬇ PDF report'}</button>
+        <div style={{ fontSize: 11, color: C.text3, marginLeft: 'auto', alignSelf: 'center' }}>Filters the list below and the PDF to the selected dates</div>
       </div>
 
       {/* Severity cards */}
