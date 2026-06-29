@@ -238,12 +238,7 @@ export default function Login() {
 
           {/* Footer */}
           <div style={{ marginTop: '30px', textAlign: 'center' }}>
-            <div style={{ display: 'flex', gap: '18px', justifyContent: 'center', marginBottom: '8px' }}>
-              <a href="/privacy" style={{ color: grey, fontSize: '12px', textDecoration: 'none' }}>Privacy</a>
-              <a href="/terms" style={{ color: grey, fontSize: '12px', textDecoration: 'none' }}>Terms</a>
-              <a href="mailto:support@fruitlinktech.in" style={{ color: grey, fontSize: '12px', textDecoration: 'none' }}>Support</a>
-            </div>
-            <div style={{ color: '#9CA3AF', fontSize: '11px' }}>Fruitlink Technologies Pvt Ltd · Hyderabad</div>
+            <div style={{ color: '#9CA3AF', fontSize: '11px' }}>© 2026 Fruitlink Technologies Pvt. Ltd.</div>
           </div>
 
         </div>
