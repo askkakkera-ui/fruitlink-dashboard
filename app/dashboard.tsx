@@ -449,6 +449,17 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     if (m < 1440) return `${Math.floor(m / 60)}h ago`
     return `${Math.floor(m / 1440)}d ago`
   }
+  // Span between open and close (or open→now if still active). ~2–4 min granularity (polling interval).
+  const fmtDuration = (from: string, to?: string | null) => {
+    const end = to ? new Date(to).getTime() : Date.now()
+    let mins = Math.round((end - new Date(from).getTime()) / 60000)
+    if (mins < 1) mins = 1
+    if (mins < 60) return mins + ' min'
+    const h = Math.floor(mins / 60), mm = mins % 60
+    if (h < 24) return mm ? h + 'h ' + mm + 'm' : h + 'h'
+    const d = Math.floor(h / 24), hh = h % 24
+    return hh ? d + 'd ' + hh + 'h' : d + 'd'
+  }
   const counts: any = {
     CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
     HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
@@ -560,14 +571,28 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                               <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
+                              <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>Opened</div>
                               <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.created_at)}</div>
-                              <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
+                              {a.resolved_at ? (
+                                <>
+                                  <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em', marginTop: 6 }}>Closed</div>
+                                  <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{fmtTime(a.resolved_at)}</div>
+                                </>
+                              ) : (
+                                <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(a.created_at)}</div>
+                              )}
                             </td>
                             <td style={{ padding: '12px 16px' }}>
                               {!a.resolved_at ? (
-                                <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
+                                <>
+                                  <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
+                                  <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>open {fmtDuration(a.created_at)}</div>
+                                </>
                               ) : (
-                                <Pill color={C.green} bg={C.greenBg}>✓ Resolved</Pill>
+                                <>
+                                  <Pill color={C.green} bg={C.greenBg}>✓ Resolved</Pill>
+                                  <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>was open {fmtDuration(a.created_at, a.resolved_at)}</div>
+                                </>
                               )}
                             </td>
                           </tr>
