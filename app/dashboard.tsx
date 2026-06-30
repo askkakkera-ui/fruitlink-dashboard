@@ -334,7 +334,6 @@ function MachineCard({ machine }: { machine: any }) {
 // ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
 function ConsoleInsights({ machines, lackingCard }: any) {
   const isMobile = useIsMobile()
-  const OPC = 4.5, GPO = 150, TARE = 235, Z = 1.2816, OPEN = 9, CLOSE = 22
   const IND = '#423A8E', INDBG = '#efeefc'
 
   const visible = (machines || []).filter((m: any) => m && m.sn)
@@ -347,6 +346,22 @@ function ConsoleInsights({ machines, lackingCard }: any) {
     }
   }, [machines])
   const machine = visible.find((m: any) => m.sn === selSn) || visible[0] || null
+  // Per-machine fruit/stock tuning from Settings → Fruit & Stock (falls back to defaults)
+  const tuning = (() => {
+    try {
+      const st = typeof machine?.state === 'string' ? JSON.parse(machine.state || '{}') : (machine?.state || {})
+      return (st.machine_config && st.machine_config.stock_tuning) || {}
+    } catch { return {} }
+  })()
+  const BOX_KG = Number(tuning.box_kg) > 0 ? Number(tuning.box_kg) : 15
+  const COUNT = Number(tuning.count) > 0 ? Number(tuning.count) : 100
+  const OPC = Number(tuning.oranges_per_cup) > 0 ? Number(tuning.oranges_per_cup) : 4.5
+  const GPO = Math.round((BOX_KG * 1000) / COUNT)
+  const TARE = Number.isFinite(Number(tuning.tare_g)) ? Number(tuning.tare_g) : 235
+  const SL = Number(tuning.service_level) > 0 ? Number(tuning.service_level) : 90
+  const Z = SL >= 95 ? 1.6449 : SL >= 90 ? 1.2816 : SL >= 85 ? 1.0364 : 0.8416
+  const OPEN = Number.isFinite(Number(tuning.open_hour)) ? Number(tuning.open_hour) : 9
+  const CLOSE = Number.isFinite(Number(tuning.close_hour)) ? Number(tuning.close_hour) : 22
 
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -591,7 +606,7 @@ function ConsoleInsights({ machines, lackingCard }: any) {
                   </div>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>Forecast = recency-weighted same-weekday demand · safety stock = Z(90%)×variability · 4.5 oranges/cup. Tunable in Settings.</div>
+              <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>Forecast = recency-weighted same-weekday demand · safety stock = Z({SL}%)×variability · {OPC} oranges/cup · {GPO} g/orange (count {COUNT}). Tunable in Settings → Fruit &amp; Stock.</div>
             </div>
           </div>
         </div>
@@ -3062,6 +3077,91 @@ function CooldownsSection({ role, SB_KEY, showSaved, showErr, saving, setSaving,
   )
 }
 
+function StockTuningSection({ role, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
+  const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+  const [machines, setMachines] = useState<any[]>([])
+  const [tune, setTune] = useState<Record<string, any>>({})
+  const DEF = { box_kg: 15, count: 100, oranges_per_cup: 5, tare_g: 235, service_level: 90, open_hour: 9, close_hour: 22 }
+  const hourLabel = (h: number) => h === 24 || h === 0 ? '12 AM' : h === 12 ? '12 PM' : h > 12 ? (h - 12) + ' PM' : h + ' AM'
+
+  useEffect(() => {
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,state'), { headers })
+      .then(r => r.json()).then(d => {
+        if (!Array.isArray(d)) return
+        const visible = d.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true })
+        setMachines(visible)
+        const t: Record<string, any> = {}
+        visible.forEach((m: any) => {
+          let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {}
+          const s = (st.machine_config && st.machine_config.stock_tuning) || {}
+          t[m.id] = { ...DEF, ...s }
+        })
+        setTune(t)
+      })
+  }, [])
+
+  const setV = (mid: string, k: string, v: any) => setTune(prev => ({ ...prev, [mid]: { ...prev[mid], [k]: v } }))
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const h = { ...headers, Prefer: 'return=minimal' }
+      await Promise.all(machines.map(async (m: any) => {
+        const cur = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id + '&select=state'), { headers }).then(r => r.json()).then(d => Array.isArray(d) && d[0] ? d[0] : {})
+        let st: any = {}; try { st = typeof cur.state === 'string' ? JSON.parse(cur.state || '{}') : (cur.state || {}) } catch (e) {}
+        const mc = st.machine_config || {}
+        mc.stock_tuning = tune[m.id] || DEF
+        st.machine_config = mc
+        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + m.id), { method: 'PATCH', headers: h, body: JSON.stringify({ state: JSON.stringify(st) }) })
+      }))
+      showSaved()
+    } catch { showErr('Save failed') }
+    setSaving(false)
+  }
+
+  const gpo = (t: any) => t && t.count > 0 ? Math.round((Number(t.box_kg || 15) * 1000) / Number(t.count)) : '—'
+  const lbl: any = { display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }
+  const inputStyle: any = { width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, background: C.surface, boxSizing: 'border-box' }
+
+  return (
+    <div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>Fruit &amp; Stock Tuning</div>
+      <div style={{ fontSize: 13, color: C.text2, marginBottom: 18 }}>Tells the Console how to turn machine weight and sales into oranges, cups, runway and restock numbers. Set these to the box <b>count</b> you load — the panel does the rest.</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 14px', background: C.orangeBg, border: '1px solid ' + C.orange + '40', borderRadius: 10, fontSize: 12.5, color: C.text2, marginBottom: 18 }}>
+        🍊 <div>Oranges come in a 15 kg box. The <b>count</b> is how many are in it (printed on the box). Lower count (<b>88</b>) = bigger oranges = about <b>4</b> per 250 ml cup. Higher count (<b>100</b>) = smaller = about <b>5</b> per cup. Set both and the maths follows your fruit.</div>
+      </div>
+      {machines.map((m: any) => {
+        const t = tune[m.id] || DEF
+        return (
+          <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '16px 20px', marginBottom: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 2 }}>{m.display_name}</div>
+            <div style={{ fontSize: 11.5, color: C.text3, fontFamily: 'monospace', marginBottom: 14 }}>{m.sn}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 12 }}>
+              <div><label style={lbl}>Box weight (kg)</label><input type="number" value={t.box_kg ?? ''} onChange={e => setV(m.id, 'box_kg', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /></div>
+              <div><label style={lbl}>Orange count / box</label><input type="number" value={t.count ?? ''} onChange={e => setV(m.id, 'count', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>≈ {gpo(t)} g per orange</div></div>
+              <div><label style={lbl}>Oranges per 250 ml cup</label><input type="number" step="0.5" value={t.oranges_per_cup ?? ''} onChange={e => setV(m.id, 'oranges_per_cup', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>88 → 4 · 100 → 5</div></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+              <div><label style={lbl}>Empty tray weight (g)</label><input type="number" value={t.tare_g ?? ''} onChange={e => setV(m.id, 'tare_g', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Subtracted from scale</div></div>
+              <div><label style={lbl}>Service level</label>
+                <select value={t.service_level ?? 90} onChange={e => setV(m.id, 'service_level', +e.target.value)} style={inputStyle}>
+                  {[['85', '85% — leaner buffer'], ['90', '90% — balanced'], ['95', '95% — safer']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Restock safety margin</div></div>
+              <div><label style={lbl}>Open / close hour</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <select value={t.open_hour ?? 9} onChange={e => setV(m.id, 'open_hour', +e.target.value)} style={{ ...inputStyle, padding: '9px 6px' }}>{Array.from({ length: 17 }, (_, i) => i + 5).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
+                  <select value={t.close_hour ?? 22} onChange={e => setV(m.id, 'close_hour', +e.target.value)} style={{ ...inputStyle, padding: '9px 6px' }}>{Array.from({ length: 13 }, (_, i) => i + 12).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
+                </div><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Machine running hours</div></div>
+            </div>
+          </div>
+        )
+      })}
+      <button onClick={save} disabled={saving} style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saved ? '✓ Saved!' : 'Save Fruit & Stock Settings'}</button>
+      <div style={{ marginTop: 10, fontSize: 11, color: C.text3 }}>The Console reads these on its next refresh (~2 min) or when reopened.</div>
+    </div>
+  )
+}
+
 function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [err, setErr] = useState(false)
@@ -3078,6 +3178,7 @@ function SettingsPage() {
     { id: 'thresholds', label: 'Thresholds', icon: '🌡️' },
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
     { id: 'cooldowns', label: 'Alert Cooldowns', icon: '⏱️' },
+    { id: 'stock', label: 'Fruit & Stock', icon: '🍊' },
     { id: 'billing', label: 'Billing', icon: '💳' },
     ...(role === 'super_admin' ? [{ id: 'danger', label: 'Danger Zone', icon: '⚠️' }] : []),
   ]
@@ -3100,6 +3201,7 @@ function SettingsPage() {
       {active === 'thresholds' && <ThresholdsSection role={role} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
       {active === 'notifications' && <NotificationsSection role={role} operatorId={operatorId} SB_URL={SB_URL} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
       {active === 'cooldowns' && <CooldownsSection role={role} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
+      {active === 'stock' && <StockTuningSection role={role} SB_KEY={SB_KEY} showSaved={showSaved} showErr={showErr} saving={saving} setSaving={setSaving} saved={saved} />}
       {active === 'billing' && <BillingSection role={role} />}
       {active === 'danger' && role === 'super_admin' && (
         <div>
