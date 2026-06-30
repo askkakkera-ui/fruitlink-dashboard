@@ -188,7 +188,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
       </div>
 
       {/* User */}
-      <div style={{ flexShrink: 0, padding: '12px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', borderTop: `1px solid ${C.sidebarT}` }}>
+      <div style={{ flexShrink: 0, padding: '12px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', borderTop: `1px solid ${C.sidebarT}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#ffffff', border: `1px solid ${C.sidebarB}`, borderRadius: 9, padding: '8px 10px' }}>
           <div style={{
             width: 30, height: 30, borderRadius: '50%', background: C.orange,
