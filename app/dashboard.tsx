@@ -146,7 +146,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
           }}>F</div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>FRUITLINK</div>
-            <div style={{ fontSize: 12.5, color: C.textSide3, letterSpacing: '0.07em', marginTop: 1 }}>TECHNOLOGIES PVT LTD</div>
+            <div style={{ fontSize: 10.5, color: C.textSide3, letterSpacing: '0.03em', marginTop: 1, whiteSpace: 'nowrap' }}>TECHNOLOGIES PVT LTD</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff', border: `1px solid ${C.sidebarB}`, borderRadius: 8, padding: '6px 10px' }}>
