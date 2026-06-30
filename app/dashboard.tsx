@@ -1120,6 +1120,10 @@ function OrdersPage() {
 
   const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
   const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
+  const REFUND_STATE: any = { 1: { label: 'Refunded', color: C.green, bg: C.greenBg }, 2: { label: 'Refund Failed', color: C.red, bg: C.redBg } }
+  const isRefundView = filter === 'refunded'
   // ─── Export: CSV (all rows) + PDF (summary). Pulls fresh from DB for the chosen range ───
   const _esc = (v: any) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
   const _istLabel = (t: string) => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
@@ -1424,7 +1428,7 @@ function OrdersPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
-                    {['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time'].map(h => (
+                    {(isRefundView ? ['Order Code', 'Machine', 'Refunded', 'Status', 'Cups', 'Time'] : ['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time']).map(h => (
                       <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: C.text3, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{h}</th>
                     ))}
                   </tr>
@@ -1441,12 +1445,24 @@ function OrdersPage() {
                           <div style={{ fontWeight: 600, color: C.text, fontSize: 13 }}>{m.display_name || '--'}</div>
                           <div style={{ fontSize: 12, color: C.text3, marginTop: 1 }}>{m.location || ''}</div>
                         </td>
-                        <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
-                          <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.pay_type?.toUpperCase()}</div>
-                        </td>
-                        <td style={{ padding: '12px 16px' }}><Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill></td>
+                        {isRefundView ? (
+                          <>
+                            <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: o.refund_state === 1 ? C.green : C.red, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
+                            <td style={{ padding: '12px 16px' }}>
+                              {(() => { const rs = REFUND_STATE[o.refund_state] || REFUND_STATE[2]; return <Pill color={rs.color} bg={rs.bg}>{rs.label}</Pill> })()}
+                              {o.refund_note && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.refund_note}</div>}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
+                              <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.pay_type?.toUpperCase()}</div>
+                            </td>
+                            <td style={{ padding: '12px 16px' }}><Pill color={ds.color} bg={ds.bg}>{ds.label}</Pill></td>
+                          </>
+                        )}
                         <td style={{ padding: '12px 16px', fontWeight: 600, color: C.text }}>{o.cup_num || '--'}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ fontSize: 12, color: C.text }}>{fmtTime(o.created_at)}</div>
