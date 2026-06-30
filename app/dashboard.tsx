@@ -157,7 +157,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
       </div>
 
       {/* Nav */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 8px' }}>
         {Object.entries(groups).map(([group, items]) => (
           <div key={group}>
             {group !== '__top' && <SectionLabel>{group}</SectionLabel>}
@@ -188,7 +188,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
       </div>
 
       {/* User */}
-      <div style={{ padding: '12px', borderTop: `1px solid ${C.sidebarT}` }}>
+      <div style={{ flexShrink: 0, padding: '12px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', borderTop: `1px solid ${C.sidebarT}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#ffffff', border: `1px solid ${C.sidebarB}`, borderRadius: 9, padding: '8px 10px' }}>
           <div style={{
             width: 30, height: 30, borderRadius: '50%', background: C.orange,
@@ -2909,6 +2909,78 @@ function BillingSection({ role }: any) {
   )
 }
 
+function PullToRefresh({ onRefresh, isMobile, children }: any) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pull, setPull] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const dragging = useRef(false)
+  const startY = useRef(0)
+  const startX = useRef(0)
+  const pullRef = useRef(0)
+  const THRESHOLD = 70, MAX = 120, RESIST = 0.5
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !isMobile) return
+    const setP = (v: number) => { pullRef.current = v; setPull(v) }
+    const onStart = (e: TouchEvent) => {
+      if (refreshing) { dragging.current = false; return }
+      if (el.scrollTop <= 0) { dragging.current = true; startY.current = e.touches[0].clientY; startX.current = e.touches[0].clientX }
+      else dragging.current = false
+    }
+    const onMove = (e: TouchEvent) => {
+      if (!dragging.current || refreshing) return
+      const dy = e.touches[0].clientY - startY.current
+      const dx = e.touches[0].clientX - startX.current
+      if (dy > 0 && Math.abs(dy) > Math.abs(dx) && el.scrollTop <= 0) {
+        e.preventDefault()
+        setP(Math.min(MAX, dy * RESIST))
+      } else if (dy < 0) { dragging.current = false; setP(0) }
+    }
+    const onEnd = async () => {
+      if (!dragging.current) return
+      dragging.current = false
+      if (pullRef.current >= THRESHOLD && !refreshing) {
+        setRefreshing(true); setP(THRESHOLD)
+        try { await onRefresh() } catch (e) {}
+        setRefreshing(false); setP(0)
+      } else setP(0)
+    }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    el.addEventListener('touchcancel', onEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [isMobile, refreshing, onRefresh])
+
+  const prog = Math.min(1, pull / THRESHOLD)
+  return (
+    <div ref={ref} style={{ flex: 1, overflowY: 'auto', position: 'relative', WebkitOverflowScrolling: 'touch' } as any}>
+      <div style={{
+        position: 'absolute', top: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center',
+        pointerEvents: 'none', zIndex: 5, transform: 'translateY(' + (pull - 34) + 'px)',
+        opacity: refreshing ? 1 : prog, transition: dragging.current ? 'none' : 'transform .25s ease, opacity .25s ease',
+      }}>
+        <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,.15)', display: 'grid', placeItems: 'center' }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%', border: '2px solid ' + C.border2, borderTopColor: C.orange,
+            transform: refreshing ? 'none' : 'rotate(' + (pull * 4) + 'deg)',
+            animation: refreshing ? 'fl-spin .7s linear infinite' : 'none',
+          }} />
+        </div>
+      </div>
+      <div style={{ transform: 'translateY(' + pull + 'px)', transition: dragging.current ? 'none' : 'transform .25s ease' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [active, setActive] = useState('console')
   const [machines, setMachines] = useState<any[]>([])
@@ -3008,6 +3080,7 @@ export default function Dashboard() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
         @keyframes fl-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+        @keyframes fl-spin { to { transform: rotate(360deg) } }
 
 /* ── Mobile responsive (phones, < 768px) ── */
         @media (max-width: 768px) {
@@ -3049,9 +3122,9 @@ export default function Dashboard() {
             )}
             <div style={{ flex: 1 }}><TopBar active={active} /></div>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <PullToRefresh onRefresh={fetchData} isMobile={isMobile}>
             {pages[active] || <ComingSoon label={active} />}
-          </div>
+          </PullToRefresh>
         </div>
       </div>
     </>
