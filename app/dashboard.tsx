@@ -3478,7 +3478,6 @@ export default function Dashboard() {
           table.fl-stack td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px !important; border-bottom: 1px solid ${C.border}; }
           table.fl-stack td:last-child { border-bottom: none; }
         }
-        }
       `}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' }}>
         {/* Sidebar: fixed drawer on mobile, normal column on desktop */}
