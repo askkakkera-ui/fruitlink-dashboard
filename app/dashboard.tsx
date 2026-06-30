@@ -331,6 +331,263 @@ function MachineCard({ machine }: { machine: any }) {
   )
 }
 
+// ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
+function ConsoleInsights({ machines, lackingCard }: any) {
+  const isMobile = useIsMobile()
+  const OPC = 4.5, GPO = 150, TARE = 235, Z = 1.2816, OPEN = 9, CLOSE = 22
+  const IND = '#423A8E', INDBG = '#efeefc'
+
+  const visible = (machines || []).filter((m: any) => m && m.sn)
+  const [selSn, setSelSn] = useState('')
+  useEffect(() => {
+    if (!visible.length) return
+    if (!selSn || !visible.find((m: any) => m.sn === selSn)) {
+      const on = visible.find((m: any) => m.status === 'online')
+      setSelSn((on || visible[0]).sn)
+    }
+  }, [machines])
+  const machine = visible.find((m: any) => m.sn === selSn) || visible[0] || null
+
+  const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!machine) { setLoading(false); return }
+    let alive = true
+    setLoading(true)
+    const since = new Date(Date.now() - 35 * 86400000).toISOString()
+    const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+    const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&machine_id=eq.' + machine.id + '&pay_state=eq.1&created_at=gte.' + since + '&order=created_at.desc&limit=3000'
+    fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h })
+      .then(r => r.json()).then(d => { if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) } })
+      .catch(() => { if (alive) { setOrders([]); setLoading(false) } })
+    return () => { alive = false }
+  }, [machine && machine.id])
+
+  const IST = 'Asia/Kolkata'
+  const dKey = (t: any) => new Intl.DateTimeFormat('en-CA', { timeZone: IST }).format(new Date(t))
+  const dHour = (t: any) => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: IST, hour: '2-digit', hourCycle: 'h23' }).format(new Date(t)), 10)
+  const wdayOfKey = (k: string) => new Date(k + 'T12:00:00+05:30').getDay()
+  const fmt = (rs: number) => '₹' + Math.round(rs).toLocaleString('en-IN')
+  const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length
+  const sd = (a: number[]) => { const m = mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, a.length - 1)) }
+  const wmean = (a: number[]) => { let n = 0, d = 0; a.forEach((x, i) => { const w = i + 1; n += x * w; d += w }); return d ? n / d : 0 }
+  const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x))
+
+  const now = new Date()
+  const todayKey = dKey(now)
+  const nowHour = dHour(now) + (parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: IST, minute: '2-digit' }).format(now), 10) || 0) / 60
+
+  const dailyCups: Record<string, number> = {}, dailyRev: Record<string, number> = {}
+  orders.forEach(o => { const k = dKey(o.created_at); dailyCups[k] = (dailyCups[k] || 0) + (o.cup_num || 1); dailyRev[k] = (dailyRev[k] || 0) + (o.amount_paise || 0) / 100 })
+
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const k = dKey(new Date(now.getTime() - (6 - i) * 86400000))
+    return { key: k, day: new Date(k + 'T12:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short' }), v: dailyRev[k] || 0, c: dailyCups[k] || 0, today: k === todayKey }
+  })
+
+  const sevenAgo = new Date(now.getTime() - 7 * 86400000)
+  const hourAgg: Record<number, number> = {}
+  orders.forEach(o => { const t = new Date(o.created_at); if (t >= sevenAgo) { const hh = dHour(o.created_at); hourAgg[hh] = (hourAgg[hh] || 0) + (o.cup_num || 1) } })
+  const hoursList = Array.from({ length: CLOSE - OPEN }, (_, i) => OPEN + i)
+  const hVals = hoursList.map(h => hourAgg[h] || 0)
+  const hTotal = hVals.reduce((s, x) => s + x, 0)
+  let best = { s: -1, i: 0 }
+  for (let i = 0; i <= hVals.length - 3; i++) { const s = hVals[i] + hVals[i + 1] + hVals[i + 2]; if (s > best.s) best = { s, i } }
+  const peakStart = hoursList[best.i], peakEnd = hoursList[Math.min(best.i + 3, hoursList.length - 1)]
+  const peakPct = hTotal > 0 ? Math.round(best.s / hTotal * 100) : 0
+  const hLabel = (h: number) => h === OPEN ? h + 'a' : h === 12 ? '12p' : h === CLOSE - 1 ? (h - 12) + 'p' : h > 12 ? (h - 12) + '' : h + ''
+  const ampm = (h: number) => { const x = h % 12 === 0 ? 12 : h % 12; return x + (h >= 12 ? ' PM' : ' AM') }
+
+  const overallAvg = () => { const ks = Object.keys(dailyCups).filter(k => k !== todayKey); return ks.length ? ks.reduce((s, k) => s + dailyCups[k], 0) / ks.length : 0 }
+  const forecastFor = (wday: number) => {
+    const keys = Object.keys(dailyCups).filter(k => k !== todayKey && wdayOfKey(k) === wday).sort()
+    const s = keys.slice(-4).map(k => dailyCups[k])
+    let mu: number, sigma: number, conf: string
+    if (s.length >= 1) { mu = wmean(s); sigma = s.length >= 2 ? sd(s) : mu * 0.15; conf = s.length >= 4 ? 'High conf.' : s.length >= 2 ? 'Building' : 'Low data' }
+    else { mu = overallAvg(); sigma = mu * 0.2; conf = 'Low data' }
+    const ss = Z * sigma
+    return { mu, ss, oranges: Math.ceil((mu + ss) * OPC), conf }
+  }
+
+  const cupsToday = dailyCups[todayKey] || 0
+  const revToday = dailyRev[todayKey] || 0
+  const sw = Number(machine && machine.scale_weight_g)
+  const haveScale = Number.isFinite(sw) && sw > TARE
+  const leftOranges = haveScale ? Math.max(0, Math.round((sw - TARE) / GPO)) : null
+  const usedToday = cupsToday * OPC
+  const sellThrough = leftOranges != null && (usedToday + leftOranges) > 0 ? Math.round(usedToday / (usedToday + leftOranges) * 100) : null
+
+  const todayWday = wdayOfKey(todayKey)
+  const fcToday = forecastFor(todayWday)
+  const cumToNow = hoursList.filter(h => h <= Math.floor(nowHour)).reduce((s, h) => s + (hourAgg[h] || 0), 0)
+  const elapsedFrac = hTotal > 0 ? cumToNow / hTotal : clamp((nowHour - OPEN) / (CLOSE - OPEN), 0.05, 1)
+  const expectedByNow = fcToday.mu * elapsedFrac
+  const paceDelta = expectedByNow > 0.5 ? Math.round((cupsToday / expectedByNow - 1) * 100) : null
+  const wdayName = new Date(todayKey + 'T12:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'long' })
+
+  const hoursOpen = Math.max(0.4, nowHour - OPEN)
+  const cph = cupsToday / hoursOpen
+  const oph = cph * OPC
+  const runHrs = leftOranges != null && oph > 0 ? leftOranges / oph : null
+  const sellAt = runHrs != null ? nowHour + runHrs : null
+  const runReady = leftOranges != null && cupsToday > 0 && nowHour > OPEN + 0.3
+
+  const tomKey = dKey(new Date(now.getTime() + 86400000))
+  const tomWday = wdayOfKey(tomKey)
+  const fcTom = forecastFor(tomWday)
+  const tomName = new Date(tomKey + 'T12:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'long' })
+  const restCups = Math.max(0, fcToday.mu - cupsToday)
+  const projEndLeftover = leftOranges != null ? Math.max(0, Math.round(leftOranges - restCups * OPC)) : null
+  const bring = projEndLeftover != null ? Math.max(0, fcTom.oranges - projEndLeftover) : fcTom.oranges
+  const loadedEst = leftOranges != null ? Math.round(leftOranges + cupsToday * OPC) : null
+
+  const card: any = { background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }
+  const sectit: any = { fontSize: 15, fontWeight: 800, color: C.text, margin: '22px 0 12px', display: 'flex', alignItems: 'center', gap: 8 }
+  const lbl: any = { fontSize: 12.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em', color: C.text2, display: 'flex', alignItems: 'center', gap: 8 }
+  const pos = (t: number) => clamp((t - OPEN) / (CLOSE - OPEN) * 100, 0, 100)
+  const runCol = sellAt == null ? C.green : sellAt < peakStart ? C.red : sellAt < peakEnd ? C.amber : C.green
+  const maxV = Math.max(...week.map(d => d.v), 1)
+  const maxH = Math.max(...hVals, 1)
+
+  if (!machine) return <div style={{ marginBottom: 22 }}><StatCard {...lackingCard} /></div>
+
+  const tStr = sellAt != null ? ampm(Math.floor(sellAt)).replace(/ (AM|PM)/, ':' + String(Math.round((sellAt - Math.floor(sellAt)) * 60)).padStart(2, '0') + ' $1') : ''
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: 14, marginBottom: 14 }}>
+        <StatCard {...lackingCard} />
+        <div style={card}>
+          <div style={{ height: 3, background: 'linear-gradient(90deg,' + C.orange + ',' + IND + ')' }} />
+          <div style={{ padding: '18px 22px' }}>
+            <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: '215px 1fr', gap: 22 }}>
+              <div style={{ marginBottom: isMobile ? 16 : 0 }}>
+                <div style={{ ...lbl, marginBottom: 14, justifyContent: 'space-between' }}>
+                  <span>Today's Sales</span>
+                  {visible.length > 1
+                    ? <select value={selSn} onChange={e => setSelSn(e.target.value)} style={{ fontSize: 11, border: '1px solid ' + C.border, borderRadius: 7, padding: '3px 6px', color: C.text2, background: C.surface }}>{visible.map((m: any) => <option key={m.sn} value={m.sn}>{m.display_name}</option>)}</select>
+                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', color: C.green, background: C.greenBg, border: '1px solid rgba(25,135,84,.25)', borderRadius: 20, padding: '2px 8px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'fl-pulse 1.8s infinite' }} />LIVE</span>}
+                </div>
+                <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1 }}>{fmt(revToday)}</div>
+                {paceDelta != null && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, borderRadius: 20, padding: '3px 10px', marginTop: 10, background: paceDelta >= 0 ? C.greenBg : C.redBg, color: paceDelta >= 0 ? C.green : C.red }}>{(paceDelta >= 0 ? '▲ ' : '▼ ') + Math.abs(paceDelta) + '% vs a typical ' + wdayName}</div>
+                )}
+                <div style={{ display: 'flex', gap: 16, marginTop: 18 }}>
+                  <div><div style={{ fontSize: 17, fontWeight: 800 }}>{cupsToday}</div><div style={{ fontSize: 10.5, color: C.text3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Cups</div></div>
+                  <div><div style={{ fontSize: 17, fontWeight: 800 }}>{cupsToday > 0 ? fmt(revToday / cupsToday) : '—'}</div><div style={{ fontSize: 10.5, color: C.text3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Avg</div></div>
+                  <div><div style={{ fontSize: 17, fontWeight: 800 }}>{sellThrough != null ? sellThrough + '%' : '—'}</div><div style={{ fontSize: 10.5, color: C.text3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Sell-through</div></div>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machine.display_name} · revenue, last 7 days</div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9, minHeight: 104 }}>
+                  {week.map((d, i) => {
+                    const h = Math.max(Math.round(d.v / maxV * 88), d.v > 0 ? 6 : 3)
+                    return <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text2 }}>{d.v > 0 ? '₹' + (d.v / 1000).toFixed(1) + 'k' : ''}</div>
+                      <div style={{ width: '100%', height: h, borderRadius: '5px 5px 0 0', background: d.today ? C.orange : '#d9d6f0', transition: 'height .5s' }} />
+                      <div style={{ fontSize: 10.5, fontWeight: d.today ? 800 : 600, color: d.today ? C.orange : C.text3 }}>{d.day}</div>
+                    </div>
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={sectit}>⛽ Stock runway — today</div>
+      <div style={card}>
+        <div style={{ height: 3, background: runReady ? runCol : C.border2 }} />
+        <div style={{ padding: '18px 22px' }}>
+          {!haveScale ? (
+            <div style={{ fontSize: 13, color: C.text3 }}>Waiting for a live stock reading from {machine.display_name} to project the runway.</div>
+          ) : (<>
+            <div style={{ position: 'relative', height: 46, borderRadius: 10, background: '#f1f2f7', border: '1px solid ' + C.border, overflow: 'hidden', margin: '6px 0 4px' }}>
+              <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: pos(nowHour) + '%', background: 'rgba(25,135,84,.16)' }} />
+              {hTotal > 0 && <div style={{ position: 'absolute', top: 0, bottom: 0, left: pos(peakStart) + '%', width: (pos(peakEnd) - pos(peakStart)) + '%', background: 'repeating-linear-gradient(45deg,rgba(254,101,5,.13),rgba(254,101,5,.13) 6px,rgba(254,101,5,.05) 6px,rgba(254,101,5,.05) 12px)', borderLeft: '1px dashed rgba(254,101,5,.5)', borderRight: '1px dashed rgba(254,101,5,.5)' }} />}
+              {sellAt != null && sellAt < CLOSE && <div style={{ position: 'absolute', top: 0, bottom: 0, left: pos(nowHour) + '%', width: (pos(Math.min(sellAt, CLOSE)) - pos(nowHour)) + '%', background: runCol, opacity: .9 }} />}
+              <div style={{ position: 'absolute', top: -3, bottom: -3, left: pos(nowHour) + '%', width: 2, background: C.text }} />
+              {sellAt != null && sellAt < CLOSE && <div style={{ position: 'absolute', top: -3, bottom: -3, left: pos(sellAt) + '%', width: 2, background: runCol }} />}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.text3, fontWeight: 600, marginTop: 4 }}>
+              {['9 AM', '12 PM', '3 PM', '6 PM', '9 PM', '10 PM'].map(x => <span key={x}>{x}</span>)}
+            </div>
+            <div style={{ fontSize: 11.5, color: C.text3, marginTop: 8, fontWeight: 600 }}>{leftOranges} oranges left · ~{Math.round(leftOranges / OPC)} cups</div>
+            <div style={{ fontSize: 12.5, color: C.text2, lineHeight: 1.5, marginTop: 6 }}>
+              {!runReady ? 'Too early in the day to project a reliable runway — check back after a few sales.'
+                : sellAt >= CLOSE ? <>At the current pace (<b>{cph.toFixed(1)} cups/hr</b>), the <b>{leftOranges} oranges</b> left last past closing. <b style={{ color: C.green }}>No refill needed today</b> ✓</>
+                  : sellAt < peakStart ? <>At the current pace, stock runs dry near <b style={{ color: C.red }}>{tStr}</b> — <b style={{ color: C.red }}>before the {ampm(peakStart)} peak</b>. Send the boys to top up <b>now</b> ⚠</>
+                    : sellAt < peakEnd ? <>At the current pace, stock sells out near <b style={{ color: C.amber }}>{tStr}</b>, <b style={{ color: C.amber }}>mid-peak</b>. Top up before {ampm(peakStart)}.</>
+                      : <>At the current pace (<b>{cph.toFixed(1)} cups/hr</b>), stock lasts to ≈ <b>{tStr}</b>. <b style={{ color: C.green }}>Covers tonight's peak</b> ✓</>}
+            </div>
+          </>)}
+        </div>
+      </div>
+
+      <div style={sectit}>📈 Sales insights &amp; restock plan</div>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 1fr', gap: 14, marginBottom: 22 }}>
+        <div style={card}>
+          <div style={{ height: 3, background: C.orange }} />
+          <div style={{ padding: '18px 22px' }}>
+            <div style={{ ...lbl, marginBottom: 16 }}>Peak selling hours <span style={{ fontWeight: 600, color: C.text3, textTransform: 'none', letterSpacing: 0 }}>· last 7 days</span></div>
+            {hTotal === 0 ? <div style={{ fontSize: 13, color: C.text3, padding: '20px 0' }}>No sales in the last 7 days yet — peak hours appear once orders come in.</div> : <>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 130, marginBottom: 6 }}>
+                {hoursList.map((h, idx) => {
+                  const inP = idx >= best.i && idx < best.i + 3
+                  const ht = Math.max(Math.round((hourAgg[h] || 0) / maxH * 112), 4)
+                  return <div key={h} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 5, height: '100%' }}>
+                    <div style={{ width: '100%', height: ht, borderRadius: '4px 4px 0 0', background: inP ? C.orange : '#e3e1ee' }} />
+                    <div style={{ fontSize: 9, fontWeight: inP ? 800 : 600, color: inP ? C.orange : C.text3 }}>{hLabel(h)}</div>
+                  </div>
+                })}
+              </div>
+              <div style={{ fontSize: 12.5, color: C.text2, lineHeight: 1.55 }}>Busiest window: <b style={{ color: C.orange, fontWeight: 800 }}>{ampm(peakStart)}–{ampm(peakEnd)}</b> — about <b style={{ color: C.orange, fontWeight: 800 }}>{peakPct}%</b> of the day's cups. Keep the machine full before <b style={{ color: C.orange, fontWeight: 800 }}>{ampm(peakStart)}</b>.</div>
+            </>}
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={{ height: 3, background: 'linear-gradient(90deg,' + C.orange + ',' + IND + ')' }} />
+          <div style={{ padding: '18px 22px' }}>
+            <div style={{ ...lbl, marginBottom: 14 }}>Smart restock plan</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <div style={{ borderRadius: 12, padding: '13px 15px', border: '1px solid rgba(254,101,5,.28)', background: C.orangeBg }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.orange }}>Today's load · {new Date(todayKey + 'T12:00:00+05:30').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+                  <div><div style={{ fontSize: 18, fontWeight: 800 }}>{loadedEst != null ? loadedEst : '—'}</div><div style={{ fontSize: 10, color: C.text3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Loaded (est.)</div></div>
+                  <div><div style={{ fontSize: 18, fontWeight: 800 }}>{cupsToday}</div><div style={{ fontSize: 10, color: C.text3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Cups sold</div></div>
+                  <div><div style={{ fontSize: 18, fontWeight: 800 }}>{leftOranges != null ? leftOranges : '—'}</div><div style={{ fontSize: 10, color: C.text3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Oranges left</div></div>
+                </div>
+              </div>
+              <div style={{ borderRadius: 12, padding: '13px 15px', border: '1px solid rgba(66,58,142,.22)', background: INDBG }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: IND }}>Tomorrow am · {tomName}</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.04em', padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase', background: fcTom.conf === 'High conf.' ? C.greenBg : C.amberBg, color: fcTom.conf === 'High conf.' ? C.green : C.amber }}>{fcTom.conf}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '9px 0 3px' }}>
+                  <span style={{ fontSize: 27, fontWeight: 800, letterSpacing: '-.02em' }}>{bring > 0 ? '~' + bring : '0'}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text2 }}>{bring > 0 ? 'oranges to bring' : 'enough rolls over — skip'}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.text2 }}>Forecast {Math.round(fcTom.mu)} cups (±{Math.round(fcTom.ss)}) = {fcTom.oranges} needed · ~{projEndLeftover != null ? projEndLeftover : 0} rolling over</div>
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>= {fcTom.oranges} target − {projEndLeftover != null ? projEndLeftover : 0} carryover (final on tomorrow's scale)</div>
+                {projEndLeftover != null && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, borderRadius: 8, padding: '6px 9px', marginTop: 9, fontWeight: 600, background: projEndLeftover > 120 ? C.amberBg : C.greenBg, color: projEndLeftover > 120 ? C.amber : C.green }}>
+                    🍊 {projEndLeftover > 120 ? 'Heavy rollover — rotate older fruit to the front first.' : 'Freshness OK — light rollover, well inside the 3–4 day window.'}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>Forecast = recency-weighted same-weekday demand · safety stock = Z(90%)×variability · 4.5 oranges/cup. Tunable in Settings.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ─── Console Page ────────────────────────────────────────────────
 function ConsolePage({ machines, alerts, loading }: any) {
   const online = machines.filter((m: any) => m.status === 'online').length
