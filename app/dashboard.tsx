@@ -44,7 +44,7 @@ const C = {
   blueBg:    '#e7f0ff',
   orange:    '#FE6505',
   orangeBg:  '#fff3ea',
-  topbar:    '#FE6505',
+  topbar:    '#423A8E',
 }
 
 function getCookie(name: string): string {
@@ -209,6 +209,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
 // ─── Top Bar ─────────────────────────────────────────────────────
 function TopBar({ active }: { active: string }) {
   const [time, setTime] = useState('')
+  const isMobile = useIsMobile()
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))
     tick()
@@ -216,22 +217,27 @@ function TopBar({ active }: { active: string }) {
     return () => clearInterval(t)
   }, [])
   const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alert Center', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List' }
+  const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
-      height: 52, background: C.topbar, borderBottom: `1px solid ${C.orange}`,
-      display: 'flex', alignItems: 'center', padding: '0 24px', gap: 14, flexShrink: 0,
-      boxShadow: '0 1px 4px #00000010',
+      height: 56, background: C.topbar, borderBottom: '1px solid rgba(0,0,0,0.12)',
+      display: 'flex', alignItems: 'center', padding: isMobile ? '0 12px' : '0 26px', gap: isMobile ? 10 : 16, flexShrink: 0,
+      boxShadow: '0 2px 10px #00000028',
     }}>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.04em' }}>FRUITLINK</span>
-        <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13 }}>›</span>
-        <span style={{ fontSize: 14.5, fontWeight: 700, color: '#fff' }}>{labels[active] || active}</span>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9 }}>
+        {!isMobile && (
+          <>
+            <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '0.05em', textShadow: shadow, whiteSpace: 'nowrap' }}>FRUITLINK</span>
+            <span style={{ color: '#fff', fontSize: 16, opacity: 0.7, textShadow: shadow }}>›</span>
+          </>
+        )}
+        <span style={{ fontSize: isMobile ? 19 : 19, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', textShadow: shadow, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labels[active] || active}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: '4px 12px' }}>
-        <Dot color={'#fff'} pulse size={6} />
-        <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>System Online</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.45)', borderRadius: 20, padding: '6px 13px', flexShrink: 0 }}>
+        <Dot color={'#fff'} pulse size={7} />
+        <span style={{ fontSize: 13, color: '#fff', fontWeight: 700, textShadow: shadow, whiteSpace: 'nowrap' }}>{isMobile ? 'Online' : 'System Online'}</span>
       </div>
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)' }}>{time}</span>
+      <span style={{ fontSize: isMobile ? 12 : 13, color: '#fff', fontWeight: 700, textShadow: shadow, whiteSpace: 'nowrap', textAlign: 'right', lineHeight: 1.15 }}>{time}</span>
     </div>
   )
 }
