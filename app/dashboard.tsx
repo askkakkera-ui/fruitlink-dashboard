@@ -3408,7 +3408,7 @@ export default function Dashboard() {
           const tRes = await fetch('/api/telemetry?sn=' + m.sn)
           const tJson = await tRes.json()
           const tel = tJson.success && tJson.data ? tJson.data : {}
-          return { ...m, ...tel, telemetry_id: tel.id }
+          return { ...m, ...tel, state: m.state, telemetry_id: tel.id }
         } catch {
           return m
         }
