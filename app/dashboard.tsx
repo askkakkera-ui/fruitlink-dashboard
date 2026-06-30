@@ -354,14 +354,26 @@ function ConsoleInsights({ machines, lackingCard }: any) {
     if (!machine) { setLoading(false); return }
     let alive = true
     setLoading(true)
-    const since = new Date(Date.now() - 35 * 86400000).toISOString()
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
-    const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&machine_id=eq.' + machine.id + '&pay_state=eq.1&created_at=gte.' + since + '&order=created_at.desc&limit=3000'
-    fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h })
-      .then(r => r.json()).then(d => { if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) } })
-      .catch(() => { if (alive) { setOrders([]); setLoading(false) } })
+    const since = new Date(Date.now() - 35 * 86400000).toISOString()
+    const run = async () => {
+      // Resolve the real machines-table id by SN (same id the orders table uses)
+      let mid = machine.id
+      try {
+        const row = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id&sn=eq.' + machine.sn), { headers: h }).then(r => r.json())
+        if (Array.isArray(row) && row[0] && row[0].id) mid = row[0].id
+      } catch {}
+      try {
+        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&machine_id=eq.' + mid + '&pay_state=eq.1&created_at=gte.' + since + '&order=created_at.desc&limit=3000'
+        const d = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h }).then(r => r.json())
+        if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) }
+      } catch {
+        if (alive) { setOrders([]); setLoading(false) }
+      }
+    }
+    run()
     return () => { alive = false }
-  }, [machine && machine.id])
+  }, [machine && machine.sn])
 
   const IST = 'Asia/Kolkata'
   const dKey = (t: any) => new Intl.DateTimeFormat('en-CA', { timeZone: IST }).format(new Date(t))
