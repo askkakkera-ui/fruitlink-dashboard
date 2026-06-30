@@ -3149,8 +3149,8 @@ function StockTuningSection({ role, SB_KEY, showSaved, showErr, saving, setSavin
                 </select><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Restock safety margin</div></div>
               <div><label style={lbl}>Open / close hour</label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <select value={t.open_hour ?? 9} onChange={e => setV(m.id, 'open_hour', +e.target.value)} style={{ ...inputStyle, padding: '9px 6px' }}>{Array.from({ length: 17 }, (_, i) => i + 5).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
-                  <select value={t.close_hour ?? 22} onChange={e => setV(m.id, 'close_hour', +e.target.value)} style={{ ...inputStyle, padding: '9px 6px' }}>{Array.from({ length: 13 }, (_, i) => i + 12).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
+                  <select value={t.open_hour ?? 9} onChange={e => setV(m.id, 'open_hour', +e.target.value)} style={{ ...inputStyle, padding: '9px 6px' }}>{Array.from({ length: 24 }, (_, i) => i).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
+                  <select value={t.close_hour ?? 22} onChange={e => setV(m.id, 'close_hour', +e.target.value)} style={{ ...inputStyle, padding: '9px 6px' }}>{Array.from({ length: 24 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
                 </div><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Machine running hours</div></div>
             </div>
           </div>
