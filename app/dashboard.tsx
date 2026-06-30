@@ -623,9 +623,10 @@ function ConsolePage({ machines, alerts, loading }: any) {
   return (
     <div style={{ padding: '24px 28px' }}>
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
-        {stats.map(s => <StatCard key={s.label} {...s} />)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
+        {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
+      <ConsoleInsights machines={machines} lackingCard={stats[3]} />
 
       {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
