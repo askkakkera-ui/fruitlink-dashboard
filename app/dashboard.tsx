@@ -3384,10 +3384,12 @@ export default function Dashboard() {
   const [role, setRole] = useState('operator')
   const [name, setName] = useState('Admin')
   const [operatorId, setOperatorId] = useState('')
+  const [ready, setReady] = useState(false)          
   useEffect(() => {
     setRole(getCookie('fl_role') || 'operator')
     setName(getCookie('fl_operator_name') || 'Admin')
     setOperatorId(getCookie('fl_operator_id') || '')
+    setReady(true)                                    
   }, [])
 
   const fetchData = useCallback(async () => {
@@ -3434,7 +3436,7 @@ export default function Dashboard() {
     setLoading(false)
   }, [role, operatorId])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { if (ready) fetchData() }, [ready, fetchData])
 
   const handleLogout = () => {
     document.cookie.split(';').forEach(c => {
