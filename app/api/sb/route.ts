@@ -36,6 +36,9 @@ const sbHeaders = (extra: Record<string, string> = {}) => ({
   ...extra,
 });
 
+// Prevent iOS Safari (and any intermediary) from caching/replaying GET responses.
+const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' };
+
 // Resolve the machine_ids this operator is granted, from the authoritative join table.
 // Uses the service key server-side (never trusts the browser).
 async function allowedMachineIds(operatorId: string): Promise<string[]> {
@@ -108,24 +111,24 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
     const scoped = await scopeGetPath(request, session);
-    if (scoped.block) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    if (scoped.empty) return NextResponse.json([]); // guaranteed-empty, never "all"
+    if (scoped.block) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    if (scoped.empty) return NextResponse.json([], { headers: NO_STORE }); // guaranteed-empty, never "all"
 
     const path = scoped.path!;
     // Storage returns raw text.
     if (path.startsWith('/storage/')) {
       const res = await fetch(SB_URL + path, { headers: sbHeaders() });
       const text = await res.text();
-      return new NextResponse(text, { status: res.status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      return new NextResponse(text, { status: res.status, headers: { 'Content-Type': 'text/plain; charset=utf-8', ...NO_STORE } });
     }
     const res = await fetch(SB_URL + path, { headers: sbHeaders() });
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: NO_STORE });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
 }
 
