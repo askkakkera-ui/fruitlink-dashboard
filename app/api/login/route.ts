@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       role,
       name: operator.name || '',
       email: operator.email || '',
+      owner_id: operator.owner_id ? String(operator.owner_id) : undefined,
     });
 
     // Build the JSON response the dashboard already expects.
