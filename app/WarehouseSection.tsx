@@ -1,6 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 
+// Dashboard-native Warehouse section — full-width, matches dashboard C tokens.
+// Calls the secure /api/warehouse route (auth + scoping server-side).
+
 const C = {
   active: '#FE6505', bg: '#f4f5f9', surface: '#ffffff', surface2: '#f4f5f9',
   border: '#e8eaf0', border2: '#dcdfe9', text: '#1f2533', text2: '#5b6478', text3: '#9099ac',
@@ -17,7 +20,7 @@ type Item = {
 type Machine = { id: string; display_name?: string; sn?: string };
 type Movement = {
   id: string; item_id: string; movement_type: string; qty_base: number; packs?: number;
-  machine_id?: string; note?: string; created_at: string;
+  machine_id?: string; note?: string; created_at: string; created_by_name?: string;
 };
 
 export default function WarehouseSection() {
@@ -80,8 +83,7 @@ export default function WarehouseSection() {
       if (!r.ok || d.error) { setErr(d.error || 'Failed'); setSaving(false); return; }
       const it = itemById(itemId);
       const base = Number(packs) * (it ? it.pack_size : 1);
-      const plural = (n: number, w: string) => `${n} ${w}${n !== 1 ? (w.endsWith('x') ? 'es' : 's') : ''}`;
-      setMsg(`${movement_type === 'receive' ? 'Received' : 'Dispatched'} ${plural(Number(packs), it?.pack_label || 'unit')} = ${plural(base, it?.base_unit || 'unit')}.`);
+      setMsg(`${movement_type === 'receive' ? 'Received' : 'Dispatched'} ${packs} ${it?.pack_label || ''}${Number(packs) > 1 ? 's' : ''} = ${base} ${it?.base_unit || ''}${base > 1 ? 's' : ''}.`);
       setPacks(''); setNote('');
       await loadOnhand(); await loadLog();
     } catch { setErr('Network problem'); }
@@ -93,7 +95,8 @@ export default function WarehouseSection() {
 
   return (
     <div style={{ padding: 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+      {/* tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
         {([['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['log', 'Movement log']] as const).map(([k, l]) => (
           <button key={k} onClick={() => { setTab(k); setErr(''); setMsg(''); }}
             style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
@@ -105,6 +108,7 @@ export default function WarehouseSection() {
 
       {loading && <div style={{ color: C.text2 }}>Loading…</div>}
 
+      {/* ON HAND — two columns on desktop */}
       {!loading && tab === 'onhand' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 }}>
           <div style={card}>
@@ -139,6 +143,7 @@ export default function WarehouseSection() {
         </div>
       )}
 
+      {/* RECEIVE / DISPATCH */}
       {!loading && (tab === 'receive' || tab === 'dispatch') && (
         <div style={{ ...card, maxWidth: 560 }}>
           <div style={cardTitle}>{tab === 'receive' ? 'Receive stock into warehouse' : 'Dispatch stock to a machine'}</div>
@@ -169,13 +174,14 @@ export default function WarehouseSection() {
         </div>
       )}
 
+      {/* LOG */}
       {!loading && tab === 'log' && (
         <div style={card}>
           <div style={cardTitle}>Movement log</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-            <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>Note</th></tr></thead>
+            <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>By</th><th style={th}>Note</th></tr></thead>
             <tbody>
-              {movements.length === 0 && <tr><td style={td} colSpan={6}>No movements yet.</td></tr>}
+              {movements.length === 0 && <tr><td style={td} colSpan={7}>No movements yet.</td></tr>}
               {movements.map(m => {
                 const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
                 const tagBg = m.movement_type === 'receive' ? C.greenBg : m.movement_type === 'dispatch' ? C.blueBg : C.amberBg;
@@ -187,6 +193,7 @@ export default function WarehouseSection() {
                     <td style={td}>{it ? it.name : m.item_id.slice(0, 6)}</td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: m.qty_base >= 0 ? C.green : C.blue }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</td>
                     <td style={{ ...td, color: C.text2 }}>{mac ? machineLabel(mac) : '—'}</td>
+                    <td style={{ ...td, color: C.text2 }}>{m.created_by_name || '—'}</td>
                     <td style={{ ...td, color: C.text2 }}>{m.note || '—'}</td>
                   </tr>
                 );
@@ -199,9 +206,9 @@ export default function WarehouseSection() {
   );
 }
 
-const card: React.CSSProperties = { background: '#ffffff', borderRadius: 12, padding: 20, border: '1px solid #e8eaf0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' };
-const cardTitle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: '#1f2533', marginBottom: 14 };
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 700, color: '#9099ac', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #e8eaf0' };
-const td: React.CSSProperties = { padding: '10px', borderBottom: '1px solid #e8eaf0', color: '#1f2533' };
-const lbl: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#5b6478', margin: '14px 0 5px' };
-const inp: React.CSSProperties = { width: '100%', padding: '11px', fontSize: 15, border: '1px solid #dcdfe9', borderRadius: 9, boxSizing: 'border-box', background: '#fff', color: '#1f2533' };
+const card: React.CSSProperties = { background: C.surface, borderRadius: 12, padding: 20, border: '1px solid ' + C.border, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' };
+const cardTitle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 14 };
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid ' + C.border };
+const td: React.CSSProperties = { padding: '10px', borderBottom: '1px solid ' + C.border, color: C.text };
+const lbl: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: C.text2, margin: '14px 0 5px' };
+const inp: React.CSSProperties = { width: '100%', padding: '11px', fontSize: 15, border: '1px solid ' + C.border2, borderRadius: 9, boxSizing: 'border-box', background: '#fff', color: C.text };

@@ -90,6 +90,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(Array.isArray(data) ? data : [], { headers: NO_STORE });
     }
 
+    // Reports: super_admin gets ALL visits in a date range, with staff names resolved
+    if (request.nextUrl.searchParams.get('report') === '1' && session.role === 'super_admin') {
+      let vurl = SB_URL + '/rest/v1/visits?select=*&order=created_at.desc&limit=1000';
+      const from = request.nextUrl.searchParams.get('from');
+      const to = request.nextUrl.searchParams.get('to');
+      if (from) vurl += '&created_at=gte.' + encodeURIComponent(from);
+      if (to) vurl += '&created_at=lte.' + encodeURIComponent(to);
+      const vres = await fetch(vurl, { headers: sbHeaders() });
+      const visits = await vres.json();
+      const rows = Array.isArray(visits) ? visits : [];
+      const staffIds = Array.from(new Set(rows.map((v: any) => v.staff_id).filter(Boolean)));
+      let names: Record<string, string> = {};
+      if (staffIds.length) {
+        const inList = '(' + staffIds.map(encodeURIComponent).join(',') + ')';
+        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email&id=in.' + inList, { headers: sbHeaders() });
+        const nrows = await nr.json();
+        (Array.isArray(nrows) ? nrows : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); });
+      }
+      const withNames = rows.map((v: any) => ({ ...v, staff_name: v.staff_id ? (names[v.staff_id] || '—') : '—' }));
+      return NextResponse.json(withNames, { headers: NO_STORE });
+    }
+
     const staffId = String(session.sub || '');
     const url = SB_URL + '/rest/v1/visits?select=*&staff_id=eq.' + encodeURIComponent(staffId) + '&order=created_at.desc&limit=50';
     const res = await fetch(url, { headers: sbHeaders() });
