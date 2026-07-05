@@ -12,6 +12,9 @@ const sbHeaders = (extra: Record<string, string> = {}) => ({
 });
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' };
 
+const FRUITLINK_NUMBER = '+918919388756';
+const NOTIFY_METHOD = process.env.NOTIFY_METHOD || 'deep_link';
+
 async function getSession(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   return await verifySession(token);
@@ -27,6 +30,43 @@ async function tenantMachineIds(ownerId: string): Promise<string[]> {
 
 function tenantOf(session: any): string {
   return session.owner_id ? String(session.owner_id) : '';
+}
+
+async function buildNotification(visit: any, machineName: string, staffName: string) {
+  const machineId = visit.machine_id;
+  const ownerId = visit.owner_id;
+
+  let arr: any = null;
+  const perM = await fetch(SB_URL + '/rest/v1/service_arrangement?select=*&machine_id=eq.' + encodeURIComponent(machineId) + '&limit=1', { headers: sbHeaders() });
+  const perMrows = await perM.json();
+  if (Array.isArray(perMrows) && perMrows[0]) arr = perMrows[0];
+  else if (ownerId) {
+    const def = await fetch(SB_URL + '/rest/v1/service_arrangement?select=*&owner_id=eq.' + encodeURIComponent(ownerId) + '&machine_id=is.null&limit=1', { headers: sbHeaders() });
+    const defRows = await def.json();
+    if (Array.isArray(defRows) && defRows[0]) arr = defRows[0];
+  }
+
+  const mode = arr ? arr.mode : 'self_service';
+  let numbers: string[] = arr && Array.isArray(arr.notify_numbers) ? [...arr.notify_numbers] : [];
+  if (mode === 'fruitlink_service' && !numbers.includes(FRUITLINK_NUMBER)) numbers.push(FRUITLINK_NUMBER);
+
+  const lines = ['\uD83C\uDF4A Fruitlink Visit Update'];
+  lines.push('Machine: ' + machineName);
+  lines.push('Type: ' + (visit.visit_type ? visit.visit_type[0].toUpperCase() + visit.visit_type.slice(1) : ''));
+  if (staffName) lines.push('By: ' + staffName);
+  if (visit.visit_type === 'loading' && visit.oranges_net != null) {
+    let s = 'Oranges: ' + (visit.oranges_loaded ?? '?') + ' loaded';
+    if (visit.oranges_damaged) s += ', ' + visit.oranges_damaged + ' damaged';
+    s += ' (net ' + visit.oranges_net + ')';
+    lines.push(s);
+  }
+  lines.push('Time: ' + new Date(visit.created_at || Date.now()).toLocaleString('en-IN'));
+  if (visit.address) lines.push('\uD83D\uDCCD ' + visit.address);
+  if (visit.lat != null && visit.lng != null) lines.push('\uD83D\uDDFA\uFE0F https://maps.google.com/?q=' + visit.lat + ',' + visit.lng);
+  if (visit.photo_url) lines.push('Photo: ' + visit.photo_url);
+
+  const message = lines.join('\n');
+  return { method: NOTIFY_METHOD, mode, recipients: numbers, message };
 }
 
 export async function GET(request: NextRequest) {
@@ -67,7 +107,6 @@ export async function POST(request: NextRequest) {
     if (session.role !== 'field_staff' && session.role !== 'super_admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
-
     const body = await request.json().catch(() => ({}));
     const machine_id = String(body.machine_id || '');
     const visit_type = String(body.visit_type || '');
@@ -81,7 +120,6 @@ export async function POST(request: NextRequest) {
 
     const staffId = String(session.sub || '');
     let ownerId = session.owner_id ? String(session.owner_id) : '';
-
     if (session.role === 'field_staff') {
       if (!ownerId) return NextResponse.json({ error: 'No tenant for staff' }, { status: 403, headers: NO_STORE });
       const allowed = await tenantMachineIds(ownerId);
@@ -94,12 +132,11 @@ export async function POST(request: NextRequest) {
       const rows = await r.json();
       ownerId = Array.isArray(rows) && rows[0] ? String(rows[0].operator_id) : ownerId;
     }
-
     const loaded = body.oranges_loaded != null ? parseInt(body.oranges_loaded) : null;
     const damaged = body.oranges_damaged != null ? parseInt(body.oranges_damaged) : null;
     const net = (loaded != null && damaged != null) ? (loaded - damaged) : (loaded != null ? loaded : null);
 
-const row = {
+    const row = {
       machine_id,
       staff_id: staffId,
       owner_id: ownerId || null,
@@ -123,7 +160,25 @@ const row = {
       body: JSON.stringify(row),
     });
     const data = await res.json();
-if (!res.ok) return NextResponse.json({ error: 'insert failed', detail: data }, { status: 500, headers: NO_STORE });    return NextResponse.json({ success: true, visit: Array.isArray(data) ? data[0] : data }, { headers: NO_STORE });
+    if (!res.ok) return NextResponse.json({ error: 'insert failed', detail: data }, { status: 500, headers: NO_STORE });
+
+    const savedVisit = Array.isArray(data) ? data[0] : data;
+
+    let staffName = session.name || '';
+    if (!staffName) {
+      const sres = await fetch(SB_URL + '/rest/v1/operators?select=name&id=eq.' + encodeURIComponent(staffId) + '&limit=1', { headers: sbHeaders() });
+      const srows = await sres.json();
+      staffName = Array.isArray(srows) && srows[0] ? (srows[0].name || '') : '';
+    }
+    let machineName = '';
+    const mres = await fetch(SB_URL + '/rest/v1/machines?select=display_name,sn&id=eq.' + encodeURIComponent(machine_id) + '&limit=1', { headers: sbHeaders() });
+    const mrows = await mres.json();
+    if (Array.isArray(mrows) && mrows[0]) machineName = mrows[0].display_name || mrows[0].sn || '';
+
+    let notify = null;
+    try { notify = await buildNotification(savedVisit, machineName, staffName); } catch { /* never fail the visit on notify prep */ }
+
+    return NextResponse.json({ success: true, visit: savedVisit, notify }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }

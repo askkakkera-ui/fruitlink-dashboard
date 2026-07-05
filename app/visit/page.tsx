@@ -42,6 +42,8 @@ export default function VisitPage() {
   const [gpsMsg, setGpsMsg] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  const [notify, setNotify] = useState<{ recipients: string[]; message: string } | null>(null);
+
   const net = (() => {
     const l = parseInt(loaded), d = parseInt(damaged);
     if (isNaN(l)) return '';
@@ -172,7 +174,7 @@ export default function VisitPage() {
   }
 
   async function submit() {
-    setErr(''); setMsg('');
+    setErr(''); setMsg(''); setNotify(null);
     if (!machineId) { setErr('Please select a machine'); return; }
     setSaving(true);
     try {
@@ -202,6 +204,11 @@ export default function VisitPage() {
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Could not save visit'); setSaving(false); return; }
       setMsg('Visit saved.');
+      if (d.notify && d.notify.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
+        setNotify({ recipients: d.notify.recipients, message: d.notify.message || '' });
+      } else {
+        setNotify(null);
+      }
       setNote(''); setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
       clearPhoto();
       loadVisits();
@@ -282,6 +289,21 @@ export default function VisitPage() {
         {err && <div style={S.err}>{err}</div>}
         {msg && <div style={S.ok}>{msg}</div>}
 
+        {notify && notify.recipients.length > 0 && (
+          <div style={S.notifyBox}>
+            <div style={S.notifyTitle}>Send WhatsApp update</div>
+            <div style={S.notifyHint}>Tap each recipient to send the pre-filled update.</div>
+            {notify.recipients.map((num) => (
+              <a key={num}
+                href={`https://wa.me/${num.replace(/[^\d]/g, '')}?text=${encodeURIComponent(notify.message)}`}
+                target="_blank" rel="noopener noreferrer"
+                style={S.waBtn}>
+                📲 Send to {num}
+              </a>
+            ))}
+          </div>
+        )}
+
         <button type="button" onClick={submit} disabled={saving || processing} style={{ ...S.submit, ...((saving || processing) ? { opacity: 0.6 } : {}) }}>
           {saving ? 'Saving…' : 'Submit visit'}
         </button>
@@ -356,4 +378,8 @@ const S: Record<string, React.CSSProperties> = {
   thumb: { width: '100%', maxWidth: 220, borderRadius: 8, marginTop: 6, display: 'block' },
   muted: { fontSize: 13, color: '#5B6478', marginTop: 3 },
   time: { fontSize: 12, color: '#98A0B0', marginTop: 4 },
+  notifyBox: { marginTop: 14, padding: 14, background: '#F0FBF4', border: '1px solid #B7E4C7', borderRadius: 10 },
+  notifyTitle: { fontSize: 15, fontWeight: 700, color: '#198754', marginBottom: 2 },
+  notifyHint: { fontSize: 12, color: '#5B6478', marginBottom: 10 },
+  waBtn: { display: 'block', textAlign: 'center', padding: '12px', marginBottom: 8, background: '#25D366', color: '#fff', fontWeight: 700, fontSize: 15, borderRadius: 10, textDecoration: 'none' },
 };
