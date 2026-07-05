@@ -6,10 +6,11 @@ const secretKey = process.env.SESSION_SECRET || '';
 const encodedKey = new TextEncoder().encode(secretKey);
 
 export type SessionPayload = {
-  sub: string;        // operator id
-  role: string;       // 'super_admin' | 'operator'
+  sub: string;
+  role: string;       // 'super_admin' | 'operator' | 'field_staff'
   name?: string;
   email?: string;
+  owner_id?: string;
 };
 
 // Sign a session token (7-day sliding expiry).

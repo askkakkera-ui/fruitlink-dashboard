@@ -133,19 +133,26 @@ export async function GET(request: NextRequest) {
 }
 
 // Shared write guard: logged in; sensitive tables need super_admin.
-async function guardWrite(request: NextRequest) {
+const FIELD_STAFF_WRITE_TABLES = ['visits'];
+
+async function guardWrite(request: NextRequest, method: string) {
   const session = await getSession(request);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const table = tableOf(pathParam(request));
   if (SUPER_ADMIN_WRITE_TABLES.includes(table) && session.role !== 'super_admin') {
     return NextResponse.json({ error: 'Forbidden: super admin only' }, { status: 403 });
   }
+  if (session.role === 'field_staff') {
+    if (method !== 'POST' || !FIELD_STAFF_WRITE_TABLES.includes(table)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
   return null;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const blocked = await guardWrite(request); if (blocked) return blocked;
+    const blocked = await guardWrite(request, 'POST'); if (blocked) return blocked;
     const url = SB_URL + pathParam(request);
     const body = await request.text();
     const res = await fetch(url, { method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }), body });
@@ -156,7 +163,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const blocked = await guardWrite(request); if (blocked) return blocked;
+    const blocked = await guardWrite(request, 'PATCH'); if (blocked) return blocked;
     const url = SB_URL + pathParam(request);
     const body = await request.text();
     const res = await fetch(url, { method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }), body });
@@ -167,7 +174,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const blocked = await guardWrite(request); if (blocked) return blocked;
+    const blocked = await guardWrite(request, 'DELETE'); if (blocked) return blocked;
     const url = SB_URL + pathParam(request);
     const res = await fetch(url, { method: 'DELETE', headers: sbHeaders({ Prefer: 'return=minimal' }) });
     return new NextResponse(null, { status: res.status });
