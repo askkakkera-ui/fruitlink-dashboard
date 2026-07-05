@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
 
@@ -7,7 +7,7 @@ type Machine = { id: string; display_name?: string; sn?: string; location?: stri
 type Visit = {
   id: string; machine_id: string; visit_type: string; note?: string;
   oranges_loaded?: number; oranges_damaged?: number; oranges_net?: number;
-  created_at: string;
+  photo_url?: string; address?: string; created_at: string;
 };
 
 const TYPES = [
@@ -33,6 +33,15 @@ export default function VisitPage() {
   const [err, setErr] = useState('');
   const [visits, setVisits] = useState<Visit[]>([]);
 
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const [address, setAddress] = useState('');
+  const [gpsMsg, setGpsMsg] = useState('');
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
   const net = (() => {
     const l = parseInt(loaded), d = parseInt(damaged);
     if (isNaN(l)) return '';
@@ -56,12 +65,104 @@ export default function VisitPage() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { loadMachines(); loadVisits(); }, []);
+  useEffect(() => { loadMachines(); loadVisits(); captureGps(); }, []);
   useEffect(() => {
     const onFocus = () => loadVisits();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, []);
+
+  function captureGps() {
+    if (!('geolocation' in navigator)) { setGpsMsg('GPS not available'); return; }
+    setGpsMsg('Getting location…');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const la = pos.coords.latitude, ln = pos.coords.longitude;
+        setLat(la); setLng(ln);
+        setGpsMsg('Location captured');
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${ln}`, {
+            headers: { 'Accept': 'application/json' },
+          });
+          const d = await r.json();
+          if (d && d.display_name) setAddress(String(d.display_name));
+        } catch { /* keep coords only */ }
+      },
+      () => { setGpsMsg('Location unavailable (you can still submit)'); },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  }
+
+  async function onPhotoPicked(file: File) {
+    setErr(''); setProcessing(true);
+    try {
+      const dataUrl = await readFile(file);
+      const img = await loadImage(dataUrl);
+      const MAX = 1280;
+      let w = img.width, h = img.height;
+      if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no canvas');
+      ctx.drawImage(img, 0, 0, w, h);
+      stamp(ctx, w, h);
+
+      const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.65));
+      if (!blob) throw new Error('compress failed');
+      setPhotoBlob(blob);
+      setPhotoPreview(URL.createObjectURL(blob));
+      (img as any).src = '';
+    } catch (e: any) {
+      setErr('Could not process photo — try again.');
+    }
+    setProcessing(false);
+  }
+
+  function stamp(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const machine = machines.find(m => m.id === machineId);
+    const now = new Date();
+    const lines = [
+      'Fruitlink Visit',
+      (machine ? (machine.display_name || machine.sn) : '') + '  ' + now.toLocaleString('en-IN'),
+    ];
+    if (lat != null && lng != null) lines.push(`GPS ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    if (address) lines.push(address.length > 60 ? address.slice(0, 60) + '…' : address);
+
+    const pad = Math.round(w * 0.02);
+    const fs = Math.max(12, Math.round(w * 0.028));
+    ctx.font = `${fs}px sans-serif`;
+    const lineH = fs + 6;
+    const boxH = lineH * lines.length + pad;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, h - boxH, w, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'top';
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, h - boxH + pad / 2 + i * lineH));
+  }
+
+  function clearPhoto() {
+    setPhotoBlob(null);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview('');
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  async function uploadPhoto(): Promise<string | null> {
+    if (!photoBlob) return null;
+    const presign = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'visit.jpg', contentType: 'image/jpeg', operator_id: 'visits' }),
+    });
+    const p = await presign.json();
+    if (!p.uploadUrl || !p.publicUrl) throw new Error(p.error || 'upload not configured');
+    const put = await fetch(p.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: photoBlob });
+    if (!put.ok) throw new Error('photo upload failed');
+    return p.publicUrl as string;
+  }
 
   function consumablesObj() {
     const c: Record<string, number> = {};
@@ -75,11 +176,19 @@ export default function VisitPage() {
     if (!machineId) { setErr('Please select a machine'); return; }
     setSaving(true);
     try {
+      let photo_url: string | null = null;
+      if (photoBlob) {
+        try { photo_url = await uploadPhoto(); }
+        catch (e: any) { setErr('Photo upload failed — check network and retry.'); setSaving(false); return; }
+      }
       const payload: any = {
         machine_id: machineId,
         visit_type: visitType,
         note: note.trim() || null,
         consumables: consumablesObj(),
+        photo_url,
+        lat, lng,
+        address: address || null,
       };
       if (visitType === 'loading') {
         if (loaded !== '') payload.oranges_loaded = parseInt(loaded);
@@ -94,6 +203,7 @@ export default function VisitPage() {
       if (!r.ok || d.error) { setErr(d.error || 'Could not save visit'); setSaving(false); return; }
       setMsg('Visit saved.');
       setNote(''); setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
+      clearPhoto();
       loadVisits();
     } catch (e: any) {
       setErr('Network problem — please try again.');
@@ -121,8 +231,7 @@ export default function VisitPage() {
         <label style={S.label}>Visit type</label>
         <div style={S.typeRow}>
           {TYPES.map(t => (
-            <button key={t.v} type="button"
-              onClick={() => setVisitType(t.v)}
+            <button key={t.v} type="button" onClick={() => setVisitType(t.v)}
               style={{ ...S.typeBtn, ...(visitType === t.v ? S.typeBtnOn : {}) }}>
               {t.label}
             </button>
@@ -138,7 +247,6 @@ export default function VisitPage() {
             <input style={S.input} type="number" inputMode="numeric" value={damaged}
               onChange={e => setDamaged(e.target.value)} placeholder="e.g. 2" />
             <div style={S.netRow}>Net loaded: <b>{net === '' ? '—' : net}</b></div>
-
             <label style={S.label}>Consumables refilled (optional)</label>
             <div style={S.consRow}>
               <input style={S.consInput} type="number" inputMode="numeric" value={cups} onChange={e => setCups(e.target.value)} placeholder="Cups" />
@@ -151,6 +259,22 @@ export default function VisitPage() {
           </div>
         )}
 
+        <label style={S.label}>Photo</label>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onPhotoPicked(f); }} />
+        {!photoPreview && (
+          <button type="button" onClick={() => fileRef.current?.click()} style={S.photoBtn} disabled={processing}>
+            {processing ? 'Processing…' : '📷 Take photo'}
+          </button>
+        )}
+        {photoPreview && (
+          <div>
+            <img src={photoPreview} alt="visit" style={S.preview} />
+            <button type="button" onClick={() => { clearPhoto(); fileRef.current?.click(); }} style={S.retake}>Retake</button>
+          </div>
+        )}
+        <div style={S.gps}>{gpsMsg}{address ? ' — ' + (address.length > 50 ? address.slice(0, 50) + '…' : address) : ''}</div>
+
         <label style={S.label}>Note (optional)</label>
         <textarea style={{ ...S.input, height: 70, resize: 'vertical' }} value={note}
           onChange={e => setNote(e.target.value)} placeholder="Anything worth recording..." />
@@ -158,7 +282,7 @@ export default function VisitPage() {
         {err && <div style={S.err}>{err}</div>}
         {msg && <div style={S.ok}>{msg}</div>}
 
-        <button type="button" onClick={submit} disabled={saving} style={{ ...S.submit, ...(saving ? { opacity: 0.6 } : {}) }}>
+        <button type="button" onClick={submit} disabled={saving || processing} style={{ ...S.submit, ...((saving || processing) ? { opacity: 0.6 } : {}) }}>
           {saving ? 'Saving…' : 'Submit visit'}
         </button>
       </div>
@@ -177,6 +301,8 @@ export default function VisitPage() {
               {v.visit_type === 'loading' && v.oranges_net != null &&
                 <div style={S.muted}>Loaded net {v.oranges_net}{v.oranges_damaged ? ` (${v.oranges_damaged} damaged)` : ''}</div>}
               {v.note && <div style={S.muted}>{v.note}</div>}
+              {v.photo_url && <img src={v.photo_url} alt="" style={S.thumb} />}
+              {v.address && <div style={S.muted}>📍 {v.address.length > 50 ? v.address.slice(0, 50) + '…' : v.address}</div>}
               <div style={S.time}>{new Date(v.created_at).toLocaleString('en-IN')}</div>
             </div>
           );
@@ -184,6 +310,23 @@ export default function VisitPage() {
       </div>
     </div>
   );
+}
+
+function readFile(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result));
+    r.onerror = () => rej(new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+}
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('image load failed'));
+    img.src = src;
+  });
 }
 
 const S: Record<string, React.CSSProperties> = {
@@ -201,11 +344,16 @@ const S: Record<string, React.CSSProperties> = {
   netRow: { fontSize: 15, color: '#1F2533', margin: '8px 0' },
   consRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 },
   consInput: { width: '100%', padding: '10px', fontSize: 15, border: '1px solid #D8DCE6', borderRadius: 8, boxSizing: 'border-box' },
+  photoBtn: { width: '100%', padding: '14px', fontSize: 16, fontWeight: 600, color: '#1F2533', background: '#fff', border: '2px dashed #D8DCE6', borderRadius: 10, cursor: 'pointer' },
+  preview: { width: '100%', borderRadius: 10, marginTop: 4, display: 'block' },
+  retake: { marginTop: 8, padding: '8px 14px', fontSize: 14, background: '#F0F1F5', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#1F2533' },
+  gps: { fontSize: 12, color: '#5B6478', marginTop: 6 },
   submit: { width: '100%', marginTop: 16, padding: '14px', fontSize: 17, fontWeight: 700, color: '#fff', background: '#FE6505', border: 'none', borderRadius: 12, cursor: 'pointer' },
   err: { marginTop: 12, padding: '10px 12px', background: '#FDEEEE', color: '#B42318', borderRadius: 8, fontSize: 14 },
   ok: { marginTop: 12, padding: '10px 12px', background: '#E7F8EF', color: '#198754', borderRadius: 8, fontSize: 14 },
   visitRow: { padding: '10px 0', borderBottom: '1px solid #EEF0F5' },
   badge: { marginLeft: 8, fontSize: 12, padding: '2px 8px', background: '#F0F1F5', borderRadius: 20, color: '#5B6478' },
+  thumb: { width: '100%', maxWidth: 220, borderRadius: 8, marginTop: 6, display: 'block' },
   muted: { fontSize: 13, color: '#5B6478', marginTop: 3 },
   time: { fontSize: 12, color: '#98A0B0', marginTop: 4 },
 };
