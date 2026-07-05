@@ -119,8 +119,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(row),
     });
     const data = await res.json();
-    if (!res.ok) return NextResponse.json({ error: 'insert failed', detail: data }, { status: 500, headers: NO_STORE });
-    return NextResponse.json({ success: true, visit: Array.isArray(data) ? data[0] : data }, { headers: NO_STORE });
+if (!res.ok) return NextResponse.json({ error: 'insert failed: ' + JSON.stringify(data) }, { status: 500, headers: NO_STORE });    return NextResponse.json({ success: true, visit: Array.isArray(data) ? data[0] : data }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
