@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     const damaged = body.oranges_damaged != null ? parseInt(body.oranges_damaged) : null;
     const net = (loaded != null && damaged != null) ? (loaded - damaged) : (loaded != null ? loaded : null);
 
-    const row = {
+const row = {
       machine_id,
       staff_id: staffId,
       owner_id: ownerId || null,
@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
       oranges_damaged: damaged,
       oranges_net: net,
       consumables: body.consumables && typeof body.consumables === 'object' ? body.consumables : null,
+      photo_url: body.photo_url ? String(body.photo_url).slice(0, 500) : null,
+      lat: (body.lat != null && !isNaN(parseFloat(body.lat))) ? parseFloat(body.lat) : null,
+      lng: (body.lng != null && !isNaN(parseFloat(body.lng))) ? parseFloat(body.lng) : null,
+      address: body.address ? String(body.address).slice(0, 500) : null,
       check_in_at: body.check_in_at || null,
       check_out_at: body.check_out_at || new Date().toISOString(),
     };
