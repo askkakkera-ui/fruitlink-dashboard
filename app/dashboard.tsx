@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import WarehouseSection from './WarehouseSection'
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode},{error:string|null}> {
   constructor(props: any){super(props);this.state={error:null}}
@@ -111,6 +112,7 @@ const NAV_ITEMS = [
   { key: 'map', label: 'Fleet Map', icon: '◎', group: 'Equipment Management' },
   { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
   { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
+  { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management' },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
@@ -3462,6 +3464,7 @@ export default function Dashboard() {
     machines: <ErrorBoundary><MachinesPage machines={machines} loading={loading} fetchData={fetchData} /></ErrorBoundary>,
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
+    warehouse: <WarehouseSection />,
   }
 
   return (
