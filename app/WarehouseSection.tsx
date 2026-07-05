@@ -29,6 +29,7 @@ export default function WarehouseSection() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
@@ -62,6 +63,13 @@ export default function WarehouseSection() {
 
   useEffect(() => {
     (async () => { setLoading(true); await loadOnhand(); await loadMachines(); await loadLog(); setLoading(false); })();
+  }, []);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   const itemById = (id: string) => items.find(i => i.id === id);
@@ -178,28 +186,66 @@ export default function WarehouseSection() {
       {!loading && tab === 'log' && (
         <div style={card}>
           <div style={cardTitle}>Movement log</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-            <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>By</th><th style={th}>Note</th></tr></thead>
-            <tbody>
-              {movements.length === 0 && <tr><td style={td} colSpan={7}>No movements yet.</td></tr>}
-              {movements.map(m => {
-                const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
-                const tagBg = m.movement_type === 'receive' ? C.greenBg : m.movement_type === 'dispatch' ? C.blueBg : C.amberBg;
-                const tagC = m.movement_type === 'receive' ? C.green : m.movement_type === 'dispatch' ? C.blue : C.amber;
-                return (
-                  <tr key={m.id}>
-                    <td style={{ ...td, color: C.text2, whiteSpace: 'nowrap' }}>{new Date(m.created_at).toLocaleString('en-IN')}</td>
-                    <td style={td}><span style={{ background: tagBg, color: tagC, padding: '2px 9px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>{m.movement_type}</span></td>
-                    <td style={td}>{it ? it.name : m.item_id.slice(0, 6)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: m.qty_base >= 0 ? C.green : C.blue }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</td>
-                    <td style={{ ...td, color: C.text2 }}>{mac ? machineLabel(mac) : '—'}</td>
-                    <td style={{ ...td, color: C.text2 }}>{m.created_by_name || '—'}</td>
-                    <td style={{ ...td, color: C.text2 }}>{m.note || '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {movements.length === 0 && <div style={{ color: C.text2, fontSize: 14 }}>No movements yet.</div>}
+
+          {/* Desktop: table */}
+          {!isMobile && movements.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+              <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>By</th><th style={th}>Note</th></tr></thead>
+              <tbody>
+                {movements.map(m => {
+                  const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
+                  const tagBg = m.movement_type === 'receive' ? C.greenBg : m.movement_type === 'dispatch' ? C.blueBg : C.amberBg;
+                  const tagC = m.movement_type === 'receive' ? C.green : m.movement_type === 'dispatch' ? C.blue : C.amber;
+                  return (
+                    <tr key={m.id}>
+                      <td style={{ ...td, color: C.text2, whiteSpace: 'nowrap' }}>{new Date(m.created_at).toLocaleString('en-IN')}</td>
+                      <td style={td}><span style={{ background: tagBg, color: tagC, padding: '2px 9px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>{m.movement_type}</span></td>
+                      <td style={td}>{it ? it.name : m.item_id.slice(0, 6)}</td>
+                      <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: m.qty_base >= 0 ? C.green : C.blue }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</td>
+                      <td style={{ ...td, color: C.text2 }}>{mac ? machineLabel(mac) : '—'}</td>
+                      <td style={{ ...td, color: C.text2 }}>{m.created_by_name || '—'}</td>
+                      <td style={{ ...td, color: C.text2 }}>{m.note || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {/* Mobile: rich stacked cards */}
+          {isMobile && movements.map(m => {
+            const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
+            const accent = m.movement_type === 'receive' ? C.green : m.movement_type === 'dispatch' ? C.blue : C.amber;
+            const unit = it ? it.base_unit + 's' : '';
+            return (
+              <div key={m.id} style={{ background: '#fff', borderRadius: 12, border: '0.5px solid ' + C.border, overflow: 'hidden', marginBottom: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ display: 'flex' }}>
+                  <div style={{ width: 5, background: accent, flexShrink: 0 }} />
+                  <div style={{ flex: 1, padding: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div>
+                        <span style={{ background: accent, color: '#fff', padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>{m.movement_type}</span>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginTop: 8 }}>{it ? it.name : m.item_id.slice(0, 6)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: accent, lineHeight: 1 }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</div>
+                        {unit && <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>{unit}</div>}
+                      </div>
+                    </div>
+                    <div style={{ borderTop: '0.5px solid ' + C.border, paddingTop: 10, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 10px', fontSize: 12.5 }}>
+                      <span style={{ color: C.text3 }}>Time</span>
+                      <span style={{ color: C.text2, textAlign: 'right' }}>{new Date(m.created_at).toLocaleString('en-IN')}</span>
+                      {mac && <><span style={{ color: C.text3 }}>Machine</span><span style={{ color: C.text2, textAlign: 'right', fontWeight: 600 }}>{machineLabel(mac)}</span></>}
+                      <span style={{ color: C.text3 }}>By</span>
+                      <span style={{ color: C.text2, textAlign: 'right' }}>{m.created_by_name || '—'}</span>
+                      {m.note && <><span style={{ color: C.text3 }}>Note</span><span style={{ color: C.text2, textAlign: 'right' }}>{m.note}</span></>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
