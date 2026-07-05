@@ -164,7 +164,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
 
       {/* Nav */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 8px' }}>
-        {Object.entries(groups).map(([group, items]) => (
+        {(() => { const order = ['__top', 'Equipment Management', 'Order Management', 'Operator Management', 'Marketing', 'System']; return Object.entries(groups).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])); })().map(([group, items]) => (
           <div key={group}>
             {group !== '__top' && <SectionLabel>{group}</SectionLabel>}
             {items.map(item => {
@@ -222,7 +222,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alert Center', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
