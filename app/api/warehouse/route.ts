@@ -21,6 +21,17 @@ function ownerForOperator(session: any): string {
   return String(session.sub || '');
 }
 
+async function operatorNames(ids: string[]): Promise<Record<string, string>> {
+  const uniq = Array.from(new Set(ids.filter(Boolean)));
+  if (uniq.length === 0) return {};
+  const inList = '(' + uniq.map(encodeURIComponent).join(',') + ')';
+  const r = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email&id=in.' + inList, { headers: sbHeaders() });
+  const rows = await r.json();
+  const map: Record<string, string> = {};
+  (Array.isArray(rows) ? rows : []).forEach((o: any) => { map[o.id] = o.name || o.email || String(o.id).slice(0, 6); });
+  return map;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
@@ -75,7 +86,10 @@ export async function GET(request: NextRequest) {
       if (item) url += '&item_id=eq.' + encodeURIComponent(item);
       const r = await fetch(url, { headers: sbHeaders() });
       const d = await r.json();
-      return NextResponse.json(Array.isArray(d) ? d : [], { headers: NO_STORE });
+      const rows = Array.isArray(d) ? d : [];
+      const names = await operatorNames(rows.map((m: any) => m.created_by));
+      const withNames = rows.map((m: any) => ({ ...m, created_by_name: m.created_by ? (names[m.created_by] || '—') : '—' }));
+      return NextResponse.json(withNames, { headers: NO_STORE });
     }
 
     return NextResponse.json({ error: 'specify items|onhand|movements' }, { status: 400, headers: NO_STORE });
