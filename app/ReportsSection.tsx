@@ -52,15 +52,20 @@ export default function ReportsSection() {
     const toTs = to + 'T23:59:59.999+05:30';
 
     if (type === 'visits') {
-      const r = await fetch('/api/visit', { cache: 'no-store' });
-      let d = await r.json();
+      const [vr, mr] = await Promise.all([
+        fetch('/api/visit?report=1&from=' + encodeURIComponent(fromTs) + '&to=' + encodeURIComponent(toTs), { cache: 'no-store' }),
+        fetch('/api/visit?machines=1', { cache: 'no-store' }),
+      ]);
+      let d = await vr.json();
+      const machines = await mr.json();
       if (!Array.isArray(d)) d = [];
-      d = d.filter((v: any) => { const t = new Date(v.created_at).getTime(); return t >= new Date(fromTs).getTime() && t <= new Date(toTs).getTime(); });
-      const cols = ['Date', 'Machine', 'Type', 'Oranges (net)', 'Address'];
+      const macName = (id: string) => { const m = Array.isArray(machines) ? machines.find((x: any) => x.id === id) : null; return m ? (m.display_name || m.sn) : (id || '').slice(0, 8); };
+      const cols = ['Date', 'Machine', 'Type', 'Field staff', 'Oranges (net)', 'Address'];
       const rows = d.map((v: any) => [
         new Date(v.created_at).toLocaleString('en-IN'),
-        (v.machine_id || '').slice(0, 8),
+        macName(v.machine_id),
         v.visit_type || '',
+        v.staff_name || '-',
         v.oranges_net != null ? String(v.oranges_net) : '-',
         v.address ? String(v.address).slice(0, 40) : '-',
       ]);
@@ -93,13 +98,14 @@ export default function ReportsSection() {
     const itemName = (id: string) => (Array.isArray(items) ? items.find((x: any) => x.id === id) : null)?.name || id.slice(0, 6);
     const macName = (id: string) => { const m = Array.isArray(machines) ? machines.find((x: any) => x.id === id) : null; return m ? (m.display_name || m.sn) : '-'; };
 
-    const cols = ['Date', 'Type', 'Item', 'Qty', 'Machine', 'Note'];
+    const cols = ['Date', 'Type', 'Item', 'Qty', 'Machine', 'By', 'Note'];
     const rows = d.map((m: any) => [
       new Date(m.created_at).toLocaleString('en-IN'),
       m.movement_type,
       itemName(m.item_id),
       (m.qty_base >= 0 ? '+' : '') + m.qty_base,
       m.machine_id ? macName(m.machine_id) : '-',
+      m.created_by_name || '-',
       m.note ? String(m.note).slice(0, 30) : '-',
     ]);
     const titles: any = { received: 'Stock Received Report', dispatched: 'Stock Dispatched Report', movements: 'Warehouse Movement Log' };
@@ -145,7 +151,8 @@ export default function ReportsSection() {
       const colWidths = (n: number) => {
         // distribute 182mm across columns
         if (n === 5) return [34, 34, 30, 40, 44];
-        if (n === 6) return [34, 22, 34, 20, 34, 38];
+        if (n === 6) return [34, 30, 26, 24, 34, 34];
+        if (n === 7) return [30, 20, 28, 16, 28, 26, 34];
         return new Array(n).fill(182 / n);
       };
 
