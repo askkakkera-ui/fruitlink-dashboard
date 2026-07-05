@@ -195,7 +195,7 @@ export default function ReportsSection() {
 
   return (
     <div style={{ padding: 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
-      <div style={{ ...card, marginBottom: 18, maxWidth: 720 }}>
+      <div style={{ ...card, marginBottom: 18 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Reports</div>
         <div style={{ fontSize: 13.5, color: C.text2, lineHeight: 1.5, marginBottom: 16 }}>
           Generate date-wise PDF reports with the Fruitlink letterhead. Pick a report type and date range.
