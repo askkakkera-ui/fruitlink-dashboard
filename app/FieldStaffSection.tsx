@@ -13,7 +13,7 @@ const C = {
 const card: React.CSSProperties = { background: '#ffffff', borderRadius: 14, border: '1px solid #e8eaf0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' };
 
 type Staff = { id: string; name?: string; email: string; phone?: string; role: string; created_at?: string };
-type Visit = { id: string; staff_id: string; machine_id?: string; visit_type?: string; oranges_net?: number; photo_url?: string; lat?: number; lng?: number; address?: string; created_at: string };
+type Visit = { id: string; staff_id: string; machine_id?: string; visit_type?: string; oranges_loaded?: number; oranges_damaged?: number; oranges_net?: number; photo_url?: string; lat?: number; lng?: number; address?: string; created_at: string };
 
 function fmtDate(t?: string) {
   if (!t) return '—';
