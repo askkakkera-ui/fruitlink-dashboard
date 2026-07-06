@@ -356,19 +356,11 @@ function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
 }
 
 // ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
-function ConsoleInsights({ machines, lackingCard }: any) {
+function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: any) {
   const isMobile = useIsMobile()
   const IND = '#423A8E', INDBG = '#efeefc'
-
   const visible = (machines || []).filter((m: any) => m && m.sn)
-  const [selSn, setSelSn] = useState('')
-  useEffect(() => {
-    if (!visible.length) return
-    if (!selSn || !visible.find((m: any) => m.sn === selSn)) {
-      const on = visible.find((m: any) => m.status === 'online')
-      setSelSn((on || visible[0]).sn)
-    }
-  }, [machines])
+  const selSn = machineSel && machineSel !== 'all' ? machineSel : (visible.find((m: any) => m.status === 'online') || visible[0])?.sn || ''
   const machine = visible.find((m: any) => m.sn === selSn) || visible[0] || null
   // Per-machine fruit/stock tuning from Settings → Fruit & Stock (falls back to defaults)
   const tuning = (() => {
@@ -681,7 +673,7 @@ const stats = [
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
-      <ConsoleInsights machines={machines} lackingCard={stats[3]} />
+      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} />
 
       {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
