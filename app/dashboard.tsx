@@ -716,12 +716,12 @@ const stats = [
             <span style={{ fontSize: 11, color: C.text3 }}>Live feed</span>
           </div>
         </div>
-        {activeAlerts.length === 0 ? (
+        {scopedAlerts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>All clear — no active alerts</div>
           </div>
-        ) : activeAlerts.slice(0, 5).map((a: any, i: number) => {
+        ) : scopedAlerts.slice(0, 5).map((a: any, i: number) => {
           const m = getMachine(a.machine_id)
           return (
             <div key={a.id} style={{
