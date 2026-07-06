@@ -51,7 +51,13 @@ export async function GET(request: NextRequest) {
     if (request.nextUrl.searchParams.get('tenants') === '1') {
       const r = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,max_notify_numbers&order=name.asc', { headers: sbHeaders() });
       const data = await r.json();
-      return NextResponse.json(Array.isArray(data) ? data : [], { headers: NO_STORE });
+      const ops = Array.isArray(data) ? data : [];
+      // Only show real tenants: operators who own at least one machine (exclude super_admin)
+      const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?select=operator_id', { headers: sbHeaders() });
+      const moRows = await moRes.json();
+      const owners = new Set((Array.isArray(moRows) ? moRows : []).map((x: any) => String(x.operator_id)));
+      const tenants = ops.filter((o: any) => o.role !== 'super_admin' && owners.has(String(o.id)));
+      return NextResponse.json(tenants, { headers: NO_STORE });
     }
 
     const mres = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn&order=display_name.asc', { headers: sbHeaders() });
