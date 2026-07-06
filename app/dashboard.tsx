@@ -360,8 +360,9 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: a
   const isMobile = useIsMobile()
   const IND = '#423A8E', INDBG = '#efeefc'
   const visible = (machines || []).filter((m: any) => m && m.sn)
-  const selSn = machineSel && machineSel !== 'all' ? machineSel : (visible.find((m: any) => m.status === 'online') || visible[0])?.sn || ''
-  const machine = visible.find((m: any) => m.sn === selSn) || visible[0] || null
+  const machine = (machineSel && machineSel !== 'all'
+    ? visible.find((m: any) => m.id === machineSel)
+    : visible.find((m: any) => m.status === 'online') || visible[0]) || visible[0] || null
   // Per-machine fruit/stock tuning from Settings → Fruit & Stock (falls back to defaults)
   const tuning = (() => {
     try {
@@ -668,21 +669,32 @@ const stats = [
 
   return (
     <div style={{ padding: '24px 28px' }}>
+      {/* Machine Picker */}
+      {machines.length > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Viewing</span>
+          <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
+            style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All machines</option>
+            {machines.filter((m: any) => m && m.id).map((m: any) => (
+              <option key={m.id} value={m.id}>{m.display_name || m.sn}</option>
+            ))}
+          </select>
+          {machineSel !== 'all' && (
+            <span style={{ fontSize: 12, color: C.text3, cursor: 'pointer' }} onClick={() => setMachineSel('all')}>✕ Clear</span>
+          )}
+        </div>
+      )}
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
       <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} />
 
-      {/* Machine Cards */}
+{/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
-            style={{ padding: '7px 12px', borderRadius: 8, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), fontSize: 13, fontWeight: machineSel !== 'all' ? 700 : 500, background: '#fff', color: C.text, cursor: 'pointer' }}>
-            <option value="all">All machines</option>
-            {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
-          </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Dot color={C.orange} pulse size={6} />
           <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced · every 2 min</span>
         </div>
