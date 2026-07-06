@@ -2658,6 +2658,7 @@ function OperatorsPage({ myId }: any) {
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: C.surface, color: C.text }}>
                   <option value="operator">Operator</option>
+                  <option value="field_staff">Field Staff</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
