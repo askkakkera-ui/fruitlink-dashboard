@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 // Dashboard-native Reports — date-wise branded PDF for visits, stock & warehouse.
 // Matches the existing dashboard PDF letterhead style.
@@ -44,7 +44,14 @@ export default function ReportsSection() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-
+  const [machineFilter, setMachineFilter] = useState('all');
+  const [machineList, setMachineList] = useState<any[]>([]);
+  useEffect(() => {
+    fetch('/api/visit?machines=1', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setMachineList(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
   function preset(days: number) { setFrom(daysAgoISO(days)); setTo(todayISO()); }
 
   async function fetchRows(): Promise<{ cols: string[]; rows: string[][]; title: string }> {
@@ -59,6 +66,7 @@ export default function ReportsSection() {
       let d = await vr.json();
       const machines = await mr.json();
       if (!Array.isArray(d)) d = [];
+      if (machineFilter !== 'all') d = d.filter((v: any) => v.machine_id === machineFilter);
       const macName = (id: string) => { const m = Array.isArray(machines) ? machines.find((x: any) => x.id === id) : null; return m ? (m.display_name || m.sn) : (id || '').slice(0, 8); };
       const cols = ['Date', 'Machine', 'Type', 'Field staff', 'Oranges (net)', 'Address'];
       const rows = d.map((v: any) => [
@@ -88,7 +96,7 @@ export default function ReportsSection() {
     if (type === 'dispatched') url += '&type=dispatch';
     const r = await fetch(url, { cache: 'no-store' });
     let d = await r.json(); if (!Array.isArray(d)) d = [];
-
+    if (machineFilter !== 'all') d = d.filter((mv: any) => mv.machine_id === machineFilter);
     // fetch items + machines to resolve names
     const [ir, mr] = await Promise.all([
       fetch('/api/warehouse?items=1', { cache: 'no-store' }),
@@ -228,6 +236,17 @@ export default function ReportsSection() {
           </div>
         </>)}
 
+        </>)}
+        {type !== 'onhand' && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>Machine</div>
+            <select value={machineFilter} onChange={e => setMachineFilter(e.target.value)}
+              style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border2, fontSize: 13.5, background: '#fff', color: C.text, cursor: 'pointer', minWidth: 200 }}>
+              <option value="all">All machines</option>
+              {machineList.map((m: any) => <option key={m.id} value={m.id}>{m.display_name || m.sn}</option>)}
+            </select>
+          </div>
+        )}
         {err && <div style={{ padding: '10px 12px', background: C.redBg, color: C.red, borderRadius: 8, fontSize: 14, marginBottom: 12 }}>{err}</div>}
         {msg && <div style={{ padding: '10px 12px', background: C.greenBg, color: C.green, borderRadius: 8, fontSize: 14, marginBottom: 12 }}>{msg}</div>}
 
