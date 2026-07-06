@@ -1318,6 +1318,11 @@ const filtered = scopedOrders.filter((o: any) => {
               <button key={v} onClick={() => setView(v as any)} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: view === v ? C.orange : 'transparent', color: view === v ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
             ))}
           </div>
+{/* Machine selector */}
+          <select value={machineSel} onChange={e => { setMachineSel(e.target.value); setShowAllMachines(false) }} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 12.5, fontWeight: 600, color: C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All machines</option>
+            {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+          </select>
           {/* Period toggle */}
           {view === 'analytics' && (
             <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
@@ -1385,7 +1390,7 @@ const filtered = scopedOrders.filter((o: any) => {
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16 }}>Revenue by Machine</div>
             {machineRevenue.length === 0 ? (
               <div style={{ color: C.text3, fontSize: 13 }}>No revenue data for this period</div>
-            ) : machineRevenue.map((m: any, i: number) => {
+            ) : (machineSel === 'all' && !showAllMachines ? machineRevenue.slice(0, 10) : machineRevenue).map((m: any, i: number) => {
               const pct = totalRevenue > 0 ? (m.revenue / totalRevenue * 100) : 0
               return (
                 <div key={m.id} style={{ marginBottom: i < machineRevenue.length - 1 ? 18 : 0 }}>
@@ -1408,6 +1413,11 @@ const filtered = scopedOrders.filter((o: any) => {
                 </div>
               )
             })}
+            {machineSel === 'all' && machineRevenue.length > 10 && (
+              <button onClick={() => setShowAllMachines(!showAllMachines)} style={{ marginTop: 16, padding: '8px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text2, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                {showAllMachines ? 'Show top 10' : `Show all ${machineRevenue.length} machines`}
+              </button>
+            )}
           </div>
         </div>
       ) : (
