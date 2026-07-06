@@ -1033,6 +1033,8 @@ function OrdersPage() {
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [machineSel, setMachineSel] = useState('all')
+  const [showAllMachines, setShowAllMachines] = useState(false)
   const [view, setView] = useState<'analytics' | 'orders'>('analytics')
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
   const [allowedIds, setAllowedIds] = useState<string[]>([])
@@ -1079,7 +1081,8 @@ function OrdersPage() {
   const istToday = new Date(todayKey + 'T00:00:00+05:30')
   const weekFloor = new Date(istToday.getTime() - 6 * 86400000)
   const monthFloor = new Date(istToday.getTime() - 29 * 86400000)
-  const periodOrders = orders.filter((o: any) => {
+  const scopedOrders = machineSel === 'all' ? orders : orders.filter((o: any) => o.machine_id === machineSel)
+  const periodOrders = scopedOrders.filter((o: any) => {
     const d = new Date(o.created_at)
     if (period === 'today') return istKey(o.created_at) === todayKey
     if (period === 'week') return d >= weekFloor
@@ -1112,7 +1115,7 @@ function OrdersPage() {
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
 
   // Tab filter for order list
-  const filtered = orders.filter((o: any) => {
+const filtered = scopedOrders.filter((o: any) => {
     if (filter === 'paid') return o.pay_state === 1
     if (filter === 'pending') return o.pay_state === 0
     if (filter === 'delivered') return o.delivery_state === 1
