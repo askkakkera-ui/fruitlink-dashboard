@@ -507,8 +507,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: a
               <div style={{ marginBottom: isMobile ? 16 : 0 }}>
                 <div style={{ ...lbl, marginBottom: 14, justifyContent: 'space-between' }}>
                   <span>Today's Sales</span>
-                  {visible.length > 1
-? <select value={selSn} onChange={e => setSelSn(e.target.value)} style={{ fontSize: 13, fontWeight: 600, border: '1px solid ' + C.orange, borderRadius: 8, padding: '5px 10px', color: C.orange, background: C.surface, cursor: 'pointer' }}>{visible.map((m: any) => <option key={m.sn} value={m.sn}>{m.display_name}</option>)}</select>                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', color: C.green, background: C.greenBg, border: '1px solid rgba(25,135,84,.25)', borderRadius: 20, padding: '2px 8px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'fl-pulse 1.8s infinite' }} />LIVE</span>}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', color: C.green, background: C.greenBg, border: '1px solid rgba(25,135,84,.25)', borderRadius: 20, padding: '2px 8px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'fl-pulse 1.8s infinite' }} />LIVE</span>
                 </div>
                 <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1 }}>{fmt(revToday)}</div>
                 {paceDelta != null && (
