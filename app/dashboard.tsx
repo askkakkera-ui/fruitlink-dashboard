@@ -724,7 +724,6 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
   const [sevFilter, setSevFilter] = useState('all')
   const [machineSel, setMachineSel] = useState('all')
-  const [machineSel, setMachineSel] = useState('all')
   const [expandedM, setExpandedM] = useState<Record<string, boolean>>({})
   const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
   const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
