@@ -843,7 +843,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
         doc.setTextColor(40, 40, 40)
         doc.text(opened, 12, y); doc.text(closed, 50, y)
         doc.text(String(m.display_name || '').slice(0, 16), 88, y)
-        doc.text(String(a.alert_type || '').slice(0, 20), 118, y)
+        doc.text(String(ALERT_LABELS[a.alert_type] || a.alert_type || '').slice(0, 20), 118, y)
         if (a.severity === 'CRITICAL') doc.setTextColor(220, 53, 69)
         else if (a.severity === 'HIGH') doc.setTextColor(201, 138, 0)
         else doc.setTextColor(13, 110, 253)
@@ -990,7 +990,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                               <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
-                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 12, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
+                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 12, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
