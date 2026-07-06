@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       const owners = new Set((Array.isArray(moRows) ? moRows : []).map((x: any) => String(x.operator_id)));
       const tenants = ops.filter((o: any) => o.role !== 'super_admin' && owners.has(String(o.id)));
       return NextResponse.json(tenants, { headers: NO_STORE });
+    }
 
     const mres = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn&order=display_name.asc', { headers: sbHeaders() });
     const machines = await mres.json();
