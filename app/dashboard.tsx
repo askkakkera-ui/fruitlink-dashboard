@@ -888,7 +888,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <select value={machineSel} onChange={e => setMachineSel(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, fontWeight: 600, color: C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
             <option value="all">All machines</option>
-            {machines.map((m: any) => <option key={m.id} value={m.machine_id || m.id}>{m.display_name}</option>)}
+            {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
           </select>
           <button onClick={fetchAlerts} style={{
             display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
@@ -951,7 +951,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {machines.map((m: any) => {
-            const machAlerts = filtered.filter((a: any) => a.machine_id === (m.machine_id || m.id))
+            const machAlerts = filtered.filter((a: any) => a.machine_id === m.id)
             if (machAlerts.length === 0) return null
             const isOpen = expandedM[m.id] !== false
             return (
