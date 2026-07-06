@@ -858,13 +858,14 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     } catch (e: any) { alert('PDF export failed: ' + (e?.message || e)) }
     setExporting(false)
   }
+  const scopedAlerts = machineSel === 'all' ? alerts : alerts.filter((a: any) => a.machine_id === machineSel)
   const counts: any = {
-    CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
-    HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
-    MEDIUM: alerts.filter((a: any) => !a.resolved_at && a.severity === 'MEDIUM').length,
-    LOW: alerts.filter((a: any) => !a.resolved_at && a.severity === 'LOW').length,
-    active: alerts.filter((a: any) => !a.resolved_at).length,
-    resolved: alerts.filter((a: any) => a.resolved_at).length,
+    CRITICAL: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
+    HIGH: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
+    MEDIUM: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'MEDIUM').length,
+    LOW: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'LOW').length,
+    active: scopedAlerts.filter((a: any) => !a.resolved_at).length,
+    resolved: scopedAlerts.filter((a: any) => a.resolved_at).length,
   }
   const fromMs = new Date(exFrom + 'T00:00:00+05:30').getTime()
   const toMs = new Date(exTo + 'T23:59:59.999+05:30').getTime()
