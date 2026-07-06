@@ -236,7 +236,6 @@ export default function ReportsSection() {
           </div>
         </>)}
 
-        </>)}
         {type !== 'onhand' && (
           <div style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>Machine</div>
