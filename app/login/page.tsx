@@ -51,7 +51,7 @@ export default function Login() {
       document.cookie = 'fl_role=' + data.role + '; path=/; max-age=' + maxAge;
       document.cookie = 'fl_state=' + data.state + '; path=/; max-age=' + maxAge;
       document.cookie = 'fl_country=' + data.country + '; path=/; max-age=' + maxAge;
-      window.location.href = '/';
+      window.location.href = data.role === 'field_staff' ? '/visit' : '/';
     } catch (e) {
       setError('Login failed. Please try again.');
       setLoading(false);
