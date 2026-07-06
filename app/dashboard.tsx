@@ -723,6 +723,8 @@ function ConsolePage({ machines, alerts, loading }: any) {
 function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
   const [sevFilter, setSevFilter] = useState('all')
+  const [machineSel, setMachineSel] = useState('all')
+  const [machineSel, setMachineSel] = useState('all')
   const [expandedM, setExpandedM] = useState<Record<string, boolean>>({})
   const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
   const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
@@ -869,6 +871,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     if (filter === 'active' && a.resolved_at) return false
     if (filter === 'resolved' && !a.resolved_at) return false
     if (sevFilter !== 'all' && a.severity !== sevFilter) return false
+    if (machineSel !== 'all' && (a.machine_id !== machineSel)) return false
     const t = new Date(a.created_at).getTime()
     if (t < fromMs || t > toMs) return false
     return true
@@ -881,10 +884,16 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Alert Center</div>
           <div style={{ fontSize: 13, color: C.text2 }}>{counts.active} active · {counts.resolved} resolved</div>
         </div>
-        <button onClick={fetchAlerts} style={{
-          display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
-          border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
-        }}>↻ Refresh</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <select value={machineSel} onChange={e => setMachineSel(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, fontWeight: 600, color: C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All machines</option>
+            {machines.map((m: any) => <option key={m.id} value={m.machine_id || m.id}>{m.display_name}</option>)}
+          </select>
+          <button onClick={fetchAlerts} style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
+            border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
+          }}>↻ Refresh</button>
+        </div>
       </div>
 
       {/* Date range + PDF export */}
