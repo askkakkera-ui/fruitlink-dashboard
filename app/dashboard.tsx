@@ -1033,6 +1033,8 @@ function OrdersPage() {
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [machineSel, setMachineSel] = useState('all')
+  const [showAllMachines, setShowAllMachines] = useState(false)
   const [view, setView] = useState<'analytics' | 'orders'>('analytics')
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
   const [allowedIds, setAllowedIds] = useState<string[]>([])
@@ -1079,7 +1081,8 @@ function OrdersPage() {
   const istToday = new Date(todayKey + 'T00:00:00+05:30')
   const weekFloor = new Date(istToday.getTime() - 6 * 86400000)
   const monthFloor = new Date(istToday.getTime() - 29 * 86400000)
-  const periodOrders = orders.filter((o: any) => {
+  const scopedOrders = machineSel === 'all' ? orders : orders.filter((o: any) => o.machine_id === machineSel)
+  const periodOrders = scopedOrders.filter((o: any) => {
     const d = new Date(o.created_at)
     if (period === 'today') return istKey(o.created_at) === todayKey
     if (period === 'week') return d >= weekFloor
@@ -1106,13 +1109,13 @@ function OrdersPage() {
     return istKey(new Date(istToday.getTime() - (6 - i) * 86400000))
   })
   const dailyData = days.map(day => {
-    const dayOrders = orders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
+    const dayOrders = scopedOrders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
     return { day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
   })
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
 
   // Tab filter for order list
-  const filtered = orders.filter((o: any) => {
+const filtered = scopedOrders.filter((o: any) => {
     if (filter === 'paid') return o.pay_state === 1
     if (filter === 'pending') return o.pay_state === 0
     if (filter === 'delivered') return o.delivery_state === 1
@@ -1315,6 +1318,11 @@ function OrdersPage() {
               <button key={v} onClick={() => setView(v as any)} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: view === v ? C.orange : 'transparent', color: view === v ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
             ))}
           </div>
+{/* Machine selector */}
+          <select value={machineSel} onChange={e => { setMachineSel(e.target.value); setShowAllMachines(false) }} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 12.5, fontWeight: 600, color: C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All machines</option>
+            {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+          </select>
           {/* Period toggle */}
           {view === 'analytics' && (
             <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
@@ -1382,7 +1390,7 @@ function OrdersPage() {
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 16 }}>Revenue by Machine</div>
             {machineRevenue.length === 0 ? (
               <div style={{ color: C.text3, fontSize: 13 }}>No revenue data for this period</div>
-            ) : machineRevenue.map((m: any, i: number) => {
+            ) : (machineSel === 'all' && !showAllMachines ? machineRevenue.slice(0, 10) : machineRevenue).map((m: any, i: number) => {
               const pct = totalRevenue > 0 ? (m.revenue / totalRevenue * 100) : 0
               return (
                 <div key={m.id} style={{ marginBottom: i < machineRevenue.length - 1 ? 18 : 0 }}>
@@ -1405,6 +1413,11 @@ function OrdersPage() {
                 </div>
               )
             })}
+            {machineSel === 'all' && machineRevenue.length > 10 && (
+              <button onClick={() => setShowAllMachines(!showAllMachines)} style={{ marginTop: 16, padding: '8px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text2, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                {showAllMachines ? 'Show top 10' : `Show all ${machineRevenue.length} machines`}
+              </button>
+            )}
           </div>
         </div>
       ) : (
