@@ -13,7 +13,7 @@ const C = {
 const card: React.CSSProperties = { background: '#ffffff', borderRadius: 14, border: '1px solid #e8eaf0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' };
 
 type Staff = { id: string; name?: string; email: string; phone?: string; role: string; created_at?: string };
-type Visit = { id: string; staff_id: string; machine_id?: string; visit_type?: string; oranges_net?: number; photo_url?: string; lat?: number; lng?: number; address?: string; created_at: string };
+type Visit = { id: string; staff_id: string; machine_id?: string; visit_type?: string; oranges_loaded?: number; oranges_damaged?: number; oranges_net?: number; photo_url?: string; lat?: number; lng?: number; address?: string; created_at: string };
 
 function fmtDate(t?: string) {
   if (!t) return '—';
@@ -161,8 +161,12 @@ export default function FieldStaffSection() {
                                 </div>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{macName(v.machine_id)}</div>
                                 <div style={{ fontSize: 11.5, color: C.text2, marginTop: 2 }}>{fmtDate(v.created_at)}</div>
-                                {v.oranges_net != null && (
-                                  <div style={{ fontSize: 12, color: C.text2, marginTop: 4 }}>🍊 {v.oranges_net} oranges (net)</div>
+                                {(v.oranges_loaded != null || v.oranges_damaged != null || v.oranges_net != null) && (
+                                  <div style={{ fontSize: 12, color: C.text2, marginTop: 4, display: 'flex', flexDirection: 'column' as const, gap: 2 }}>
+                                    {v.oranges_loaded != null && <span>🍊 Loaded: {v.oranges_loaded}</span>}
+                                    {v.oranges_damaged != null && <span>❌ Damaged: {v.oranges_damaged}</span>}
+                                    {v.oranges_net != null && <span>✅ Net: {v.oranges_net}</span>}
+                                  </div>
                                 )}
                                 {(v.lat != null && v.lng != null) && (
                                   <a href={'https://maps.google.com/?q=' + v.lat + ',' + v.lng} target="_blank" rel="noopener noreferrer"

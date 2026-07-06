@@ -356,20 +356,13 @@ function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
 }
 
 // ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
-function ConsoleInsights({ machines, lackingCard }: any) {
+function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: any) {
   const isMobile = useIsMobile()
   const IND = '#423A8E', INDBG = '#efeefc'
-
   const visible = (machines || []).filter((m: any) => m && m.sn)
-  const [selSn, setSelSn] = useState('')
-  useEffect(() => {
-    if (!visible.length) return
-    if (!selSn || !visible.find((m: any) => m.sn === selSn)) {
-      const on = visible.find((m: any) => m.status === 'online')
-      setSelSn((on || visible[0]).sn)
-    }
-  }, [machines])
-  const machine = visible.find((m: any) => m.sn === selSn) || visible[0] || null
+  const machine = (machineSel && machineSel !== 'all'
+    ? visible.find((m: any) => m.id === machineSel)
+    : visible.find((m: any) => m.status === 'online') || visible[0]) || visible[0] || null
   // Per-machine fruit/stock tuning from Settings → Fruit & Stock (falls back to defaults)
   const tuning = (() => {
     try {
@@ -515,8 +508,7 @@ function ConsoleInsights({ machines, lackingCard }: any) {
               <div style={{ marginBottom: isMobile ? 16 : 0 }}>
                 <div style={{ ...lbl, marginBottom: 14, justifyContent: 'space-between' }}>
                   <span>Today's Sales</span>
-                  {visible.length > 1
-? <select value={selSn} onChange={e => setSelSn(e.target.value)} style={{ fontSize: 13, fontWeight: 600, border: '1px solid ' + C.orange, borderRadius: 8, padding: '5px 10px', color: C.orange, background: C.surface, cursor: 'pointer' }}>{visible.map((m: any) => <option key={m.sn} value={m.sn}>{m.display_name}</option>)}</select>                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', color: C.green, background: C.greenBg, border: '1px solid rgba(25,135,84,.25)', borderRadius: 20, padding: '2px 8px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'fl-pulse 1.8s infinite' }} />LIVE</span>}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', color: C.green, background: C.greenBg, border: '1px solid rgba(25,135,84,.25)', borderRadius: 20, padding: '2px 8px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'fl-pulse 1.8s infinite' }} />LIVE</span>
                 </div>
                 <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1 }}>{fmt(revToday)}</div>
                 {paceDelta != null && (
@@ -640,19 +632,22 @@ function ConsoleInsights({ machines, lackingCard }: any) {
 
 // ─── Console Page ────────────────────────────────────────────────
 function ConsolePage({ machines, alerts, loading }: any) {
-  const [stockData, setStockData] = useState<any[]>([])
+const [stockData, setStockData] = useState<any[]>([])
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
-  const online = machines.filter((m: any) => m.status === 'online').length
+  const [machineSel, setMachineSel] = useState('all')
+  const scopedMachines = machineSel === 'all' ? machines : machines.filter((m: any) => m.id === machineSel)
+  const online = scopedMachines.filter((m: any) => m.status === 'online').length
   const activeAlerts = alerts.filter((a: any) => !a.resolved_at)
-  const critical = activeAlerts.filter((a: any) => a.severity === 'CRITICAL').length
-  const high = activeAlerts.filter((a: any) => a.severity === 'HIGH').length
-  const lacking = machines.filter((m: any) => m.status === 'online' && (!m.stock_l1 || !m.stock_l2 || !m.stock_l3)).length
+  const scopedAlerts = machineSel === 'all' ? activeAlerts : activeAlerts.filter((a: any) => a.machine_id === machineSel)
+  const critical = scopedAlerts.filter((a: any) => a.severity === 'CRITICAL').length
+  const high = scopedAlerts.filter((a: any) => a.severity === 'HIGH').length
+  const lacking = scopedMachines.filter((m: any) => m.status === 'online' && (!m.stock_l1 || !m.stock_l2 || !m.stock_l3)).length
 
-  const stats = [
-    { label: 'All Equipment', value: machines.length.toString(), sub: `${online} online · ${machines.length - online} offline`, color: C.blue, icon: '🖥', pct: machines.length > 0 ? (online / machines.length) * 100 : 0 },
-    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? machines.find((m: any) => m.status === 'online')?.display_name || '' : 'No machines online', color: C.green, icon: '📡', pct: machines.length > 0 ? (online / machines.length) * 100 : 0 },
-    { label: 'Active Alerts', value: activeAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: activeAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(activeAlerts.length * 10, 100) },
-    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: machines.length > 0 ? (lacking / machines.length) * 100 : 0 },
+const stats = [
+    { label: machineSel === 'all' ? 'All Equipment' : 'Machine', value: scopedMachines.length.toString(), sub: `${online} online · ${scopedMachines.length - online} offline`, color: C.blue, icon: '🖥', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
+    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? scopedMachines.find((m: any) => m.status === 'online')?.display_name || '' : 'None online', color: C.green, icon: '📡', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
+    { label: 'Active Alerts', value: scopedAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: scopedAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(scopedAlerts.length * 10, 100) },
+    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: scopedMachines.length > 0 ? (lacking / scopedMachines.length) * 100 : 0 },
   ]
 
   const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
@@ -674,26 +669,41 @@ function ConsolePage({ machines, alerts, loading }: any) {
 
   return (
     <div style={{ padding: '24px 28px' }}>
+      {/* Machine Picker */}
+      {machines.length > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Viewing</span>
+          <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
+            style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All machines</option>
+            {machines.filter((m: any) => m && m.id).map((m: any) => (
+              <option key={m.id} value={m.id}>{m.display_name || m.sn}</option>
+            ))}
+          </select>
+          {machineSel !== 'all' && (
+            <span style={{ fontSize: 12, color: C.text3, cursor: 'pointer' }} onClick={() => setMachineSel('all')}>✕ Clear</span>
+          )}
+        </div>
+      )}
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
-      <ConsoleInsights machines={machines} lackingCard={stats[3]} />
+      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} />
 
-      {/* Machine Cards */}
+{/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Dot color={C.orange} pulse size={6} />
-          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced from machine · every 2 min</span>
+          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced · every 2 min</span>
         </div>
       </div>
-
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16, marginBottom: 22 }}>
-          {machines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
+        <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
+          {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       )}
 
