@@ -252,19 +252,15 @@ function TopBar({ active }: { active: string }) {
 function StatCard({ label, value, sub, color, icon, pct }: any) {
   return (
     <div style={{
-      background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14,
-      padding: '18px 20px', position: 'relative' as const, overflow: 'hidden',
+      background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
+      padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
     }}>
-      <div style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.9 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>{label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{label}</div>
         <div style={{ width: 32, height: 32, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
       </div>
-      <div style={{ fontSize: 36, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{sub}</div>}
-      <div style={{ marginTop: 16, height: 2, background: C.border, borderRadius: 2 }}>
-        <div style={{ height: '100%', background: color, borderRadius: 2, width: `${Math.min(pct ?? 100, 100)}%`, opacity: 0.7, transition: 'width .6s' }} />
-      </div>
+      <div style={{ fontSize: 34, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{sub}</div>}
     </div>
   )
 }
@@ -2552,8 +2548,7 @@ function OperatorsPage({ myId }: any) {
           { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: '#7c3aed', icon: '👑' },
           { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.green, icon: '🧑‍💼' },
         ].map(s => (
-          <div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 20px', borderTop: `3px solid ${s.color}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+<div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 22 }}>{s.icon}</span>
               <span style={{ fontSize: 28, fontWeight: 800, color: s.color }}>{s.value}</span>
             </div>
