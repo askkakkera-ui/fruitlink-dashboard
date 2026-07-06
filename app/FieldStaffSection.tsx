@@ -33,8 +33,8 @@ function initials(name?: string, email?: string) {
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return s.slice(0, 2).toUpperCase();
 }
-const VISIT_LABEL: Record<string, string> = { loading: 'Loading', service: 'Service', check: 'Check', cleaning: 'Cleaning', repair: 'Repair' };
-const VISIT_COLOR: Record<string, string> = { loading: '#FE6505', service: '#0D6EFD', check: '#198754', cleaning: '#c98a00', repair: '#DC3545' };
+const VISIT_LABEL: Record<string, string> = { cleaning: 'Cleaning', loading: 'Loading', maintenance: 'Maintenance', other: 'Other' };
+const VISIT_COLOR: Record<string, string> = { cleaning: '#0D6EFD', loading: '#FE6505', maintenance: '#c98a00', other: '#5b6478' };
 
 export default function FieldStaffSection() {
   const [staff, setStaff] = useState<Staff[]>([]);

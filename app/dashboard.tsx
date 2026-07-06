@@ -2552,8 +2552,8 @@ function OperatorsPage({ myId }: any) {
     setDelOp(null); fetchOperators()
   }
 
-  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue }
-  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg }
+  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue, field_staff: C.orange }
+  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg, field_staff: '#fff3ea' }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -2572,6 +2572,7 @@ function OperatorsPage({ myId }: any) {
           { label: 'Total Operators', value: operators.length, color: C.blue, icon: '👥' },
           { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: '#7c3aed', icon: '👑' },
           { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.green, icon: '🧑‍💼' },
+          { label: 'Field Staff', value: operators.filter(o => o.role === 'field_staff').length, color: C.orange, icon: '👷' },
         ].map(s => (
 <div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 22 }}>{s.icon}</span>
@@ -2611,7 +2612,7 @@ function OperatorsPage({ myId }: any) {
                   <td style={{ padding: '13px 16px', color: C.text }}>{op.email}</td>
                   <td style={{ padding: '13px 16px' }}>
                     <Pill color={ROLE_COLOR[op.role] || C.text2} bg={ROLE_BG[op.role] || C.surface2}>
-                      {op.role === 'super_admin' ? '👑 Super Admin' : '🧑‍💼 Operator'}
+                      {op.role === 'super_admin' ? '👑 Super Admin' : op.role === 'field_staff' ? '👷 Field Staff' : '🧑‍💼 Operator'}
                     </Pill>
                   </td>
                   <td style={{ padding: '13px 16px' }}>
@@ -2658,6 +2659,7 @@ function OperatorsPage({ myId }: any) {
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: C.surface, color: C.text }}>
                   <option value="operator">Operator</option>
+                  <option value="field_staff">Field Staff</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
