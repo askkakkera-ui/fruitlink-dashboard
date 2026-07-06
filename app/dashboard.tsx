@@ -736,6 +736,9 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     stock_empty_l3: 'Layer 3 Empty', stock_low_l1: 'Layer 1 Low', stock_low_l2: 'Layer 2 Low',
     stock_low_l3: 'Layer 3 Low', door_open: 'Door Open', vend_failure: 'Vend Failure',
     cup_empty: 'Cups Empty', film_empty: 'Film Empty', cooling_off: 'Cooling Off',
+    newsaier_fault_stock: 'Stock Fault', newsaier_fault_mechanical: 'Mechanical Fault',
+    waste_bin_full: 'Waste Bin Full', power_loss: 'Power Loss', unusual_access: 'Unusual Access',
+  }
   }
   const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
