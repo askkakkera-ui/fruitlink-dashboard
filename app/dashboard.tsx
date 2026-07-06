@@ -1109,7 +1109,7 @@ function OrdersPage() {
     return istKey(new Date(istToday.getTime() - (6 - i) * 86400000))
   })
   const dailyData = days.map(day => {
-    const dayOrders = orders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
+    const dayOrders = scopedOrders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
     return { day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
   })
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
