@@ -277,7 +277,6 @@ function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
   const stockBg = !stock?.stock_known ? C.surface2 : stock.cups_remaining <= 10 ? C.redBg : stock.stock_pct <= 50 ? C.amberBg : C.greenBg
   const stockPct = stock?.stock_pct ?? 0
   const daysAgo = stock?.last_loaded_at ? Math.floor((Date.now()-new Date(stock.last_loaded_at).getTime())/86400000) : null
-  return (
 
   return (
     <div style={{
