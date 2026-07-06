@@ -739,7 +739,6 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     newsaier_fault_stock: 'Stock Fault', newsaier_fault_mechanical: 'Mechanical Fault',
     waste_bin_full: 'Waste Bin Full', power_loss: 'Power Loss', unusual_access: 'Unusual Access',
   }
-  }
   const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => {
