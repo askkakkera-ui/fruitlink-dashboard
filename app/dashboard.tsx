@@ -723,6 +723,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
 function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
   const [filter, setFilter] = useState<'all' | 'active' | 'resolved'>('active')
   const [sevFilter, setSevFilter] = useState('all')
+  const [machineSel, setMachineSel] = useState('all')
   const [expandedM, setExpandedM] = useState<Record<string, boolean>>({})
   const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
   const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
@@ -735,6 +736,8 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     stock_empty_l3: 'Layer 3 Empty', stock_low_l1: 'Layer 1 Low', stock_low_l2: 'Layer 2 Low',
     stock_low_l3: 'Layer 3 Low', door_open: 'Door Open', vend_failure: 'Vend Failure',
     cup_empty: 'Cups Empty', film_empty: 'Film Empty', cooling_off: 'Cooling Off',
+    newsaier_fault_stock: 'Stock Fault', newsaier_fault_mechanical: 'Mechanical Fault',
+    waste_bin_full: 'Waste Bin Full', power_loss: 'Power Loss', unusual_access: 'Unusual Access',
   }
   const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -839,7 +842,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
         doc.setTextColor(40, 40, 40)
         doc.text(opened, 12, y); doc.text(closed, 50, y)
         doc.text(String(m.display_name || '').slice(0, 16), 88, y)
-        doc.text(String(a.alert_type || '').slice(0, 20), 118, y)
+        doc.text(String(ALERT_LABELS[a.alert_type] || a.alert_type || '').slice(0, 20), 118, y)
         if (a.severity === 'CRITICAL') doc.setTextColor(220, 53, 69)
         else if (a.severity === 'HIGH') doc.setTextColor(201, 138, 0)
         else doc.setTextColor(13, 110, 253)
@@ -855,13 +858,14 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     } catch (e: any) { alert('PDF export failed: ' + (e?.message || e)) }
     setExporting(false)
   }
+  const scopedAlerts = machineSel === 'all' ? alerts : alerts.filter((a: any) => a.machine_id === machineSel)
   const counts: any = {
-    CRITICAL: alerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
-    HIGH: alerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
-    MEDIUM: alerts.filter((a: any) => !a.resolved_at && a.severity === 'MEDIUM').length,
-    LOW: alerts.filter((a: any) => !a.resolved_at && a.severity === 'LOW').length,
-    active: alerts.filter((a: any) => !a.resolved_at).length,
-    resolved: alerts.filter((a: any) => a.resolved_at).length,
+    CRITICAL: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'CRITICAL').length,
+    HIGH: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'HIGH').length,
+    MEDIUM: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'MEDIUM').length,
+    LOW: scopedAlerts.filter((a: any) => !a.resolved_at && a.severity === 'LOW').length,
+    active: scopedAlerts.filter((a: any) => !a.resolved_at).length,
+    resolved: scopedAlerts.filter((a: any) => a.resolved_at).length,
   }
   const fromMs = new Date(exFrom + 'T00:00:00+05:30').getTime()
   const toMs = new Date(exTo + 'T23:59:59.999+05:30').getTime()
@@ -869,6 +873,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
     if (filter === 'active' && a.resolved_at) return false
     if (filter === 'resolved' && !a.resolved_at) return false
     if (sevFilter !== 'all' && a.severity !== sevFilter) return false
+    if (machineSel !== 'all' && (a.machine_id !== machineSel)) return false
     const t = new Date(a.created_at).getTime()
     if (t < fromMs || t > toMs) return false
     return true
@@ -881,10 +886,16 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Alert Center</div>
           <div style={{ fontSize: 13, color: C.text2 }}>{counts.active} active · {counts.resolved} resolved</div>
         </div>
-        <button onClick={fetchAlerts} style={{
-          display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
-          border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
-        }}>↻ Refresh</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <select value={machineSel} onChange={e => setMachineSel(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, fontWeight: 600, color: C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All machines</option>
+            {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+          </select>
+          <button onClick={fetchAlerts} style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff',
+            border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13,
+          }}>↻ Refresh</button>
+        </div>
       </div>
 
       {/* Date range + PDF export */}
@@ -941,7 +952,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {machines.map((m: any) => {
-            const machAlerts = filtered.filter((a: any) => a.machine_id === (m.machine_id || m.id))
+            const machAlerts = filtered.filter((a: any) => a.machine_id === m.id)
             if (machAlerts.length === 0) return null
             const isOpen = expandedM[m.id] !== false
             return (
@@ -979,7 +990,7 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                               <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
                             </td>
                             <td style={{ padding: '12px 16px' }}>
-                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 12, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{a.alert_type}</div>
+                              <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 12, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
@@ -3437,7 +3448,7 @@ export default function Dashboard() {
           const tRes = await fetch('/api/telemetry?sn=' + m.sn)
           const tJson = await tRes.json()
           const tel = tJson.success && tJson.data ? tJson.data : {}
-          return { ...m, ...tel, state: m.state, telemetry_id: tel.id }
+          return { ...m, ...tel, id: m.id, machine_id: m.id, state: m.state, telemetry_id: tel.id }
         } catch {
           return m
         }
