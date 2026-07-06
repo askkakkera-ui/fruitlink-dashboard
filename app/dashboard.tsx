@@ -267,11 +267,17 @@ function StatCard({ label, value, sub, color, icon, pct }: any) {
   )
 }
 
-function MachineCard({ machine }: { machine: any }) {
+function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
   const online = machine.status === 'online'
   const temp = machine.inner_temp_c
   const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
   const layers = [machine.stock_l1, machine.stock_l2, machine.stock_l3]
+  const isNewSaier = (() => { try { const st = typeof machine.state==='string'?JSON.parse(machine.state):(machine.state||{}); return st?.machine_config?.machine_type==='newsaier'; } catch { return false; } })()
+  const stockColor = !stock?.stock_known ? C.text3 : stock.cups_remaining <= 10 ? C.red : stock.stock_pct <= 50 ? C.amber : C.green
+  const stockBg = !stock?.stock_known ? C.surface2 : stock.cups_remaining <= 10 ? C.redBg : stock.stock_pct <= 50 ? C.amberBg : C.greenBg
+  const stockPct = stock?.stock_pct ?? 0
+  const daysAgo = stock?.last_loaded_at ? Math.floor((Date.now()-new Date(stock.last_loaded_at).getTime())/86400000) : null
+  return (
 
   return (
     <div style={{
@@ -298,22 +304,37 @@ function MachineCard({ machine }: { machine: any }) {
           )}
         </div>
 
-        {/* Layers */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          {layers.map((has, i) => (
-            <div key={i} style={{
-              flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
-              borderRadius: 10, padding: '10px 6px', textAlign: 'center',
-              borderTop: `2px solid ${online ? (has ? C.green : C.red) : C.border2}`,
-            }}>
-              <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
-              <div style={{ fontSize: 17, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: online ? (has ? C.green : C.red) : C.text3 }}>
-                {online ? (has ? 'Stocked' : 'Empty') : '—'}
-              </div>
+        {/* Layers / Stock */}
+        {isNewSaier ? (
+          <div style={{ marginBottom: 14, background: stockBg, borderRadius: 10, padding: '10px 12px', border: '1px solid ' + C.border }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>🍊 Est. Stock</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: stockColor }}>{stock?.stock_known ? `${stock.cups_remaining} cups left` : 'No data yet'}</span>
             </div>
-          ))}
-        </div>
+            <div style={{ height: 8, background: C.surface2, borderRadius: 4, overflow: 'hidden', marginBottom: 5 }}>
+              <div style={{ height: '100%', width: `${Math.min(100, stockPct)}%`, background: stockColor, borderRadius: 4, transition: 'width 0.4s' }} />
+            </div>
+            <div style={{ fontSize: 11, color: C.text3 }}>
+              {stock?.stock_known ? `${stock.cups_loaded} loaded · ${stock.cups_dispensed} dispensed${daysAgo !== null ? ' · loaded ' + (daysAgo === 0 ? 'today' : daysAgo + 'd ago') : ''}` : 'Log a loading visit to track stock'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            {layers.map((has, i) => (
+              <div key={i} style={{
+                flex: 1, background: C.surface2, border: `1px solid ${C.border}`,
+                borderRadius: 10, padding: '10px 6px', textAlign: 'center',
+                borderTop: `2px solid ${online ? (has ? C.green : C.red) : C.border2}`,
+              }}>
+                <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
+                <div style={{ fontSize: 17, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: online ? (has ? C.green : C.red) : C.text3 }}>
+                  {online ? (has ? 'Stocked' : 'Empty') : '—'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Sensors grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -620,6 +641,8 @@ function ConsoleInsights({ machines, lackingCard }: any) {
 
 // ─── Console Page ────────────────────────────────────────────────
 function ConsolePage({ machines, alerts, loading }: any) {
+  const [stockData, setStockData] = useState<any[]>([])
+  useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const online = machines.filter((m: any) => m.status === 'online').length
   const activeAlerts = alerts.filter((a: any) => !a.resolved_at)
   const critical = activeAlerts.filter((a: any) => a.severity === 'CRITICAL').length
@@ -671,7 +694,7 @@ function ConsolePage({ machines, alerts, loading }: any) {
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16, marginBottom: 22 }}>
-          {machines.map((m: any) => <MachineCard key={m.id} machine={m} />)}
+          {machines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       )}
 
@@ -1511,6 +1534,8 @@ const filtered = scopedOrders.filter((o: any) => {
 
 
 function MachinesPage({ machines, loading, fetchData }: any) {
+  const [stockData, setStockData] = useState<any[]>([])
+  useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const safeMachines = (machines || []).map((m: any) => {
     let st = m.state
     if (typeof st === 'string') { try { st = JSON.parse(st) } catch { st = {} } }
@@ -1569,6 +1594,11 @@ function MachinesPage({ machines, loading, fetchData }: any) {
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
             const layers = [m.stock_l1, m.stock_l2, m.stock_l3]
+            const isNewSaier = (() => { try { const st = typeof m.state==='string'?JSON.parse(m.state):(m.state||{}); return st?.machine_config?.machine_type==='newsaier'; } catch { return false; } })()
+            const mStock = stockData.find((s: any) => s.machine_id === m.id)
+            const msColor = !mStock?.stock_known ? C.text3 : mStock.cups_remaining <= 10 ? C.red : mStock.stock_pct <= 50 ? C.amber : C.green
+            const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
+            const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
             return (
               <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ height: 3, background: `linear-gradient(90deg, ${online ? C.green : C.border2}, transparent)` }} />
@@ -1588,8 +1618,20 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                       {canEdit && <button onClick={() => openEdit(m)} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr) 2fr 2fr 2fr', gap: 10 }}>
-                    {layers.map((has: boolean, i: number) => (
+                  {isNewSaier && (
+                    <div style={{ marginBottom: 10, background: msBg, borderRadius: 10, padding: '10px 14px', border: '1px solid ' + C.border }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>🍊 Est. Stock</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: msColor }}>{mStock?.stock_known ? `${mStock.cups_remaining} cups left` : 'No data yet'}</span>
+                      </div>
+                      <div style={{ height: 8, background: C.surface2, borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, mStock?.stock_pct ?? 0)}%`, background: msColor, borderRadius: 4 }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: C.text3 }}>{mStock?.stock_known ? `${mStock.cups_loaded} loaded · ${mStock.cups_dispensed} dispensed${msDays !== null ? ' · ' + (msDays === 0 ? 'today' : msDays + 'd ago') : ''}` : 'Log a loading visit'}</div>
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: isNewSaier ? '2fr 2fr 2fr' : 'repeat(3,1fr) 2fr 2fr 2fr', gap: 10 }}>
+                    {!isNewSaier && layers.map((has: boolean, i: number) => (
                       <div key={i} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px', textAlign: 'center', borderTop: '2px solid ' + (online ? (has ? C.green : C.red) : C.border2) }}>
                         <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 5, letterSpacing: '0.05em' }}>LAYER {i + 1}</div>
                         <div style={{ fontSize: 18, marginBottom: 3 }}>{online ? (has ? '🟢' : '🔴') : '⚫'}</div>
