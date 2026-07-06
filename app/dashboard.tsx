@@ -640,19 +640,22 @@ function ConsoleInsights({ machines, lackingCard }: any) {
 
 // ─── Console Page ────────────────────────────────────────────────
 function ConsolePage({ machines, alerts, loading }: any) {
-  const [stockData, setStockData] = useState<any[]>([])
+const [stockData, setStockData] = useState<any[]>([])
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
-  const online = machines.filter((m: any) => m.status === 'online').length
+  const [machineSel, setMachineSel] = useState('all')
+  const scopedMachines = machineSel === 'all' ? machines : machines.filter((m: any) => m.id === machineSel)
+  const online = scopedMachines.filter((m: any) => m.status === 'online').length
   const activeAlerts = alerts.filter((a: any) => !a.resolved_at)
-  const critical = activeAlerts.filter((a: any) => a.severity === 'CRITICAL').length
-  const high = activeAlerts.filter((a: any) => a.severity === 'HIGH').length
-  const lacking = machines.filter((m: any) => m.status === 'online' && (!m.stock_l1 || !m.stock_l2 || !m.stock_l3)).length
+  const scopedAlerts = machineSel === 'all' ? activeAlerts : activeAlerts.filter((a: any) => a.machine_id === machineSel)
+  const critical = scopedAlerts.filter((a: any) => a.severity === 'CRITICAL').length
+  const high = scopedAlerts.filter((a: any) => a.severity === 'HIGH').length
+  const lacking = scopedMachines.filter((m: any) => m.status === 'online' && (!m.stock_l1 || !m.stock_l2 || !m.stock_l3)).length
 
-  const stats = [
-    { label: 'All Equipment', value: machines.length.toString(), sub: `${online} online · ${machines.length - online} offline`, color: C.blue, icon: '🖥', pct: machines.length > 0 ? (online / machines.length) * 100 : 0 },
-    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? machines.find((m: any) => m.status === 'online')?.display_name || '' : 'No machines online', color: C.green, icon: '📡', pct: machines.length > 0 ? (online / machines.length) * 100 : 0 },
-    { label: 'Active Alerts', value: activeAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: activeAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(activeAlerts.length * 10, 100) },
-    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: machines.length > 0 ? (lacking / machines.length) * 100 : 0 },
+const stats = [
+    { label: machineSel === 'all' ? 'All Equipment' : 'Machine', value: scopedMachines.length.toString(), sub: `${online} online · ${scopedMachines.length - online} offline`, color: C.blue, icon: '🖥', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
+    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? scopedMachines.find((m: any) => m.status === 'online')?.display_name || '' : 'None online', color: C.green, icon: '📡', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
+    { label: 'Active Alerts', value: scopedAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: scopedAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(scopedAlerts.length * 10, 100) },
+    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: scopedMachines.length > 0 ? (lacking / scopedMachines.length) * 100 : 0 },
   ]
 
   const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
@@ -683,17 +686,21 @@ function ConsolePage({ machines, alerts, loading }: any) {
       {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
+            style={{ padding: '7px 12px', borderRadius: 8, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), fontSize: 13, fontWeight: machineSel !== 'all' ? 700 : 500, background: '#fff', color: C.text, cursor: 'pointer' }}>
+            <option value="all">All machines</option>
+            {machines.map((m: any) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+          </select>
           <Dot color={C.orange} pulse size={6} />
-          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced from machine · every 2 min</span>
+          <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced · every 2 min</span>
         </div>
       </div>
-
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16, marginBottom: 22 }}>
-          {machines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
+        <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
+          {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       )}
 
