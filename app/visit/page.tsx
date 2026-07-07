@@ -97,17 +97,15 @@ export default function VisitPage() {
         let addr = lat.toFixed(4) + 'N ' + lng.toFixed(4) + 'E';
         try {
           const r = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
-            { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' } }
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
+            { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0 (fruitlinktech.in)' } }
           );
           const d = await r.json();
-          if (d?.address) {
-            const a = d.address;
-            const area = a.quarter || a.suburb || a.neighbourhood || a.city_district || a.county || a.road || '';
-            const city = a.city || a.town || a.state_district || a.village || a.state || '';
-            if (area || city) addr = [area, city].filter(Boolean).join(', ');
-          } else if (d?.display_name) {
-            addr = String(d.display_name).split(',').slice(0, 2).join(',').trim();
+          if (d?.display_name) {
+            const parts = String(d.display_name).split(',')
+              .map((s: string) => s.trim())
+              .filter((s: string) => s.length > 2 && !/^\d+$/.test(s));
+            addr = parts.slice(0, 3).join(', ');
           }
         } catch { }
         const res: GpsResult = { lat, lng, addr };
