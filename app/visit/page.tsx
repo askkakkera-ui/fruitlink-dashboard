@@ -93,10 +93,17 @@ export default function VisitPage() {
         setGpsMsg('Location captured');
         try {
           const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${ln}`, {
-            headers: { 'Accept': 'application/json' },
+            headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' },
           });
           const d = await r.json();
-          if (d && d.display_name) setAddress(String(d.display_name));
+          if (d && d.display_name) {
+            // Build a short address: neighbourhood/suburb + city
+            const parts = [d.address?.suburb || d.address?.neighbourhood || d.address?.road, d.address?.city || d.address?.town || d.address?.village].filter(Boolean);
+            setAddress(parts.length > 0 ? parts.join(', ') : String(d.display_name).slice(0, 60));
+          } else {
+            // Fallback: show readable coordinates
+            setAddress(la.toFixed(5) + '°N, ' + ln.toFixed(5) + '°E');
+          }
         } catch { /* keep coords only */ }
       },
       () => { setGpsMsg('Location unavailable (you can still submit)'); },
@@ -318,7 +325,7 @@ export default function VisitPage() {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-          <div style={S.gps}>{gpsMsg}{address ? ' — ' + (address.length > 50 ? address.slice(0, 50) + '…' : address) : ''}</div>
+          <div style={S.gps}>{gpsMsg}{address ? ' — ' + (address.length > 80 ? address.slice(0, 80) + '…' : address) : ''}</div>
           {lat == null && <button type="button" onClick={captureGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry</button>}
         </div>
 
