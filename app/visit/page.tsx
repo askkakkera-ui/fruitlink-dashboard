@@ -45,8 +45,6 @@ export default function VisitPage() {
   const [notify, setNotify] = useState<{ recipients: string[]; message: string } | null>(null);
   const [attendance, setAttendance] = useState<{ id: string; check_in_at: string; machine_id?: string } | null>(null);
   const [attLoading, setAttLoading] = useState(false);
-  const [attendance, setAttendance] = useState<{ id: string; check_in_at: string; machine_id?: string } | null>(null);
-  const [attLoading, setAttLoading] = useState(false);
 
   const net = (() => {
     const l = parseInt(loaded), d = parseInt(damaged);
