@@ -121,6 +121,7 @@ const NAV_ITEMS = [
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', superAdmin: true },
+  { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
