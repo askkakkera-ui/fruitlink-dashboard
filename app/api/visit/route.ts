@@ -81,7 +81,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(Array.isArray(all) ? all : [], { headers: NO_STORE });
       }
       const staffId = String(session.sub || '');
-      const staffId = String(session.sub || '');
       const owner = tenantOf(session);
       const ids = await tenantMachineIds(session.role === 'field_staff' ? staffId : owner);
       if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
