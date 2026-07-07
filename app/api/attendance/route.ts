@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+import { verifySession, SESSION_COOKIE } from '@/lib/session';
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
-const SB_KEY = process.env.SB_KEY || process.env.NEXT_PUBLIC_SB_KEY || '';
+const SB_KEY = process.env.SB_KEY || '';
 const NO_STORE = { 'Cache-Control': 'no-store' };
-
 function sbHeaders() {
   return { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 }
-
 async function getSession(request: NextRequest) {
-  try {
-    const cookie = request.cookies.get('fl_auth');
-    if (!cookie || cookie.value !== 'fl_secure_2026') return null;
-    const id = request.cookies.get('fl_operator_id')?.value;
-    const role = request.cookies.get('fl_role')?.value;
-    const name = request.cookies.get('fl_operator_name')?.value;
-    if (!id || !role) return null;
-    // fetch owner_id from DB
-    const op = await fetch(SB_URL + '/rest/v1/operators?select=id,owner_id&id=eq.' + encodeURIComponent(id), { headers: sbHeaders() }).then(r => r.json());
-    const owner_id = Array.isArray(op) && op[0] ? op[0].owner_id : null;
-    return { sub: id, role, name, owner_id };
-  } catch { return null; }
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  return await verifySession(token);
 }
 
 export async function GET(request: NextRequest) {
