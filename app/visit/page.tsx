@@ -227,6 +227,10 @@ export default function VisitPage() {
         <div style={S.header}>
           <img src={LOGO} alt="Fruitlink" style={{ height: 34 }} />
           <span style={S.title}>Visit Update</span>
+          <button onClick={() => { ['fl_auth','fl_operator_id','fl_role','fl_operator_name','fl_state','fl_country'].forEach(k => document.cookie = k + '=; max-age=0; path=/'); window.location.href = '/login'; }}
+            style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#5b6478', background: 'none', border: '1px solid #e8eaf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
+            Sign out
+          </button>
         </div>
 
         <label style={S.label}>Machine</label>
