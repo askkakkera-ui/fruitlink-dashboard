@@ -105,7 +105,11 @@ export default function VisitPage() {
         gpsRef.current = res;
         setGpsMsg('📍 ' + addr);
       },
-      () => { setGpsMsg('Location unavailable — tap Retry'); },
+      (e: GeolocationPositionError) => {
+        if (e.code === 1) setGpsMsg('❌ Location blocked — go to Phone Settings → Apps → Chrome → Permissions → Location → Allow');
+        else if (e.code === 2) setGpsMsg('❌ Location unavailable — tap 🔄 Retry');
+        else setGpsMsg('❌ Location timed out — tap 🔄 Retry');
+      },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
     );
   }
@@ -189,6 +193,7 @@ export default function VisitPage() {
   async function submit() {
     setErr(''); setMsg(''); setNotify(null);
     if (!machineId) { setErr('Please select a machine'); return; }
+    if (!photoBlob) { setErr('📷 Photo is required — please take a photo before submitting.'); return; }
     setSaving(true);
     try {
       let photo_url: string | null = null;
@@ -425,7 +430,7 @@ const S: Record<string, React.CSSProperties> = {
   photoBtn: { width: '100%', padding: '14px', fontSize: 16, fontWeight: 600, color: '#1F2533', background: '#fff', border: '2px dashed #D8DCE6', borderRadius: 10, cursor: 'pointer' },
   preview: { width: '100%', borderRadius: 10, marginTop: 4, display: 'block' },
   retake: { marginTop: 8, padding: '8px 14px', fontSize: 14, background: '#F0F1F5', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#1F2533' },
-  gps: { fontSize: 12, color: '#5B6478' },
+  gps: { fontSize: 12, color: '#374151' },
   submit: { width: '100%', marginTop: 16, padding: '14px', fontSize: 17, fontWeight: 700, color: '#fff', background: '#FE6505', border: 'none', borderRadius: 12, cursor: 'pointer' },
   err: { marginTop: 12, padding: '10px 12px', background: '#FDEEEE', color: '#B42318', borderRadius: 8, fontSize: 14 },
   ok: { marginTop: 12, padding: '10px 12px', background: '#E7F8EF', color: '#198754', borderRadius: 8, fontSize: 14 },
@@ -433,7 +438,7 @@ const S: Record<string, React.CSSProperties> = {
   badge: { marginLeft: 8, fontSize: 12, padding: '2px 8px', background: '#F0F1F5', borderRadius: 20, color: '#1F2533' },
   thumb: { width: '100%', maxWidth: 220, borderRadius: 8, marginTop: 6, display: 'block' },
   muted: { fontSize: 13, color: '#1F2533', marginTop: 3 },
-  time: { fontSize: 12, color: '#5B6478', marginTop: 4 },
+  time: { fontSize: 12, color: '#374151', marginTop: 4 },
   notifyBox: { marginTop: 14, padding: 14, background: '#F0FBF4', border: '1px solid #B7E4C7', borderRadius: 10 },
   notifyTitle: { fontSize: 15, fontWeight: 700, color: '#198754', marginBottom: 2 },
   notifyHint: { fontSize: 12, color: '#1F2533', marginBottom: 10 },
