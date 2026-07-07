@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
 
-type Machine = { id: string; display_name?: string; sn?: string; location?: string };
+type Machine = { id: string; display_name?: string; sn?: string; location?: string; location_lat?: number; location_lng?: number };
 type Visit = {
   id: string; machine_id: string; visit_type: string; note?: string;
   oranges_loaded?: number; oranges_damaged?: number; oranges_net?: number;
@@ -277,8 +277,24 @@ export default function VisitPage() {
         <label style={S.label}>Machine</label>
         <select style={S.input} value={machineId} onChange={e => setMachineId(e.target.value)}>
           {machines.length === 0 && <option value="">No machines available</option>}
-          {machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}</option>)}
+          {machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}{m.location ? ' — ' + m.location : ''}</option>)}
         </select>
+        {(() => {
+          const m = machines.find(x => x.id === machineId);
+          if (!m) return null;
+          const mapsUrl = m.location_lat && m.location_lng
+            ? `https://maps.google.com/?q=${m.location_lat},${m.location_lng}`
+            : `https://maps.google.com/?q=${encodeURIComponent(m.location || (m.display_name || ''))}`;
+          return (
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {m.location && <span style={{ fontSize: 12, color: '#5B6478' }}>📍 {m.location}</span>}
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: 12, fontWeight: 600, color: '#0D6EFD', textDecoration: 'none' }}>
+                🗺 Get directions
+              </a>
+            </div>
+          );
+        })()}
 
         <label style={S.label}>Visit type</label>
         <div style={S.typeRow}>
