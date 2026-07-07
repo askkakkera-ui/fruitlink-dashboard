@@ -226,7 +226,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -3551,6 +3551,9 @@ export default function Dashboard() {
     reports: <ReportsSection />,
     fieldstaff: role === 'super_admin'
       ? <FieldStaffSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    attendance: role === 'super_admin'
+      ? <AttendanceSection />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
   }
 
