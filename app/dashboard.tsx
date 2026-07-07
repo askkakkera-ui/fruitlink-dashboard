@@ -2516,6 +2516,9 @@ function AssignMachinesModal({ op, onClose }: any) {
         const insRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id }))) })
         if (!insRes.ok) { const t = await insRes.text().catch(() => ''); setMsg('Error saving: ' + (t || insRes.status)); setSaving(false); return }
       }
+      if (op.role === 'field_staff') {
+        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + op.id), { method: 'PATCH', headers: J, body: JSON.stringify({ owner_id: 'b3a5c89d-c243-46c6-be86-4293b5765e70' }) })
+      }
       setMsg('\u2713 Saved'); setTimeout(onClose, 800)
     } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
@@ -2571,7 +2574,7 @@ function OperatorsPage({ myId }: any) {
     setSaving(true); setMsg('')
     try {
       if (editOp) {
-        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country }
+        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: form.role === 'field_staff' ? 'b3a5c89d-c243-46c6-be86-4293b5765e70' : null }
         if (form.password) {
           const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
@@ -2582,7 +2585,7 @@ function OperatorsPage({ myId }: any) {
       } else {
         const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
-        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country }) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: form.role === 'field_staff' ? 'b3a5c89d-c243-46c6-be86-4293b5765e70' : null })
         if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Added')
       }
