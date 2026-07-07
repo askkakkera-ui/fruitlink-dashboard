@@ -74,9 +74,9 @@ export async function GET(request: NextRequest) {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
-    if (params.get('geocode') === '1') {
-      const lat = params.get('lat');
-      const lng = params.get('lng');
+    if (request.nextUrl.searchParams.get('geocode') === '1') {
+      const lat = request.nextUrl.searchParams.get('lat');
+      const lng = request.nextUrl.searchParams.get('lng');
       if (!lat || !lng) return NextResponse.json({ addr: null }, { headers: NO_STORE });
       try {
         const r = await fetch(
