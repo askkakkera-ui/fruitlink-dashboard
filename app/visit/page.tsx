@@ -102,8 +102,12 @@ export default function VisitPage() {
           );
           const d = await r.json();
           if (d?.address) {
-            const p = [d.address.suburb || d.address.neighbourhood || d.address.road, d.address.city || d.address.town || d.address.village].filter(Boolean);
-            if (p.length) addr = p.join(', ');
+            const a = d.address;
+            const area = a.quarter || a.suburb || a.neighbourhood || a.city_district || a.county || a.road || '';
+            const city = a.city || a.town || a.state_district || a.village || a.state || '';
+            if (area || city) addr = [area, city].filter(Boolean).join(', ');
+          } else if (d?.display_name) {
+            addr = String(d.display_name).split(',').slice(0, 2).join(',').trim();
           }
         } catch { }
         const res: GpsResult = { lat, lng, addr };
