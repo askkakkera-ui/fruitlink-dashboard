@@ -96,17 +96,9 @@ export default function VisitPage() {
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
         let addr = lat.toFixed(4) + 'N ' + lng.toFixed(4) + 'E';
         try {
-          const r = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
-            { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0 (fruitlinktech.in)' } }
-          );
+          const r = await fetch(`/api/visit?geocode=1&lat=${lat}&lng=${lng}`, { cache: 'no-store' });
           const d = await r.json();
-          if (d?.display_name) {
-            const parts = String(d.display_name).split(',')
-              .map((s: string) => s.trim())
-              .filter((s: string) => s.length > 2 && !/^\d+$/.test(s));
-            addr = parts.slice(0, 3).join(', ');
-          }
+          if (d?.addr) addr = d.addr;
         } catch { }
         const res: GpsResult = { lat, lng, addr };
         setGpsResult(res);

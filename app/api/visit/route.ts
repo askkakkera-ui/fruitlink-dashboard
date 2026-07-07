@@ -74,6 +74,26 @@ export async function GET(request: NextRequest) {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
+    if (request.nextUrl.searchParams.get('geocode') === '1') {
+      const lat = request.nextUrl.searchParams.get('lat');
+      const lng = request.nextUrl.searchParams.get('lng');
+      if (!lat || !lng) return NextResponse.json({ addr: null }, { headers: NO_STORE });
+      try {
+        const r = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=16`,
+          { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkServer/1.0 (fruitlinktech.in)' } }
+        );
+        const d = await r.json();
+        let addr = lat + 'N, ' + lng + 'E';
+        if (d?.display_name) {
+          const parts = String(d.display_name).split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 2 && !/^\d+$/.test(s));
+          addr = parts.slice(0, 3).join(', ');
+        }
+        return NextResponse.json({ addr }, { headers: NO_STORE });
+      } catch {
+        return NextResponse.json({ addr: null }, { headers: NO_STORE });
+      }
+    }
     if (request.nextUrl.searchParams.get('machines') === '1') {
       if (session.role === 'super_admin') {
         const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location&order=display_name.asc', { headers: sbHeaders() });
