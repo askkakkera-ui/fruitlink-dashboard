@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     }
     if (request.nextUrl.searchParams.get('machines') === '1') {
       if (session.role === 'super_admin') {
-        const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location&order=display_name.asc', { headers: sbHeaders() });
+        const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_lat,location_lng&order=display_name.asc', { headers: sbHeaders() });
         const all = await res.json();
         return NextResponse.json(Array.isArray(all) ? all : [], { headers: NO_STORE });
       }
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       const ids = await tenantMachineIds(session.role === 'field_staff' ? staffId : owner);
       if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
       const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
-      const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
+      const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_lat,location_lng&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
       const data = await res.json();
       return NextResponse.json(Array.isArray(data) ? data : [], { headers: NO_STORE });
     }
