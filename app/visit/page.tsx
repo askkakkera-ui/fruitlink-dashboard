@@ -100,7 +100,7 @@ export default function VisitPage() {
         } catch { /* keep coords only */ }
       },
       () => { setGpsMsg('Location unavailable (you can still submit)'); },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }
 
