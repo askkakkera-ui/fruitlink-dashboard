@@ -84,7 +84,6 @@ export async function GET(request: NextRequest) {
       const owner = tenantOf(session);
       const ids = await tenantMachineIds(session.role === 'field_staff' ? staffId : owner);
       if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
-      if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
       const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
       const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
       const data = await res.json();
