@@ -34,11 +34,11 @@ const C = {
   border:    '#e8eaf0',
   border2:   '#dcdfe9',
   text:      '#1f2533',
-  text2:     '#5b6478',
-  text3:     '#9099ac',
+  text2:     '#374151',
+  text3:     '#4b5563',
   textSide:  '#2a2550',
   textSide2: '#3a3560',
-  textSide3: '#6b6592',
+  textSide3: '#3d3870',
   green:     '#198754',
   greenBg:   '#e7f8ef',
   red:       '#DC3545',
@@ -696,18 +696,21 @@ const stats = [
 {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Dot color={C.orange} pulse size={6} />
           <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced · every 2 min</span>
+          <button onClick={() => setFleetOpen(v => !v)} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, color: C.text, cursor: 'pointer' }}>
+            {fleetOpen ? '▲ Hide' : '▼ Show'}
+          </button>
         </div>
       </div>
-      {loading ? (
+      {fleetOpen && (loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
           {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
         </div>
-      )}
+      ))}
 
       {/* Recent Alerts */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
