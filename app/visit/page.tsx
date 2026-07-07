@@ -29,6 +29,7 @@ export default function VisitPage() {
   const [film, setFilm] = useState('');
   const [straws, setStraws] = useState('');
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -113,7 +114,33 @@ export default function VisitPage() {
 
   async function onPhotoPicked(file: File) {
     setErr(''); setProcessing(true);
-    captureGps();
+    // Get GPS first, then process photo with coordinates in watermark
+    await new Promise<void>(resolve => {
+      if (!('geolocation' in navigator)) { resolve(); return; }
+      setGpsMsg('Getting location…');
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const la = pos.coords.latitude, ln = pos.coords.longitude;
+          setLat(la); setLng(ln);
+          setGpsMsg('Location captured');
+          try {
+            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${ln}`, {
+              headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' },
+            });
+            const d = await r.json();
+            if (d && d.display_name) {
+              const parts = [d.address?.suburb || d.address?.neighbourhood || d.address?.road, d.address?.city || d.address?.town || d.address?.village].filter(Boolean);
+              setAddress(parts.length > 0 ? parts.join(', ') : String(d.display_name).slice(0, 60));
+            } else {
+              setAddress(la.toFixed(5) + '°N, ' + ln.toFixed(5) + '°E');
+            }
+          } catch { }
+          resolve();
+        },
+        () => { setGpsMsg('Location unavailable (you can still submit)'); resolve(); },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
     try {
       const dataUrl = await readFile(file);
       const img = await loadImage(dataUrl);
@@ -121,14 +148,12 @@ export default function VisitPage() {
       let w = img.width, h = img.height;
       if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
-
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('no canvas');
       ctx.drawImage(img, 0, 0, w, h);
       stamp(ctx, w, h);
-
       const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.65));
       if (!blob) throw new Error('compress failed');
       setPhotoBlob(blob);
@@ -221,6 +246,8 @@ export default function VisitPage() {
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Could not save visit'); setSaving(false); return; }
       setMsg('Visit saved.');
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
       if (d.notify && d.notify.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
         setNotify({ recipients: d.notify.recipients, message: d.notify.message || '' });
       } else {
@@ -352,8 +379,8 @@ export default function VisitPage() {
           </div>
         )}
 
-        <button type="button" onClick={submit} disabled={saving || processing} style={{ ...S.submit, ...((saving || processing) ? { opacity: 0.6 } : {}) }}>
-          {saving ? 'Saving…' : 'Submit visit'}
+        <button type="button" onClick={submit} disabled={saving || processing || submitted} style={{ ...S.submit, ...((saving || processing) ? { opacity: 0.6 } : {}), ...(submitted ? { background: '#198754' } : {}) }}>
+          {saving ? 'Saving…' : submitted ? '✓ Visit Saved' : 'Submit visit'}
         </button>
       </div>
 
