@@ -9,6 +9,7 @@ type Visit = {
   oranges_loaded?: number; oranges_damaged?: number; oranges_net?: number;
   photo_url?: string; address?: string; created_at: string;
 };
+type GpsResult = { lat: number; lng: number; addr: string } | null;
 
 const TYPES = [
   { v: 'cleaning', label: 'Cleaning' },
@@ -37,9 +38,9 @@ export default function VisitPage() {
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
-  const [address, setAddress] = useState('');
+
+  // GPS state — for display + submit payload
+  const [gpsResult, setGpsResult] = useState<GpsResult>(null);
   const [gpsMsg, setGpsMsg] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -84,76 +85,83 @@ export default function VisitPage() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  function captureGps() {
-    if (!('geolocation' in navigator)) { setGpsMsg('GPS not available'); return; }
-    setGpsMsg('Getting location…');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const la = pos.coords.latitude, ln = pos.coords.longitude;
-        setLat(la); setLng(ln);
-        setGpsMsg('Location captured');
-        try {
-          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${ln}`, {
-            headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' },
-          });
-          const d = await r.json();
-          if (d && d.display_name) {
-            // Build a short address: neighbourhood/suburb + city
-            const parts = [d.address?.suburb || d.address?.neighbourhood || d.address?.road, d.address?.city || d.address?.town || d.address?.village].filter(Boolean);
-            setAddress(parts.length > 0 ? parts.join(', ') : String(d.display_name).slice(0, 60));
-          } else {
-            // Fallback: show readable coordinates
-            setAddress(la.toFixed(5) + '°N, ' + ln.toFixed(5) + '°E');
-          }
-        } catch { /* keep coords only */ }
-      },
-      () => { setGpsMsg('Location unavailable (you can still submit)'); },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+  // Returns GPS as a local value (not React state) so it can be used immediately in stamp()
+  function getGps(): Promise<GpsResult> {
+    return new Promise(resolve => {
+      if (!('geolocation' in navigator)) {
+        setGpsMsg('GPS not available');
+        resolve(null);
+        return;
+      }
+      setGpsMsg('Getting location…');
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude, lng = pos.coords.longitude;
+          setGpsMsg('Location captured');
+          let addr = lat.toFixed(5) + '°N, ' + lng.toFixed(5) + '°E';
+          try {
+            const r = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+              { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' } }
+            );
+            const d = await r.json();
+            if (d && d.display_name) {
+              const parts = [
+                d.address?.suburb || d.address?.neighbourhood || d.address?.road,
+                d.address?.city || d.address?.town || d.address?.village,
+              ].filter(Boolean);
+              addr = parts.length > 0 ? parts.join(', ') : String(d.display_name).slice(0, 60);
+            }
+          } catch { /* use coord fallback */ }
+          const result: GpsResult = { lat, lng, addr };
+          setGpsResult(result); // update display
+          setGpsMsg('Location captured — ' + addr);
+          resolve(result);
+        },
+        () => {
+          setGpsMsg('Location unavailable (you can still submit)');
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
+
+  function retryGps() {
+    getGps().then(r => { if (r) setGpsResult(r); });
   }
 
   async function onPhotoPicked(file: File) {
     setErr(''); setProcessing(true);
-    // Get GPS first, then process photo with coordinates in watermark
-    await new Promise<void>(resolve => {
-      if (!('geolocation' in navigator)) { resolve(); return; }
-      setGpsMsg('Getting location…');
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const la = pos.coords.latitude, ln = pos.coords.longitude;
-          setLat(la); setLng(ln);
-          setGpsMsg('Location captured');
-          try {
-            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${la}&lon=${ln}`, {
-              headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' },
-            });
-            const d = await r.json();
-            if (d && d.display_name) {
-              const parts = [d.address?.suburb || d.address?.neighbourhood || d.address?.road, d.address?.city || d.address?.town || d.address?.village].filter(Boolean);
-              setAddress(parts.length > 0 ? parts.join(', ') : String(d.display_name).slice(0, 60));
-            } else {
-              setAddress(la.toFixed(5) + '°N, ' + ln.toFixed(5) + '°E');
-            }
-          } catch { }
-          resolve();
-        },
-        () => { setGpsMsg('Location unavailable (you can still submit)'); resolve(); },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    });
+
+    // Run GPS and image loading in PARALLEL — faster, preview shows sooner
+    const [gps, imgResult] = await Promise.all([
+      getGps(),
+      readFile(file).then(dataUrl => loadImage(dataUrl)).catch(() => null),
+    ]);
+
+    if (!imgResult) {
+      setErr('Could not process photo — try again.');
+      setProcessing(false);
+      return;
+    }
+
     try {
-      const dataUrl = await readFile(file);
-      const img = await loadImage(dataUrl);
+      const img = imgResult;
       const MAX = 1280;
       let w = img.width, h = img.height;
       if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('no canvas');
       ctx.drawImage(img, 0, 0, w, h);
-      stamp(ctx, w, h);
+
+      // Stamp uses local gps variable — guaranteed to have the value
+      stampWithGps(ctx, w, h, gps);
+
       const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.65));
       if (!blob) throw new Error('compress failed');
       setPhotoBlob(blob);
@@ -165,19 +173,21 @@ export default function VisitPage() {
     setProcessing(false);
   }
 
-  function stamp(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  // Stamp function takes GPS as a parameter — no React state timing issues
+  function stampWithGps(ctx: CanvasRenderingContext2D, w: number, h: number, gps: GpsResult) {
     const machine = machines.find(m => m.id === machineId);
     const now = new Date();
     const lines = [
       'Fruitlink Visit',
       (machine ? (machine.display_name || machine.sn) : '') + '  ' + now.toLocaleString('en-IN'),
     ];
-    if (lat != null && lng != null) lines.push(`GPS ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-    if (address) lines.push(address.length > 60 ? address.slice(0, 60) + '…' : address);
-
+    if (gps) {
+      lines.push('GPS ' + gps.lat.toFixed(5) + ', ' + gps.lng.toFixed(5));
+      lines.push(gps.addr.length > 60 ? gps.addr.slice(0, 60) + '…' : gps.addr);
+    }
     const pad = Math.round(w * 0.02);
     const fs = Math.max(12, Math.round(w * 0.028));
-    ctx.font = `${fs}px sans-serif`;
+    ctx.font = fs + 'px sans-serif';
     const lineH = fs + 6;
     const boxH = lineH * lines.length + pad;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -231,8 +241,9 @@ export default function VisitPage() {
         note: note.trim() || null,
         consumables: consumablesObj(),
         photo_url,
-        lat, lng,
-        address: address || null,
+        lat: gpsResult?.lat ?? null,
+        lng: gpsResult?.lng ?? null,
+        address: gpsResult?.addr ?? null,
       };
       if (visitType === 'loading') {
         if (loaded !== '') payload.oranges_loaded = parseInt(loaded);
@@ -245,9 +256,13 @@ export default function VisitPage() {
       });
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Could not save visit'); setSaving(false); return; }
-      setMsg('Visit saved.');
+
+      // Success — show green button for 4 seconds
+      setSaving(false);
       setSubmitted(true);
-      setTimeout(() => setSubmitted(false), 3000);
+      setMsg('Visit saved.');
+      setTimeout(() => { setSubmitted(false); setMsg(''); }, 4000);
+
       if (d.notify && d.notify.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
         setNotify({ recipients: d.notify.recipients, message: d.notify.message || '' });
       } else {
@@ -256,6 +271,7 @@ export default function VisitPage() {
       setNote(''); setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
       clearPhoto();
       loadVisits();
+      return; // early return so setSaving(false) below doesn't run again
     } catch (e: any) {
       setErr('Network problem — please try again.');
     }
@@ -276,7 +292,7 @@ export default function VisitPage() {
               <button disabled={attLoading} onClick={async () => {
                 setAttLoading(true);
                 try {
-                  await fetch('/api/attendance?id=' + attendance.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat, lng, address }) });
+                  await fetch('/api/attendance?id=' + attendance.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: gpsResult?.lat, lng: gpsResult?.lng, address: gpsResult?.addr }) });
                   setAttendance(null); await loadAttendance();
                 } catch { } finally { setAttLoading(false); }
               }} style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#DC3545', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
@@ -286,7 +302,7 @@ export default function VisitPage() {
               <button disabled={attLoading} onClick={async () => {
                 setAttLoading(true);
                 try {
-                  const r = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machine_id: machineId || null, lat, lng, address }) });
+                  const r = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machine_id: machineId || null, lat: gpsResult?.lat, lng: gpsResult?.lng, address: gpsResult?.addr }) });
                   const d = await r.json();
                   if (d && d.id) setAttendance(d);
                 } catch { } finally { setAttLoading(false); }
@@ -343,7 +359,7 @@ export default function VisitPage() {
           onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onPhotoPicked(f); }} />
         {!photoPreview && (
           <button type="button" onClick={() => fileRef.current?.click()} style={S.photoBtn} disabled={processing}>
-            {processing ? 'Processing…' : '📷 Take photo'}
+            {processing ? 'Getting location + processing photo…' : '📷 Take photo'}
           </button>
         )}
         {photoPreview && (
@@ -352,9 +368,11 @@ export default function VisitPage() {
             <button type="button" onClick={() => { clearPhoto(); fileRef.current?.click(); }} style={S.retake}>Retake</button>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-          <div style={S.gps}>{gpsMsg}{address ? ' — ' + (address.length > 80 ? address.slice(0, 80) + '…' : address) : ''}</div>
-          {lat == null && <button type="button" onClick={captureGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry</button>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const, marginTop: 4 }}>
+          <div style={S.gps}>{gpsMsg}</div>
+          {!gpsResult && !processing && (
+            <button type="button" onClick={retryGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry GPS</button>
+          )}
         </div>
 
         <label style={S.label}>Note (optional)</label>
@@ -379,7 +397,8 @@ export default function VisitPage() {
           </div>
         )}
 
-        <button type="button" onClick={submit} disabled={saving || processing || submitted} style={{ ...S.submit, ...((saving || processing) ? { opacity: 0.6 } : {}), ...(submitted ? { background: '#198754' } : {}) }}>
+        <button type="button" onClick={submit} disabled={saving || processing || submitted}
+          style={{ ...S.submit, ...(saving || processing ? { opacity: 0.6 } : {}), ...(submitted ? { background: '#198754' } : {}) }}>
           {saving ? 'Saving…' : submitted ? '✓ Visit Saved' : 'Submit visit'}
         </button>
       </div>
@@ -399,7 +418,7 @@ export default function VisitPage() {
                 <div style={S.muted}>Loaded net {v.oranges_net}{v.oranges_damaged ? ` (${v.oranges_damaged} damaged)` : ''}</div>}
               {v.note && <div style={S.muted}>{v.note}</div>}
               {v.photo_url && <img src={v.photo_url} alt="" style={S.thumb} />}
-              {v.address && <div style={S.muted}>📍 {v.address.length > 50 ? v.address.slice(0, 50) + '…' : v.address}</div>}
+              {v.address && <div style={S.muted}>📍 {v.address.length > 60 ? v.address.slice(0, 60) + '…' : v.address}</div>}
               <div style={S.time}>{new Date(v.created_at).toLocaleString('en-IN')}</div>
             </div>
           );
@@ -444,7 +463,7 @@ const S: Record<string, React.CSSProperties> = {
   photoBtn: { width: '100%', padding: '14px', fontSize: 16, fontWeight: 600, color: '#1F2533', background: '#fff', border: '2px dashed #D8DCE6', borderRadius: 10, cursor: 'pointer' },
   preview: { width: '100%', borderRadius: 10, marginTop: 4, display: 'block' },
   retake: { marginTop: 8, padding: '8px 14px', fontSize: 14, background: '#F0F1F5', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#1F2533' },
-  gps: { fontSize: 12, color: '#5B6478', marginTop: 6 },
+  gps: { fontSize: 12, color: '#5B6478', marginTop: 2 },
   submit: { width: '100%', marginTop: 16, padding: '14px', fontSize: 17, fontWeight: 700, color: '#fff', background: '#FE6505', border: 'none', borderRadius: 12, cursor: 'pointer' },
   err: { marginTop: 12, padding: '10px 12px', background: '#FDEEEE', color: '#B42318', borderRadius: 8, fontSize: 14 },
   ok: { marginTop: 12, padding: '10px 12px', background: '#E7F8EF', color: '#198754', borderRadius: 8, fontSize: 14 },
