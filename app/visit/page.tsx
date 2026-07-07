@@ -248,8 +248,6 @@ export default function VisitPage() {
       setMsg('Visit saved.');
       setSubmitted(true);
       setTimeout(() => setSubmitted(false), 3000);
-      setSubmitted(true);
-      setTimeout(() => setSubmitted(false), 3000);
       if (d.notify && d.notify.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
         setNotify({ recipients: d.notify.recipients, message: d.notify.message || '' });
       } else {
