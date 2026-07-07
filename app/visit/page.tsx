@@ -317,7 +317,10 @@ export default function VisitPage() {
             <button type="button" onClick={() => { clearPhoto(); fileRef.current?.click(); }} style={S.retake}>Retake</button>
           </div>
         )}
-        <div style={S.gps}>{gpsMsg}{address ? ' — ' + (address.length > 50 ? address.slice(0, 50) + '…' : address) : ''}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
+          <div style={S.gps}>{gpsMsg}{address ? ' — ' + (address.length > 50 ? address.slice(0, 50) + '…' : address) : ''}</div>
+          {lat == null && <button type="button" onClick={captureGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry</button>}
+        </div>
 
         <label style={S.label}>Note (optional)</label>
         <textarea style={{ ...S.input, height: 70, resize: 'vertical' }} value={note}
