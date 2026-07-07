@@ -131,10 +131,9 @@ export default function VisitPage() {
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, w, h);
       stampPhoto(ctx, w, h); // uses gpsRef.current — whatever GPS we have right now
-      const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.65));
-      if (!blob) throw new Error('compress failed');
-      setPhotoBlob(blob);
-      setPhotoPreview(URL.createObjectURL(blob));
+      const dataPreview = canvas.toDataURL('image/jpeg', 0.65);
+      setPhotoPreview(dataPreview);
+      canvas.toBlob(blob => { if (blob) setPhotoBlob(blob); }, 'image/jpeg', 0.65);
       (img as any).src = '';
     } catch {
       setErr('Could not process photo — try again.');
@@ -168,7 +167,6 @@ export default function VisitPage() {
 
   function clearPhoto() {
     setPhotoBlob(null);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoPreview('');
     if (fileRef.current) fileRef.current.value = '';
   }
