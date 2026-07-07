@@ -12,7 +12,7 @@ const card: React.CSSProperties = { background: '#fff', borderRadius: 14, border
 
 function fmtDate(t?: string) {
   if (!t) return '—';
-  try { return new Date(t).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return t; }
+  try { return new Date(t).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }); } catch { return t; }
 }
 function fmtDuration(inT?: string, outT?: string) {
   if (!inT || !outT) return '—';
