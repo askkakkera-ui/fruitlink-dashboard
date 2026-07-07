@@ -53,13 +53,18 @@ export async function GET(req: NextRequest) {
 
       // 3. Count cups dispensed since that loading visit (paid orders only)
       const oRes = await fetch(
-        SB_URL + '/rest/v1/orders?select=cup_num&machine_id=eq.' + m.id +
+        SB_URL + '/rest/v1/orders?select=cup_num,amount_paise&machine_id=eq.' + m.id +
         '&pay_state=eq.1&created_at=gt.' + encodeURIComponent(last_loaded_at),
         { headers: sbH() }
       );
       const orders = await oRes.json();
+      const PRICE_PER_CUP_PAISE = (mc.price_250ml || 120) * 100;
       const cups_dispensed = (Array.isArray(orders) ? orders : [])
-        .reduce((sum: number, o: any) => sum + (parseInt(o.cup_num) || 1), 0);
+        .reduce((sum: number, o: any) => {
+          const fromAmount = o.amount_paise ? Math.round(o.amount_paise / PRICE_PER_CUP_PAISE) : 0;
+          const fromCupNum = parseInt(o.cup_num) || 0;
+          return sum + Math.max(1, fromAmount > fromCupNum ? fromAmount : fromCupNum);
+        }, 0);
 
       const cups_remaining = Math.max(0, cups_loaded - cups_dispensed);
       const stock_pct = cups_loaded > 0 ? Math.round((cups_remaining / cups_loaded) * 100) : 0;
