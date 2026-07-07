@@ -4,6 +4,7 @@ import WarehouseSection from './WarehouseSection'
 import NotifyConfigSection from './NotifyConfigSection'
 import ReportsSection from './ReportsSection'
 import FieldStaffSection from './FieldStaffSection'
+import AttendanceSection from './AttendanceSection'
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode},{error:string|null}> {
   constructor(props: any){super(props);this.state={error:null}}
