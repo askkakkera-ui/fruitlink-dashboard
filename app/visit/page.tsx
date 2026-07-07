@@ -43,6 +43,10 @@ export default function VisitPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [notify, setNotify] = useState<{ recipients: string[]; message: string } | null>(null);
+  const [attendance, setAttendance] = useState<{ id: string; check_in_at: string; machine_id?: string } | null>(null);
+  const [attLoading, setAttLoading] = useState(false);
+  const [attendance, setAttendance] = useState<{ id: string; check_in_at: string; machine_id?: string } | null>(null);
+  const [attLoading, setAttLoading] = useState(false);
 
   const net = (() => {
     const l = parseInt(loaded), d = parseInt(damaged);
@@ -50,6 +54,13 @@ export default function VisitPage() {
     return String((isNaN(d) ? 0 : d) > l ? 0 : l - (isNaN(d) ? 0 : d));
   })();
 
+  async function loadAttendance() {
+    try {
+      const r = await fetch('/api/attendance?current=1', { cache: 'no-store' });
+      const d = await r.json();
+      setAttendance(d || null);
+    } catch { setAttendance(null); }
+  }
   async function loadMachines() {
     try {
       const r = await fetch('/api/visit?machines=1', { cache: 'no-store' });
@@ -67,7 +78,7 @@ export default function VisitPage() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { loadMachines(); loadVisits(); captureGps(); }, []);
+  useEffect(() => { loadMachines(); loadVisits(); captureGps(); loadAttendance(); }, []);
   useEffect(() => {
     const onFocus = () => loadVisits();
     window.addEventListener('focus', onFocus);
@@ -227,10 +238,34 @@ export default function VisitPage() {
         <div style={S.header}>
           <img src={LOGO} alt="Fruitlink" style={{ height: 34 }} />
           <span style={S.title}>Visit Update</span>
-          <button onClick={() => { ['fl_auth','fl_operator_id','fl_role','fl_operator_name','fl_state','fl_country'].forEach(k => document.cookie = k + '=; max-age=0; path=/'); window.location.href = '/login'; }}
-            style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#5b6478', background: 'none', border: '1px solid #e8eaf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
-            Sign out
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            {attendance ? (
+              <button disabled={attLoading} onClick={async () => {
+                setAttLoading(true);
+                try {
+                  await fetch('/api/attendance?id=' + attendance.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat, lng, address }) });
+                  setAttendance(null); await loadAttendance();
+                } catch { } finally { setAttLoading(false); }
+              }} style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#DC3545', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
+                {attLoading ? '...' : '🔴 Check Out'}
+              </button>
+            ) : (
+              <button disabled={attLoading} onClick={async () => {
+                setAttLoading(true);
+                try {
+                  const r = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machine_id: machineId || null, lat, lng, address }) });
+                  const d = await r.json();
+                  if (d && d.id) setAttendance(d);
+                } catch { } finally { setAttLoading(false); }
+              }} style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#198754', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
+                {attLoading ? '...' : '🟢 Check In'}
+              </button>
+            )}
+            <button onClick={() => { ['fl_auth','fl_operator_id','fl_role','fl_operator_name','fl_state','fl_country'].forEach(k => document.cookie = k + '=; max-age=0; path=/'); window.location.href = '/login'; }}
+              style={{ fontSize: 12, fontWeight: 600, color: '#5b6478', background: 'none', border: '1px solid #e8eaf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
+              Sign out
+            </button>
+          </div>
         </div>
 
         <label style={S.label}>Machine</label>
