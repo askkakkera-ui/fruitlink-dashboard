@@ -76,7 +76,7 @@ export default function VisitPage() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { loadMachines(); loadVisits(); captureGps(); loadAttendance(); }, []);
+  useEffect(() => { loadMachines(); loadVisits(); loadAttendance(); }, []);
   useEffect(() => {
     const onFocus = () => loadVisits();
     window.addEventListener('focus', onFocus);
@@ -113,6 +113,7 @@ export default function VisitPage() {
 
   async function onPhotoPicked(file: File) {
     setErr(''); setProcessing(true);
+    captureGps();
     try {
       const dataUrl = await readFile(file);
       const img = await loadImage(dataUrl);
