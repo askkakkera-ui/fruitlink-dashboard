@@ -9,7 +9,7 @@ type Visit = {
   oranges_loaded?: number; oranges_damaged?: number; oranges_net?: number;
   photo_url?: string; address?: string; created_at: string;
 };
-type GpsResult = { lat: number; lng: number; addr: string } | null;
+type GpsResult = { lat: number; lng: number; addr: string };
 
 const TYPES = [
   { v: 'cleaning', label: 'Cleaning' },
@@ -34,19 +34,17 @@ export default function VisitPage() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [visits, setVisits] = useState<Visit[]>([]);
-
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [processing, setProcessing] = useState(false);
-
-  // GPS state — for display + submit payload
-  const [gpsResult, setGpsResult] = useState<GpsResult>(null);
+  const [gpsResult, setGpsResult] = useState<GpsResult | null>(null);
   const [gpsMsg, setGpsMsg] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
-
   const [notify, setNotify] = useState<{ recipients: string[]; message: string } | null>(null);
-  const [attendance, setAttendance] = useState<{ id: string; check_in_at: string; machine_id?: string } | null>(null);
+  const [attendance, setAttendance] = useState<{ id: string; check_in_at: string } | null>(null);
   const [attLoading, setAttLoading] = useState(false);
+  // Use a ref to access latest gpsResult inside stamp() without closure issues
+  const gpsRef = useRef<GpsResult | null>(null);
 
   const net = (() => {
     const l = parseInt(loaded), d = parseInt(damaged);
@@ -54,11 +52,15 @@ export default function VisitPage() {
     return String((isNaN(d) ? 0 : d) > l ? 0 : l - (isNaN(d) ? 0 : d));
   })();
 
+  // Keep ref in sync with state
+  useEffect(() => { gpsRef.current = gpsResult; }, [gpsResult]);
+
   async function loadAttendance() {
     try {
       const r = await fetch('/api/attendance?current=1', { cache: 'no-store' });
+      if (!r.ok) { setAttendance(null); return; }
       const d = await r.json();
-      setAttendance(d || null);
+      setAttendance(d && d.id ? d : null);
     } catch { setAttendance(null); }
   }
   async function loadMachines() {
@@ -68,122 +70,89 @@ export default function VisitPage() {
       const list = Array.isArray(d) ? d : (d.machines || []);
       setMachines(list);
       if (list.length && !machineId) setMachineId(list[0].id);
-    } catch { /* ignore */ }
+    } catch { }
   }
   async function loadVisits() {
     try {
       const r = await fetch('/api/visit', { cache: 'no-store' });
       const d = await r.json();
       if (Array.isArray(d)) setVisits(d);
-    } catch { /* ignore */ }
+    } catch { }
   }
 
-  useEffect(() => { loadMachines(); loadVisits(); loadAttendance(); }, []);
+  useEffect(() => { loadMachines(); loadVisits(); loadAttendance(); startGps(); }, []);
   useEffect(() => {
-    const onFocus = () => loadVisits();
+    const onFocus = () => { loadVisits(); loadAttendance(); };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  // Returns GPS as a local value (not React state) so it can be used immediately in stamp()
-  function getGps(): Promise<GpsResult> {
-    return new Promise(resolve => {
-      if (!('geolocation' in navigator)) {
-        setGpsMsg('GPS not available');
-        resolve(null);
-        return;
-      }
-      setGpsMsg('Getting location…');
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude, lng = pos.coords.longitude;
-          setGpsMsg('Location captured');
-          let addr = lat.toFixed(5) + '°N, ' + lng.toFixed(5) + '°E';
-          try {
-            const r = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
-              { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' } }
-            );
-            const d = await r.json();
-            if (d && d.display_name) {
-              const parts = [
-                d.address?.suburb || d.address?.neighbourhood || d.address?.road,
-                d.address?.city || d.address?.town || d.address?.village,
-              ].filter(Boolean);
-              addr = parts.length > 0 ? parts.join(', ') : String(d.display_name).slice(0, 60);
-            }
-          } catch { /* use coord fallback */ }
-          const result: GpsResult = { lat, lng, addr };
-          setGpsResult(result); // update display
-          setGpsMsg('Location captured — ' + addr);
-          resolve(result);
-        },
-        () => {
-          setGpsMsg('Location unavailable (you can still submit)');
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    });
-  }
-
-  function retryGps() {
-    getGps().then(r => { if (r) setGpsResult(r); });
+  // GPS runs silently in background — never blocks UI
+  function startGps() {
+    if (!('geolocation' in navigator)) { setGpsMsg('GPS not available'); return; }
+    setGpsMsg('Getting location…');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        let addr = lat.toFixed(4) + 'N ' + lng.toFixed(4) + 'E';
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+            { headers: { 'Accept': 'application/json', 'User-Agent': 'FruitlinkApp/1.0' } }
+          );
+          const d = await r.json();
+          if (d?.address) {
+            const p = [d.address.suburb || d.address.neighbourhood || d.address.road, d.address.city || d.address.town || d.address.village].filter(Boolean);
+            if (p.length) addr = p.join(', ');
+          }
+        } catch { }
+        const res: GpsResult = { lat, lng, addr };
+        setGpsResult(res);
+        gpsRef.current = res;
+        setGpsMsg('📍 ' + addr);
+      },
+      () => { setGpsMsg('Location unavailable — tap Retry'); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   }
 
   async function onPhotoPicked(file: File) {
     setErr(''); setProcessing(true);
-
-    // Run GPS and image loading in PARALLEL — faster, preview shows sooner
-    const [gps, imgResult] = await Promise.all([
-      getGps(),
-      readFile(file).then(dataUrl => loadImage(dataUrl)).catch(() => null),
-    ]);
-
-    if (!imgResult) {
-      setErr('Could not process photo — try again.');
-      setProcessing(false);
-      return;
-    }
-
+    // Photo processes immediately — GPS already running in background from page load
     try {
-      const img = imgResult;
+      const dataUrl = await readFile(file);
+      const img = await loadImage(dataUrl);
       const MAX = 1280;
       let w = img.width, h = img.height;
       if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
-
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('no canvas');
+      const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, w, h);
-
-      // Stamp uses local gps variable — guaranteed to have the value
-      stampWithGps(ctx, w, h, gps);
-
+      stampPhoto(ctx, w, h); // uses gpsRef.current — whatever GPS we have right now
       const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.65));
       if (!blob) throw new Error('compress failed');
       setPhotoBlob(blob);
       setPhotoPreview(URL.createObjectURL(blob));
       (img as any).src = '';
-    } catch (e: any) {
+    } catch {
       setErr('Could not process photo — try again.');
     }
     setProcessing(false);
   }
 
-  // Stamp function takes GPS as a parameter — no React state timing issues
-  function stampWithGps(ctx: CanvasRenderingContext2D, w: number, h: number, gps: GpsResult) {
+  function stampPhoto(ctx: CanvasRenderingContext2D, w: number, h: number) {
     const machine = machines.find(m => m.id === machineId);
     const now = new Date();
+    const gps = gpsRef.current; // use ref — always current, no closure issue
     const lines = [
       'Fruitlink Visit',
-      (machine ? (machine.display_name || machine.sn) : '') + '  ' + now.toLocaleString('en-IN'),
+      (machine?.display_name || machine?.sn || '') + '  ' + now.toLocaleString('en-IN'),
     ];
     if (gps) {
       lines.push('GPS ' + gps.lat.toFixed(5) + ', ' + gps.lng.toFixed(5));
-      lines.push(gps.addr.length > 60 ? gps.addr.slice(0, 60) + '…' : gps.addr);
+      lines.push(gps.addr.length > 55 ? gps.addr.slice(0, 55) + '…' : gps.addr);
     }
     const pad = Math.round(w * 0.02);
     const fs = Math.max(12, Math.round(w * 0.028));
@@ -235,46 +204,32 @@ export default function VisitPage() {
         try { photo_url = await uploadPhoto(); }
         catch (e: any) { setErr('Photo upload failed — check network and retry.'); setSaving(false); return; }
       }
+      const gps = gpsRef.current;
       const payload: any = {
-        machine_id: machineId,
-        visit_type: visitType,
-        note: note.trim() || null,
-        consumables: consumablesObj(),
-        photo_url,
-        lat: gpsResult?.lat ?? null,
-        lng: gpsResult?.lng ?? null,
-        address: gpsResult?.addr ?? null,
+        machine_id: machineId, visit_type: visitType,
+        note: note.trim() || null, consumables: consumablesObj(),
+        photo_url, lat: gps?.lat ?? null, lng: gps?.lng ?? null, address: gps?.addr ?? null,
       };
       if (visitType === 'loading') {
         if (loaded !== '') payload.oranges_loaded = parseInt(loaded);
         if (damaged !== '') payload.oranges_damaged = parseInt(damaged);
       }
-      const r = await fetch('/api/visit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const r = await fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Could not save visit'); setSaving(false); return; }
-
-      // Success — show green button for 4 seconds
+      // Success
       setSaving(false);
       setSubmitted(true);
-      setMsg('Visit saved.');
-      setTimeout(() => { setSubmitted(false); setMsg(''); }, 4000);
-
-      if (d.notify && d.notify.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
+      setMsg('Visit saved ✓');
+      setTimeout(() => { setSubmitted(false); setMsg(''); }, 5000);
+      if (d.notify?.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
         setNotify({ recipients: d.notify.recipients, message: d.notify.message || '' });
-      } else {
-        setNotify(null);
       }
       setNote(''); setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
       clearPhoto();
       loadVisits();
-      return; // early return so setSaving(false) below doesn't run again
-    } catch (e: any) {
-      setErr('Network problem — please try again.');
-    }
+      return;
+    } catch { setErr('Network problem — please try again.'); }
     setSaving(false);
   }
 
@@ -292,7 +247,11 @@ export default function VisitPage() {
               <button disabled={attLoading} onClick={async () => {
                 setAttLoading(true);
                 try {
-                  await fetch('/api/attendance?id=' + attendance.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: gpsResult?.lat, lng: gpsResult?.lng, address: gpsResult?.addr }) });
+                  const gps = gpsRef.current;
+                  await fetch('/api/attendance?id=' + attendance.id, {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: gps?.lat, lng: gps?.lng, address: gps?.addr }),
+                  });
                   setAttendance(null); await loadAttendance();
                 } catch { } finally { setAttLoading(false); }
               }} style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#DC3545', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
@@ -302,16 +261,22 @@ export default function VisitPage() {
               <button disabled={attLoading} onClick={async () => {
                 setAttLoading(true);
                 try {
-                  const r = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machine_id: machineId || null, lat: gpsResult?.lat, lng: gpsResult?.lng, address: gpsResult?.addr }) });
+                  const gps = gpsRef.current;
+                  const r = await fetch('/api/attendance', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ machine_id: machineId || null, lat: gps?.lat, lng: gps?.lng, address: gps?.addr }),
+                  });
                   const d = await r.json();
-                  if (d && d.id) setAttendance(d);
+                  if (d?.id) setAttendance(d);
                 } catch { } finally { setAttLoading(false); }
               }} style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#198754', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
                 {attLoading ? '...' : '🟢 Check In'}
               </button>
             )}
-            <button onClick={() => { ['fl_auth','fl_operator_id','fl_role','fl_operator_name','fl_state','fl_country'].forEach(k => document.cookie = k + '=; max-age=0; path=/'); window.location.href = '/login'; }}
-              style={{ fontSize: 12, fontWeight: 600, color: '#5b6478', background: 'none', border: '1px solid #e8eaf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
+            <button onClick={() => {
+              ['fl_auth','fl_operator_id','fl_role','fl_operator_name','fl_state','fl_country'].forEach(k => document.cookie = k + '=; max-age=0; path=/');
+              window.location.href = '/login';
+            }} style={{ fontSize: 12, fontWeight: 600, color: '#5b6478', background: 'none', border: '1px solid #e8eaf0', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
               Sign out
             </button>
           </div>
@@ -336,11 +301,9 @@ export default function VisitPage() {
         {visitType === 'loading' && (
           <div style={S.loadBox}>
             <label style={S.label}>Oranges loaded</label>
-            <input style={S.input} type="number" inputMode="numeric" value={loaded}
-              onChange={e => setLoaded(e.target.value)} placeholder="e.g. 100" />
+            <input style={S.input} type="number" inputMode="numeric" value={loaded} onChange={e => setLoaded(e.target.value)} placeholder="e.g. 100" />
             <label style={S.label}>Damaged / rejected</label>
-            <input style={S.input} type="number" inputMode="numeric" value={damaged}
-              onChange={e => setDamaged(e.target.value)} placeholder="e.g. 2" />
+            <input style={S.input} type="number" inputMode="numeric" value={damaged} onChange={e => setDamaged(e.target.value)} placeholder="e.g. 2" />
             <div style={S.netRow}>Net loaded: <b>{net === '' ? '—' : net}</b></div>
             <label style={S.label}>Consumables refilled (optional)</label>
             <div style={S.consRow}>
@@ -356,10 +319,10 @@ export default function VisitPage() {
 
         <label style={S.label}>Photo</label>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-          onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onPhotoPicked(f); }} />
+          onChange={e => { const f = e.target.files?.[0]; if (f) onPhotoPicked(f); }} />
         {!photoPreview && (
           <button type="button" onClick={() => fileRef.current?.click()} style={S.photoBtn} disabled={processing}>
-            {processing ? 'Getting location + processing photo…' : '📷 Take photo'}
+            {processing ? 'Processing photo…' : '📷 Take photo'}
           </button>
         )}
         {photoPreview && (
@@ -368,31 +331,26 @@ export default function VisitPage() {
             <button type="button" onClick={() => { clearPhoto(); fileRef.current?.click(); }} style={S.retake}>Retake</button>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const, marginTop: 4 }}>
-          <div style={S.gps}>{gpsMsg}</div>
-          {!gpsResult && !processing && (
-            <button type="button" onClick={retryGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry GPS</button>
-          )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' as const }}>
+          <span style={S.gps}>{gpsMsg || 'Getting location…'}</span>
+          {!gpsResult && <button type="button" onClick={startGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry GPS</button>}
         </div>
 
         <label style={S.label}>Note (optional)</label>
-        <textarea style={{ ...S.input, height: 70, resize: 'vertical' }} value={note}
+        <textarea style={{ ...S.input, height: 70, resize: 'vertical' } as React.CSSProperties} value={note}
           onChange={e => setNote(e.target.value)} placeholder="Anything worth recording..." />
 
         {err && <div style={S.err}>{err}</div>}
         {msg && <div style={S.ok}>{msg}</div>}
 
-        {notify && notify.recipients.length > 0 && (
+        {notify?.recipients && notify.recipients.length > 0 && (
           <div style={S.notifyBox}>
             <div style={S.notifyTitle}>Send WhatsApp update</div>
             <div style={S.notifyHint}>Tap each recipient to send the pre-filled update.</div>
-            {notify.recipients.map((num) => (
-              <a key={num}
-                href={`https://wa.me/${num.replace(/[^\d]/g, '')}?text=${encodeURIComponent(notify.message)}`}
-                target="_blank" rel="noopener noreferrer"
-                style={S.waBtn}>
-                📲 Send to {num}
-              </a>
+            {notify.recipients.map(num => (
+              <a key={num} href={`https://wa.me/${num.replace(/[^\d]/g, '')}?text=${encodeURIComponent(notify.message)}`}
+                target="_blank" rel="noopener noreferrer" style={S.waBtn}>📲 Send to {num}</a>
             ))}
           </div>
         )}
@@ -410,12 +368,8 @@ export default function VisitPage() {
           const m = machineById(v.machine_id);
           return (
             <div key={v.id} style={S.visitRow}>
-              <div>
-                <b>{m ? machineLabel(m) : v.machine_id.slice(0, 8)}</b>
-                <span style={S.badge}>{v.visit_type}</span>
-              </div>
-              {v.visit_type === 'loading' && v.oranges_net != null &&
-                <div style={S.muted}>Loaded net {v.oranges_net}{v.oranges_damaged ? ` (${v.oranges_damaged} damaged)` : ''}</div>}
+              <div><b>{m ? machineLabel(m) : v.machine_id.slice(0, 8)}</b><span style={S.badge}>{v.visit_type}</span></div>
+              {v.visit_type === 'loading' && v.oranges_net != null && <div style={S.muted}>Loaded net {v.oranges_net}{v.oranges_damaged ? ` (${v.oranges_damaged} damaged)` : ''}</div>}
               {v.note && <div style={S.muted}>{v.note}</div>}
               {v.photo_url && <img src={v.photo_url} alt="" style={S.thumb} />}
               {v.address && <div style={S.muted}>📍 {v.address.length > 60 ? v.address.slice(0, 60) + '…' : v.address}</div>}
@@ -452,7 +406,7 @@ const S: Record<string, React.CSSProperties> = {
   title: { fontSize: 20, fontWeight: 700, color: '#1F2533' },
   subTitle: { fontSize: 16, fontWeight: 700, color: '#1F2533', marginBottom: 10 },
   label: { display: 'block', fontSize: 13, fontWeight: 600, color: '#5B6478', margin: '12px 0 5px' },
-  input: { width: '100%', padding: '12px 12px', fontSize: 16, border: '1px solid #D8DCE6', borderRadius: 10, boxSizing: 'border-box', background: '#fff', color: '#1F2533' },
+  input: { width: '100%', padding: '12px', fontSize: 16, border: '1px solid #D8DCE6', borderRadius: 10, boxSizing: 'border-box', background: '#fff', color: '#1F2533' },
   typeRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
   typeBtn: { padding: '12px 8px', fontSize: 15, border: '1px solid #D8DCE6', borderRadius: 10, background: '#fff', color: '#1F2533', cursor: 'pointer', fontWeight: 600 },
   typeBtnOn: { background: '#FE6505', borderColor: '#FE6505', color: '#fff' },
@@ -463,7 +417,7 @@ const S: Record<string, React.CSSProperties> = {
   photoBtn: { width: '100%', padding: '14px', fontSize: 16, fontWeight: 600, color: '#1F2533', background: '#fff', border: '2px dashed #D8DCE6', borderRadius: 10, cursor: 'pointer' },
   preview: { width: '100%', borderRadius: 10, marginTop: 4, display: 'block' },
   retake: { marginTop: 8, padding: '8px 14px', fontSize: 14, background: '#F0F1F5', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#1F2533' },
-  gps: { fontSize: 12, color: '#5B6478', marginTop: 2 },
+  gps: { fontSize: 12, color: '#5B6478' },
   submit: { width: '100%', marginTop: 16, padding: '14px', fontSize: 17, fontWeight: 700, color: '#fff', background: '#FE6505', border: 'none', borderRadius: 12, cursor: 'pointer' },
   err: { marginTop: 12, padding: '10px 12px', background: '#FDEEEE', color: '#B42318', borderRadius: 8, fontSize: 14 },
   ok: { marginTop: 12, padding: '10px 12px', background: '#E7F8EF', color: '#198754', borderRadius: 8, fontSize: 14 },
