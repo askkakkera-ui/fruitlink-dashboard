@@ -4,6 +4,7 @@ import WarehouseSection from './WarehouseSection'
 import NotifyConfigSection from './NotifyConfigSection'
 import ReportsSection from './ReportsSection'
 import FieldStaffSection from './FieldStaffSection'
+import AttendanceSection from './AttendanceSection'
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode},{error:string|null}> {
   constructor(props: any){super(props);this.state={error:null}}
@@ -120,6 +121,7 @@ const NAV_ITEMS = [
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', superAdmin: true },
+  { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
@@ -224,7 +226,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -3549,6 +3551,9 @@ export default function Dashboard() {
     reports: <ReportsSection />,
     fieldstaff: role === 'super_admin'
       ? <FieldStaffSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    attendance: role === 'super_admin'
+      ? <AttendanceSection />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
   }
 
