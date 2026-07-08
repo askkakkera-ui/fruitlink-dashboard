@@ -1628,8 +1628,6 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           }).map((m: any, idx: number, arr: any[]) => {
             const online = m.status === 'online'
             const isExpanded = expandedId === m.id
-            const content = (() => {
-            const isExpanded = expandedId === m.id
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
             const layers = [m.stock_l1, m.stock_l2, m.stock_l3]
