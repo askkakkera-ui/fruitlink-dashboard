@@ -1856,16 +1856,13 @@ function FleetMapPage({ machines }: { machines: any[] }) {
             return (
               <div key={m.id} style={{ borderBottom: '1px solid ' + C.border }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px' }}>
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: online ? C.green : C.red, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
                     <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
                   </div>
                   <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
-                  </div>
-                <div style={{ height: 3, background: online ? C.green : C.border2 }} />
-                <div style={{ padding: '14px 16px' }}>
+                </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
