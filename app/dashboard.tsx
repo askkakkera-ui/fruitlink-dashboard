@@ -1567,6 +1567,171 @@ const filtered = scopedOrders.filter((o: any) => {
 }
 
 
+// ─── Machine Grouped List ────────────────────────────────────────
+function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords }: any) {
+  const [collapsedOps, setCollapsedOps] = useState<Record<string, boolean>>({})
+
+  const filtered = (machines || []).filter((m: any) => {
+    if (!search.trim()) return true
+    const q = search.toLowerCase()
+    return (m.display_name || '').toLowerCase().includes(q) ||
+      (m.location || '').toLowerCase().includes(q) ||
+      (m.sn || '').toLowerCase().includes(q) ||
+      (m.owner_name || '').toLowerCase().includes(q)
+  })
+
+  // Group by operator → then by location
+  const opGroups: Record<string, { name: string; id: string; machines: any[] }> = {}
+  filtered.forEach((m: any) => {
+    const opName = m.owner_name || 'Unassigned'
+    const opId = m.owner_id || 'unassigned'
+    if (!opGroups[opId]) opGroups[opId] = { name: opName, id: opId, machines: [] }
+    opGroups[opId].machines.push(m)
+  })
+
+  const sortedOps = Object.values(opGroups).sort((a, b) =>
+    a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)
+  )
+
+  const toggleOp = (opId: string) => setCollapsedOps(p => ({ ...p, [opId]: !p[opId] }))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {sortedOps.map(opGroup => {
+        const isCollapsed = collapsedOps[opGroup.id]
+        const onlineCount = opGroup.machines.filter((m: any) => m.status === 'online').length
+        const totalSales = opGroup.machines.reduce((sum: number, m: any) => sum + (m.today_revenue || 0), 0)
+
+        // Sub-group by location
+        const locGroups: Record<string, any[]> = {}
+        opGroup.machines.forEach((m: any) => {
+          const loc = m.location || 'Unassigned Location'
+          if (!locGroups[loc]) locGroups[loc] = []
+          locGroups[loc].push(m)
+        })
+        const sortedLocs = Object.entries(locGroups).sort(([a], [b]) =>
+          a === 'Unassigned Location' ? 1 : b === 'Unassigned Location' ? -1 : a.localeCompare(b)
+        )
+
+        return (
+          <div key={opGroup.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
+            {/* Operator header — clickable to collapse */}
+            <div onClick={() => toggleOp(opGroup.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', cursor: 'pointer', background: isCollapsed ? C.surface2 : C.surface, borderBottom: isCollapsed ? 'none' : '1px solid ' + C.border }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0f1ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🧑‍💼</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{opGroup.name}</div>
+                <div style={{ fontSize: 12, color: C.text2, marginTop: 2, display: 'flex', gap: 10 }}>
+                  <span>🖥 {opGroup.machines.length} machine{opGroup.machines.length !== 1 ? 's' : ''}</span>
+                  <span style={{ color: onlineCount > 0 ? C.green : C.text3 }}>📡 {onlineCount} online</span>
+                  {totalSales > 0 && <span style={{ color: C.blue }}>₹{totalSales.toLocaleString('en-IN')} today</span>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {onlineCount > 0 && <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.green }} />}
+                <span style={{ fontSize: 12, color: C.text3, fontWeight: 600 }}>{isCollapsed ? '▼ Show' : '▲ Hide'}</span>
+              </div>
+            </div>
+
+            {/* Locations + machines — hidden when collapsed */}
+            {!isCollapsed && (
+              <div>
+                {sortedLocs.map(([locName, locMachines], li) => (
+                  <div key={locName} style={{ borderBottom: li < sortedLocs.length - 1 ? '1px solid ' + C.border : 'none' }}>
+                    {/* Location sub-header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', background: C.surface2 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text2 }}>📍 {locName}</span>
+                      <span style={{ fontSize: 11, color: C.text3 }}>{locMachines.length} machine{locMachines.length !== 1 ? 's' : ''}</span>
+                    </div>
+
+                    {/* Machines in this location */}
+                    {locMachines.map((m: any) => {
+                      const online = m.status === 'online'
+                      const isExpanded = expandedId === m.id
+                      const temp = m.inner_temp_c
+                      const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
+                      const mStock = stockData.find((s: any) => s.machine_id === m.id)
+                      const msColor = !mStock?.stock_known ? C.text3 : mStock.cups_remaining <= 10 ? C.red : mStock.stock_pct <= 50 ? C.amber : C.green
+                      const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
+                      const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
+                      const co = getCoords(m)
+
+                      return (
+                        <div key={m.id} style={{ background: C.surface, borderTop: '1px solid ' + C.border }}>
+                          {/* Compact row */}
+                          <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🖥</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                              <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>SN: {m.sn}</div>
+                            </div>
+                            <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
+                            <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {isExpanded && (
+                            <div style={{ borderTop: '1px solid ' + C.border }}>
+                              <div style={{ height: 3, background: online ? C.green : C.border2 }} />
+                              <div style={{ padding: '14px 20px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                                  <div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                                    <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
+                                    {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
+                                  </div>
+                                </div>
+
+                                {/* Stock */}
+                                {mStock?.stock_known && (
+                                  <div style={{ background: msBg, borderRadius: 10, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <span style={{ fontSize: 22 }}>🍊</span>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: msColor }}>{mStock.cups_remaining} cups remaining ({mStock.stock_pct}%)</div>
+                                      {msDays != null && <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>Last loaded {msDays === 0 ? 'today' : msDays + 'd ago'}</div>}
+                                    </div>
+                                  </div>
+                                )}
+                                {!mStock?.stock_known && (
+                                  <div style={{ background: C.surface2, borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: C.text3 }}>🍊 Stock: No data — log a loading visit</div>
+                                )}
+
+                                {/* Stats grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                                  {[
+                                    { label: 'Temperature', value: temp != null ? temp + '°C' : '--', color: tempColor },
+                                    { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
+                                    { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--', color: C.text },
+                                    { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
+                                  ].map(f => (
+                                    <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 10px' }}>
+                                      <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+
 function MachinesPage({ machines, loading, fetchData }: any) {
   const [stockData, setStockData] = useState<any[]>([])
   const [search, setSearch] = useState('')
@@ -1629,12 +1794,22 @@ function MachinesPage({ machines, loading, fetchData }: any) {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading machines...</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
-          {safeMachines.filter((m: any) => {
-            if (!search.trim()) return true;
-            const q = search.toLowerCase();
-            return (m.display_name || '').toLowerCase().includes(q) || (m.location || '').toLowerCase().includes(q) || (m.sn || '').toLowerCase().includes(q);
-          }).map((m: any, idx: number, arr: any[]) => {
+        <MachineGroupedList
+          machines={safeMachines}
+          search={search}
+          expandedId={expandedId}
+          setExpandedId={setExpandedId}
+          stockData={stockData}
+          role={role}
+          canEdit={canEdit}
+          openEdit={openEdit}
+          fmtTime={fmtTime}
+          getCoords={(m: any) => { if (m.location_lat != null && m.location_lng != null) return { lat: m.location_lat, lng: m.location_lng }; return null; }}
+        />
+      )}
+      {false && loading && (
+        <div>
+          {safeMachines.map((m: any, idx: number, arr: any[]) => {
             const online = m.status === 'online'
             const isExpanded = expandedId === m.id
             const temp = m.inner_temp_c
@@ -1728,7 +1903,11 @@ function MachinesPage({ machines, loading, fetchData }: any) {
               </div>
             )
           })}
-        </div>
+                </div>
+              </div>
+            ));
+          })()}
+        </>
       )}
       {editM && (
         <div onClick={closeEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
