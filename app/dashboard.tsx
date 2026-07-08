@@ -1853,8 +1853,6 @@ function FleetMapPage({ machines }: { machines: any[] }) {
             const online = m.status === 'online'
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
-            return null
-            })()
             return (
               <div key={m.id} style={{ borderBottom: idx < arr.length - 1 ? '1px solid ' + C.border : 'none' }}>
                 <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
