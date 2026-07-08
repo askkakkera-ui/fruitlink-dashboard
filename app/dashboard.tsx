@@ -358,7 +358,7 @@ function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
 }
 
 // ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
-function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: any) {
+function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, stockData }: any) {
   const isMobile = useIsMobile()
   const IND = '#423A8E', INDBG = '#efeefc'
   const visible = (machines || []).filter((m: any) => m && m.sn)
@@ -459,7 +459,13 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: a
   const revToday = dailyRev[todayKey] || 0
   const sw = Number(machine && machine.scale_weight_g)
   const haveScale = Number.isFinite(sw) && sw > TARE
-  const leftOranges = haveScale ? Math.max(0, Math.round((sw - TARE) / GPO)) : null
+  // Fall back to visit-based stock data for NewSaier machines (no hardware scale)
+  const visitStock = (stockData || []).find((s: any) => s.machine_id === machine?.id)
+  const leftOranges = haveScale
+    ? Math.max(0, Math.round((sw - TARE) / GPO))
+    : visitStock?.stock_known
+      ? Math.round((visitStock.cups_remaining || 0) * OPC)
+      : null
   const usedToday = cupsToday * OPC
   const sellThrough = leftOranges != null && (usedToday + leftOranges) > 0 ? Math.round(usedToday / (usedToday + leftOranges) * 100) : null
 
@@ -693,7 +699,7 @@ const stats = [
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
-      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} />
+      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={stockData} />
 
 {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: fleetOpen ? 14 : 0 }}>
