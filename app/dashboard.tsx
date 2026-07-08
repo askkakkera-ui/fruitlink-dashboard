@@ -117,12 +117,12 @@ const NAV_ITEMS = [
   { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
   { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
   { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management' },
-  { key: 'notifyconfig', label: 'WhatsApp Alerts', icon: '💬', group: 'System', superAdmin: true },
-  { key: 'reports', label: 'Reports', icon: '📄', group: 'System', superAdmin: true },
-  { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
-  { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', superAdmin: true },
-  { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', superAdmin: true },
-  { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', superAdmin: true },
+  { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', permission: 'can_view_notify_config', superAdmin: true },
+  { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
+  { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
+  { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
+  { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
+  { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
@@ -131,8 +131,18 @@ const NAV_ITEMS = [
 function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
   const initials = (name || 'A').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
   const groups: Record<string, typeof NAV_ITEMS> = {}
-  NAV_ITEMS.forEach(item => {
-    if (item.superAdmin && role !== 'super_admin') return
+  NAV_ITEMS.forEach((item: any) => {
+    // superAdminOnly = never visible to operators
+    if (item.superAdminOnly && role !== 'super_admin') return
+    // permission key = check operator permissions from JWT
+    if (item.permission && role === 'operator') {
+      const opPerms = (() => { try { const c = document.cookie.match(/fl_permissions=([^;]+)/); return c ? JSON.parse(decodeURIComponent(c[1])) : {} } catch { return {} } })()
+      if (!opPerms[item.permission]) return
+    }
+    // legacy superAdmin flag = hide from operators unless they have explicit permission
+    if (item.superAdmin && role !== 'super_admin') {
+      if (!item.permission) return
+    }
     const g = item.group || '__top'
     if (!groups[g]) groups[g] = []
     groups[g].push(item)
