@@ -687,7 +687,7 @@ const stats = [
             style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
             <option value="all">All machines</option>
             {machines.filter((m: any) => m && m.id).map((m: any) => (
-              <option key={m.id} value={m.id}>{m.display_name || m.sn}</option>
+              <option key={m.id} value={m.id}>{m.display_name || m.sn}{m.location ? ' — ' + m.location : ''}</option>
             ))}
           </select>
           {machineSel !== 'all' && (
@@ -1560,6 +1560,7 @@ const filtered = scopedOrders.filter((o: any) => {
 
 function MachinesPage({ machines, loading, fetchData }: any) {
   const [stockData, setStockData] = useState<any[]>([])
+  const [search, setSearch] = useState('')
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const safeMachines = (machines || []).map((m: any) => {
     let st = m.state
@@ -1596,13 +1597,18 @@ function MachinesPage({ machines, loading, fetchData }: any) {
   }
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Machine List</div>
           <div style={{ fontSize: 13, color: C.text2 }}>{safeMachines.length} machines · {safeMachines.filter((m: any) => m.status === 'online').length} online</div>
         </div>
         <button onClick={fetchData} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh</button>
       </div>
+      <input
+        type="text" placeholder="🔍 Search by machine name or location..."
+        value={search} onChange={e => setSearch(e.target.value)}
+        style={{ width: '100%', padding: '10px 14px', fontSize: 14, border: '1px solid ' + C.border, borderRadius: 10, marginBottom: 18, boxSizing: 'border-box' as const, color: C.text, background: C.surface, outline: 'none' }}
+      />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
         {[
           { label: 'Total Machines', value: safeMachines.length, color: C.blue, icon: '🖥', pct: 100 },
@@ -1614,7 +1620,11 @@ function MachinesPage({ machines, loading, fetchData }: any) {
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading machines...</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {safeMachines.map((m: any) => {
+          {safeMachines.filter((m: any) => {
+            if (!search.trim()) return true;
+            const q = search.toLowerCase();
+            return (m.display_name || '').toLowerCase().includes(q) || (m.location || '').toLowerCase().includes(q) || (m.sn || '').toLowerCase().includes(q);
+          }).map((m: any) => {
             const online = m.status === 'online'
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
