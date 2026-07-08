@@ -1751,11 +1751,11 @@ function MachineGroupedList({ machines, search, expandedId, setExpandedId, stock
                       <MachineRow key={m.id} m={m} expandedId={expandedId} setExpandedId={setExpandedId} stockData={stockData} canEdit={canEdit} openEdit={openEdit} fmtTime={fmtTime} getCoords={getCoords} />
                     ))}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
+        ))}
       </div>
     </div>
   )
