@@ -11,6 +11,7 @@ export type SessionPayload = {
   name?: string;
   email?: string;
   owner_id?: string;
+  permissions?: Record<string, boolean>; // granular feature flags from operator_permissions
 };
 
 // Sign a session token (7-day sliding expiry).
@@ -34,4 +35,5 @@ export async function verifySession(token: string | undefined | null): Promise<S
   }
 }
 
+export const SESSION_COOKIE = 'fl_session';
 export const SESSION_COOKIE = 'fl_session';
