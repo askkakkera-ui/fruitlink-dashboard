@@ -120,7 +120,7 @@ export default function VisitPage() {
     try {
       const dataUrl = await readFile(file);
       const img = await loadImage(dataUrl);
-      const MAX = 1280;
+      const MAX = 960;
       let w = img.width, h = img.height;
       if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
       else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
@@ -129,9 +129,9 @@ export default function VisitPage() {
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, w, h);
       stampPhoto(ctx, w, h); // uses gpsRef.current — whatever GPS we have right now
-      const dataPreview = canvas.toDataURL('image/jpeg', 0.65);
+      const dataPreview = canvas.toDataURL('image/jpeg', 0.5);
       setPhotoPreview(dataPreview);
-      canvas.toBlob(blob => { if (blob) setPhotoBlob(blob); }, 'image/jpeg', 0.65);
+      canvas.toBlob(blob => { if (blob) setPhotoBlob(blob); }, 'image/jpeg', 0.5);
       (img as any).src = '';
     } catch {
       setErr('Could not process photo — try again.');
