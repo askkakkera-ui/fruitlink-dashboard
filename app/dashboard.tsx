@@ -635,6 +635,8 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel }: a
 // ─── Console Page ────────────────────────────────────────────────
 function ConsolePage({ machines, alerts, loading }: any) {
 const [stockData, setStockData] = useState<any[]>([])
+  const [fleetOpen, setFleetOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const [machineSel, setMachineSel] = useState('all')
   const scopedMachines = machineSel === 'all' ? machines : machines.filter((m: any) => m.id === machineSel)
