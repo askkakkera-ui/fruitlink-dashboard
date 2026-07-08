@@ -1637,11 +1637,11 @@ function MachinesPage({ machines, loading, fetchData }: any) {
             const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
             const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
             return (
-              <div key={m.id} style={{ background: C.surface, borderBottom: idx < arr.length - 1 ? '1px solid ' + C.border : 'none' }}>
+              <div key={m.id} style={{ background: C.surface, borderBottom: '1px solid ' + C.border }}>
                 {/* Compact row — always visible */}
                 <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: online ? C.green : C.red, flexShrink: 0 }} />
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🖥</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
                     <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
@@ -1854,10 +1854,10 @@ function FleetMapPage({ machines }: { machines: any[] }) {
             return (
               <div key={m.id} style={{ borderBottom: '1px solid ' + C.border }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px' }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: online ? C.green : C.red, flexShrink: 0 }} />
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🖥</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                    <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
+                    <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>📍 {m.location || m.sn}</div>
                   </div>
                   <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
                 </div>
