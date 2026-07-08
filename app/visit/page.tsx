@@ -265,6 +265,8 @@ export default function VisitPage() {
                   });
                   const d = await r.json();
                   if (d?.id) setAttendance(d);
+                  else if (r.status === 409 && d?.id) setAttendance(d);
+                  else if (d?.error) setErr('Check In failed: ' + d.error);
                 } catch { } finally { setAttLoading(false); }
               }} style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#198754', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
                 {attLoading ? '...' : '🟢 Check In'}
