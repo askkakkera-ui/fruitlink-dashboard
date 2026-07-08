@@ -38,13 +38,15 @@ export default function VisitPage() {
   const [photoPreview, setPhotoPreview] = useState('');
   const [processing, setProcessing] = useState(false);
   const [gpsResult, setGpsResult] = useState<GpsResult | null>(null);
-  const [gpsMsg, setGpsMsg] = useState('');
+  const [gpsMsg, setGpsMsg] = useState('Getting location…');
+  const [gpsStatus, setGpsStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [notify, setNotify] = useState<{ recipients: string[]; message: string } | null>(null);
   const [attendance, setAttendance] = useState<{ id: string; check_in_at: string } | null>(null);
   const [attLoading, setAttLoading] = useState(false);
-  // Use a ref to access latest gpsResult inside stamp() without closure issues
+  // Ref always has latest GPS — safe to use in callbacks without stale closure
   const gpsRef = useRef<GpsResult | null>(null);
+  const watchIdRef = useRef<number | null>(null);
 
   const net = (() => {
     const l = parseInt(loaded), d = parseInt(damaged);
@@ -52,7 +54,6 @@ export default function VisitPage() {
     return String((isNaN(d) ? 0 : d) > l ? 0 : l - (isNaN(d) ? 0 : d));
   })();
 
-  // Keep ref in sync with state
   useEffect(() => { gpsRef.current = gpsResult; }, [gpsResult]);
 
   async function loadAttendance() {
@@ -63,6 +64,7 @@ export default function VisitPage() {
       setAttendance(d && d.id ? d : null);
     } catch { setAttendance(null); }
   }
+
   async function loadMachines() {
     try {
       const r = await fetch('/api/visit?machines=1', { cache: 'no-store' });
@@ -72,6 +74,7 @@ export default function VisitPage() {
       if (list.length && !machineId) setMachineId(list[0].id);
     } catch { }
   }
+
   async function loadVisits() {
     try {
       const r = await fetch('/api/visit', { cache: 'no-store' });
@@ -80,43 +83,102 @@ export default function VisitPage() {
     } catch { }
   }
 
-  useEffect(() => { loadMachines(); loadVisits(); loadAttendance(); startGps(); }, []);
+  useEffect(() => {
+    loadMachines();
+    loadVisits();
+    loadAttendance();
+    startGps();
+    return () => {
+      // Clean up watch on unmount
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const onFocus = () => { loadVisits(); loadAttendance(); };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  // GPS runs silently in background — never blocks UI
+  // Use watchPosition — far more reliable on Android than getCurrentPosition
+  // watchPosition bypasses Chrome's rate limiting that breaks getCurrentPosition
   function startGps() {
-    if (!('geolocation' in navigator)) { setGpsMsg('GPS not available'); return; }
+    if (!('geolocation' in navigator)) {
+      setGpsMsg('GPS not available on this device');
+      setGpsStatus('error');
+      return;
+    }
+    // Clear any existing watch
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
     setGpsMsg('Getting location…');
-    navigator.geolocation.getCurrentPosition(
+    setGpsStatus('loading');
+
+    // Set a manual timeout since watchPosition doesn't have a built-in timeout
+    const timeoutId = setTimeout(() => {
+      if (!gpsRef.current) {
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+        setGpsMsg('❌ Location timed out — tap 🔄 Retry. Enable Location Accuracy in Android Settings.');
+        setGpsStatus('error');
+      }
+    }, 20000); // 20 second timeout
+
+    const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
-        const lat = pos.coords.latitude, lng = pos.coords.longitude;
-        let addr = lat.toFixed(4) + 'N ' + lng.toFixed(4) + 'E';
+        clearTimeout(timeoutId);
+        // Clear watch after first good position
+        navigator.geolocation.clearWatch(watchId);
+        watchIdRef.current = null;
+
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        let addr = lat.toFixed(4) + '°N ' + lng.toFixed(4) + '°E';
+
+        // Get location name from VPS geocode endpoint
         try {
-          const r = await fetch(`https://api.fruitlinktech.in/rest/app/geocode?lat=${lat}&lng=${lng}`, { cache: 'no-store' });
+          const r = await fetch(
+            `https://api.fruitlinktech.in/rest/app/geocode?lat=${lat}&lng=${lng}`,
+            { cache: 'no-store', signal: AbortSignal.timeout(8000) }
+          );
           const d = await r.json();
           if (d?.addr) addr = d.addr;
-        } catch { }
+        } catch { /* use coordinate fallback */ }
+
         const res: GpsResult = { lat, lng, addr };
         setGpsResult(res);
         gpsRef.current = res;
         setGpsMsg('📍 ' + addr);
+        setGpsStatus('ok');
       },
       (e: GeolocationPositionError) => {
-        if (e.code === 1) setGpsMsg('❌ Location blocked — go to Phone Settings → Apps → Chrome → Permissions → Location → Allow');
-        else if (e.code === 2) setGpsMsg('❌ Location unavailable — tap 🔄 Retry');
-        else setGpsMsg('❌ Location timed out — tap 🔄 Retry');
+        clearTimeout(timeoutId);
+        watchIdRef.current = null;
+        setGpsStatus('error');
+        if (e.code === 1) {
+          setGpsMsg('❌ Location blocked — Settings → Location → Google Location Accuracy → ON, then retry');
+        } else if (e.code === 2) {
+          setGpsMsg('❌ Location unavailable — ensure Location is ON in phone Settings, then tap Retry');
+        } else {
+          setGpsMsg('❌ Location timed out — tap 🔄 Retry');
+        }
       },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      {
+        enableHighAccuracy: false,  // false = network/WiFi location, works indoors
+        timeout: 15000,
+        maximumAge: 30000,
+      }
     );
+    watchIdRef.current = watchId;
   }
 
   async function onPhotoPicked(file: File) {
     setErr(''); setProcessing(true);
-    // Photo processes immediately — GPS already running in background from page load
     try {
       const dataUrl = await readFile(file);
       const img = await loadImage(dataUrl);
@@ -128,7 +190,7 @@ export default function VisitPage() {
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, w, h);
-      stampPhoto(ctx, w, h); // uses gpsRef.current — whatever GPS we have right now
+      stampPhoto(ctx, w, h);
       const dataPreview = canvas.toDataURL('image/jpeg', 0.65);
       setPhotoPreview(dataPreview);
       canvas.toBlob(blob => { if (blob) setPhotoBlob(blob); }, 'image/jpeg', 0.65);
@@ -142,7 +204,7 @@ export default function VisitPage() {
   function stampPhoto(ctx: CanvasRenderingContext2D, w: number, h: number) {
     const machine = machines.find(m => m.id === machineId);
     const now = new Date();
-    const gps = gpsRef.current; // use ref — always current, no closure issue
+    const gps = gpsRef.current;
     const lines = [
       'Fruitlink Visit',
       (machine?.display_name || machine?.sn || '') + '  ' + now.toLocaleString('en-IN'),
@@ -197,10 +259,9 @@ export default function VisitPage() {
     setSaving(true);
     try {
       let photo_url: string | null = null;
-      if (photoBlob) {
-        try { photo_url = await uploadPhoto(); }
-        catch (e: any) { setErr('Photo upload failed — check network and retry.'); setSaving(false); return; }
-      }
+      try { photo_url = await uploadPhoto(); }
+      catch (e: any) { setErr('Photo upload failed — check network and retry.'); setSaving(false); return; }
+
       const gps = gpsRef.current;
       const payload: any = {
         machine_id: machineId, visit_type: visitType,
@@ -211,14 +272,20 @@ export default function VisitPage() {
         if (loaded !== '') payload.oranges_loaded = parseInt(loaded);
         if (damaged !== '') payload.oranges_damaged = parseInt(damaged);
       }
-      const r = await fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const r = await fetch('/api/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Could not save visit'); setSaving(false); return; }
+
       // Success
       setSaving(false);
       setSubmitted(true);
       setMsg('Visit saved ✓');
       setTimeout(() => { setSubmitted(false); setMsg(''); }, 5000);
+
       if (d.notify?.method === 'deep_link' && Array.isArray(d.notify.recipients) && d.notify.recipients.length) {
         setNotify({ recipients: d.notify.recipients, message: d.notify.message || '' });
       }
@@ -232,6 +299,9 @@ export default function VisitPage() {
 
   const machineLabel = (m: Machine) => m.display_name || m.sn || m.id;
   const machineById = (id: string) => machines.find(m => m.id === id);
+
+  // GPS status color
+  const gpsColor = gpsStatus === 'ok' ? '#198754' : gpsStatus === 'error' ? '#B42318' : '#374151';
 
   return (
     <div style={S.page}>
@@ -277,6 +347,16 @@ export default function VisitPage() {
               Sign out
             </button>
           </div>
+        </div>
+
+        {/* GPS status bar — always visible at top */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: gpsStatus === 'ok' ? '#e7f8ef' : gpsStatus === 'error' ? '#fdeeee' : '#f4f5f9', marginBottom: 14, flexWrap: 'wrap' as const }}>
+          <span style={{ fontSize: 12, color: gpsColor, flex: 1 }}>{gpsMsg}</span>
+          {gpsStatus !== 'ok' && (
+            <button type="button" onClick={startGps} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+              🔄 Retry GPS
+            </button>
+          )}
         </div>
 
         <label style={S.label}>Machine</label>
@@ -345,11 +425,6 @@ export default function VisitPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' as const }}>
-          <span style={S.gps}>{gpsMsg || 'Getting location…'}</span>
-          {!gpsResult && <button type="button" onClick={startGps} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #D8DCE6', background: '#fff', color: '#1F2533', cursor: 'pointer' }}>🔄 Retry GPS</button>}
-        </div>
-
         <label style={S.label}>Note (optional)</label>
         <textarea style={{ ...S.input, height: 70, resize: 'vertical' } as React.CSSProperties} value={note}
           onChange={e => setNote(e.target.value)} placeholder="Anything worth recording..." />
@@ -386,7 +461,7 @@ export default function VisitPage() {
               {v.note && <div style={S.muted}>{v.note}</div>}
               {v.photo_url && <img src={v.photo_url} alt="" style={S.thumb} />}
               {v.address && <div style={S.muted}>📍 {v.address.length > 60 ? v.address.slice(0, 60) + '…' : v.address}</div>}
-              <div style={S.time}>{new Date(v.created_at).toLocaleString('en-IN')}</div>
+              <div style={S.time}>{new Date(v.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
             </div>
           );
         })}
@@ -418,7 +493,7 @@ const S: Record<string, React.CSSProperties> = {
   header: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 },
   title: { fontSize: 20, fontWeight: 700, color: '#1F2533' },
   subTitle: { fontSize: 16, fontWeight: 700, color: '#1F2533', marginBottom: 10 },
-  label: { display: 'block', fontSize: 13, fontWeight: 600, color: '#5B6478', margin: '12px 0 5px' },
+  label: { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', margin: '12px 0 5px' },
   input: { width: '100%', padding: '12px', fontSize: 16, border: '1px solid #D8DCE6', borderRadius: 10, boxSizing: 'border-box', background: '#fff', color: '#1F2533' },
   typeRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
   typeBtn: { padding: '12px 8px', fontSize: 15, border: '1px solid #D8DCE6', borderRadius: 10, background: '#fff', color: '#1F2533', cursor: 'pointer', fontWeight: 600 },
