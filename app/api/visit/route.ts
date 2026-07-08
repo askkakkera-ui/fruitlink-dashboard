@@ -14,6 +14,8 @@ const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-ag
 
 const FRUITLINK_NUMBER = '+918919388756';
 const NOTIFY_METHOD = process.env.NOTIFY_METHOD || 'deep_link';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
+const TELEGRAM_CHAT_IDS = (process.env.TELEGRAM_CHAT_IDS || '').split(',').filter(Boolean);
 
 async function getSession(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
@@ -32,6 +34,18 @@ function tenantOf(session: any): string {
   return session.owner_id ? String(session.owner_id) : '';
 }
 
+async function sendTelegram(message: string) {
+  if (!TELEGRAM_TOKEN || TELEGRAM_CHAT_IDS.length === 0) return;
+  for (const chatId of TELEGRAM_CHAT_IDS) {
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'Markdown' }),
+      });
+    } catch { /* never fail visit on telegram error */ }
+  }
+}
 async function buildNotification(visit: any, machineName: string, staffName: string) {
   const machineId = visit.machine_id;
   const ownerId = visit.owner_id;
@@ -218,7 +232,10 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(mrows) && mrows[0]) machineName = mrows[0].display_name || mrows[0].sn || '';
 
     let notify = null;
-    try { notify = await buildNotification(savedVisit, machineName, staffName); } catch { /* never fail the visit on notify prep */ }
+    try {
+      notify = await buildNotification(savedVisit, machineName, staffName);
+      if (notify?.message) await sendTelegram(notify.message);
+    } catch { /* never fail the visit on notify prep */ }
 
     return NextResponse.json({ success: true, visit: savedVisit, notify }, { headers: NO_STORE });
   } catch (e: any) {
