@@ -1567,7 +1567,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
     let st = m.state
     if (typeof st === 'string') { try { st = JSON.parse(st) } catch { st = {} } }
     return { ...m, state: st || {} }
-  })
+  }).sort((a: any, b: any) => (a.display_name || '').localeCompare(b.display_name || ''))
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
   // ─── Edit machine name + location (super_admin only) ───
   const role = getCookie('fl_role') || 'operator'
@@ -1647,7 +1647,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                     <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
+                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
                     <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
                   </div>
                 </div>
