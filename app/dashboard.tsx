@@ -340,7 +340,7 @@ function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
         {/* Sensors grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { label: 'Temperature', value: temp != null ? `${temp}°C` : '—', color: tempColor, sub: temp != null ? (temp > 12 ? 'High' : temp < 3 ? 'Low' : 'Normal') : '' },
+            { label: 'Temperature', value: temp != null ? `${temp}°C` : '—', color: tempColor, sub: temp != null ? (temp > 18 ? 'High' : temp > 12 ? 'Warm' : temp < 3 ? 'Low' : 'Normal') : '' },
             { label: 'Location', value: machine.location || '—', color: C.text, sub: '' },
             { label: 'Cup Tray', value: machine.cup_present === true ? 'Present' : machine.cup_present === false ? 'Missing' : '—', color: machine.cup_present ? C.green : machine.cup_present === false ? C.red : C.text3, sub: '' },
             { label: 'App Version', value: machine.app_version ? `v${machine.app_version}` : '—', color: C.blue, sub: 'Fruitlink' },
@@ -1674,7 +1674,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                       </div>
                     ))}
                     {[
-                      { label: 'Temperature', value: temp != null ? temp + 'C' : '--', color: tempColor, sub: temp != null ? (temp > 12 ? 'High' : temp < 3 ? 'Low' : 'Normal') : '' },
+                      { label: 'Temperature', value: temp != null ? temp + 'C' : '--', color: tempColor, sub: temp != null ? (temp > 18 ? 'High' : temp > 12 ? 'Warm' : temp < 3 ? 'Low' : 'Normal') : '' },
                       { label: 'Cup Tray', value: m.cup_present === true ? 'Present' : m.cup_present === false ? 'Missing' : '--', color: m.cup_present ? C.green : m.cup_present === false ? C.red : C.text3, sub: '' },
                       { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text, sub: online ? 'Active' : 'Disconnected' },
                     ].map(f => (
@@ -1834,7 +1834,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
           {machines.map((m: any) => {
             const online = m.status === 'online'
             const temp = m.inner_temp_c
-            const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
+            const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
             return (
               <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden' }}>
                 <div style={{ height: 3, background: online ? C.green : C.border2 }} />
