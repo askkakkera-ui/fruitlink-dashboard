@@ -117,22 +117,31 @@ const NAV_ITEMS = [
   { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
   { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
   { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management' },
-  { key: 'notifyconfig', label: 'WhatsApp Alerts', icon: '💬', group: 'System', superAdmin: true },
-  { key: 'reports', label: 'Reports', icon: '📄', group: 'System', superAdmin: true },
-  { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
-  { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', superAdmin: true },
-  { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', superAdmin: true },
-  { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', superAdmin: true },
+  { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', permission: 'can_view_notify_config', superAdmin: true },
+  { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
+  { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
+  { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
+  { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
+  { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
 ]
 
-function Sidebar({ active, setActive, role, name, alertCount, onLogout }: any) {
+function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissions = {} }: any) {
   const initials = (name || 'A').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
   const groups: Record<string, typeof NAV_ITEMS> = {}
-  NAV_ITEMS.forEach(item => {
-    if (item.superAdmin && role !== 'super_admin') return
+  NAV_ITEMS.forEach((item: any) => {
+    // superAdminOnly = never visible to non-super-admins
+    if (item.superAdminOnly && role !== 'super_admin') return
+    // permission key = check operator permissions passed as prop
+    if (item.permission && role === 'operator') {
+      if (!permissions[item.permission]) return
+    }
+    // legacy superAdmin flag = hide from operators unless they have explicit permission
+    if (item.superAdmin && role !== 'super_admin') {
+      if (!item.permission) return
+    }
     const g = item.group || '__top'
     if (!groups[g]) groups[g] = []
     groups[g].push(item)
@@ -3787,11 +3796,16 @@ export default function Dashboard() {
   const [role, setRole] = useState('operator')
   const [name, setName] = useState('Admin')
   const [operatorId, setOperatorId] = useState('')
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({})
   const [ready, setReady] = useState(false)          
   useEffect(() => {
     setRole(getCookie('fl_role') || 'operator')
     setName(getCookie('fl_operator_name') || 'Admin')
     setOperatorId(getCookie('fl_operator_id') || '')
+    try {
+      const raw = getCookie('fl_permissions')
+      if (raw) setPermissions(JSON.parse(decodeURIComponent(raw)))
+    } catch { setPermissions({}) }
     setReady(true)                                    
   }, [])
 
@@ -3914,7 +3928,7 @@ export default function Dashboard() {
           transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
         } : { height: '100%' }}>
-          <Sidebar active={active} setActive={(k: string) => { setActive(k); setMenuOpen(false) }} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} />
+          <Sidebar active={active} setActive={(k: string) => { setActive(k); setMenuOpen(false) }} role={role} name={name} alertCount={activeAlertCount} onLogout={handleLogout} permissions={permissions} />
         </div>
         {/* Dark overlay behind the drawer on mobile */}
         {isMobile && menuOpen && (
