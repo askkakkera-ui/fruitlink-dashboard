@@ -696,31 +696,37 @@ const stats = [
       <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} />
 
 {/* Machine Cards */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: fleetOpen ? 14 : 0 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Fleet Overview</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Dot color={C.orange} pulse size={6} />
           <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Synced · every 2 min</span>
+          <button onClick={() => setFleetOpen(v => !v)} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: fleetOpen ? C.orangeBg : C.surface, color: fleetOpen ? C.orange : C.text, cursor: 'pointer' }}>
+            {fleetOpen ? '▲ Hide' : '▼ Show'}
+          </button>
         </div>
       </div>
-      {loading ? (
+      {fleetOpen && (loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
           {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
         </div>
-      )}
+      ))}
 
       {/* Recent Alerts */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Recent Alerts</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ padding: '16px 20px', borderBottom: alertsOpen ? `1px solid ${C.border}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Recent Alerts {scopedAlerts.length > 0 && <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 700, color: C.red, background: C.redBg, padding: '1px 7px', borderRadius: 10 }}>{scopedAlerts.length}</span>}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Dot color={C.orange} pulse size={6} />
             <span style={{ fontSize: 11, color: C.text3 }}>Live feed</span>
+            <button onClick={() => setAlertsOpen(v => !v)} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: alertsOpen ? C.redBg : C.surface, color: alertsOpen ? C.red : C.text, cursor: 'pointer' }}>
+              {alertsOpen ? '▲ Hide' : '▼ Show'}
+            </button>
           </div>
         </div>
-        {scopedAlerts.length === 0 ? (
+        {alertsOpen && (scopedAlerts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>All clear — no active alerts</div>
@@ -751,7 +757,7 @@ const stats = [
               </div>
             </div>
           )
-        })}
+       }))}
       </div>
     </div>
   )
