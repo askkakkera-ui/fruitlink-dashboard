@@ -272,7 +272,7 @@ function StatCard({ label, value, sub, color, icon, pct }: any) {
 function MachineCard({ machine, stock }: { machine: any, stock?: any }) {
   const online = machine.status === 'online'
   const temp = machine.inner_temp_c
-  const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
+  const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
   const layers = [machine.stock_l1, machine.stock_l2, machine.stock_l3]
   const isNewSaier = (() => { try { const st = typeof machine.state==='string'?JSON.parse(machine.state):(machine.state||{}); return st?.machine_config?.machine_type==='newsaier'; } catch { return false; } })()
   const stockColor = !stock?.stock_known ? C.text3 : stock.cups_remaining <= 10 ? C.red : stock.stock_pct <= 50 ? C.amber : C.green
@@ -1627,7 +1627,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           }).map((m: any) => {
             const online = m.status === 'online'
             const temp = m.inner_temp_c
-            const tempColor = temp == null ? C.text3 : temp > 12 ? C.red : temp < 3 ? C.blue : C.green
+            const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
             const layers = [m.stock_l1, m.stock_l2, m.stock_l3]
             const isNewSaier = (() => { try { const st = typeof m.state==='string'?JSON.parse(m.state):(m.state||{}); return st?.machine_config?.machine_type==='newsaier'; } catch { return false; } })()
             const mStock = stockData.find((s: any) => s.machine_id === m.id)
