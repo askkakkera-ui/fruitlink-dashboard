@@ -1854,8 +1854,8 @@ function FleetMapPage({ machines }: { machines: any[] }) {
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
             return (
-              <div key={m.id} style={{ borderBottom: idx < arr.length - 1 ? '1px solid ' + C.border : 'none' }}>
-                <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
+              <div key={m.id} style={{ borderBottom: '1px solid ' + C.border }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px' }}>
                   style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: online ? C.green : C.red, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1863,9 +1863,7 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                     <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
                   </div>
                   <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
-                  <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
-                </div>
-                {isExpanded && <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
+                  </div>
                 <div style={{ height: 3, background: online ? C.green : C.border2 }} />
                 <div style={{ padding: '14px 16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
