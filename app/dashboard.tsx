@@ -1888,7 +1888,6 @@ function FleetMapPage({ machines }: { machines: any[] }) {
                     ))}
                   </div>
                 </div>
-              </div>}
               </div>
             )
           })}
