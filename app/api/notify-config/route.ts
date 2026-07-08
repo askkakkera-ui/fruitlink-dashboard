@@ -4,42 +4,27 @@ import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
-const sbHeaders = (extra: Record<string, string> = {}) => ({
-  apikey: SB_KEY,
-  Authorization: 'Bearer ' + SB_KEY,
-  'Content-Type': 'application/json',
-  ...extra,
+const sbH = (extra: Record<string, string> = {}) => ({
+  apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY,
+  'Content-Type': 'application/json', ...extra,
 });
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' };
-
 const FRUITLINK_SUPER_ADMIN_ID = '0c1bd083-682a-4913-ac37-08c85ef94b41';
 
-async function getSession(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  return await verifySession(token);
+async function getSession(req: NextRequest) {
+  return verifySession(req.cookies.get(SESSION_COOKIE)?.value);
 }
 
-function normNumber(n: any): string | null {
+function normPhone(n: any): string | null {
   let s = String(n || '').replace(/[^\d+]/g, '');
   if (!s) return null;
   if (!s.startsWith('+')) s = '+' + s;
-  if (s.length < 8 || s.length > 16) return null;
-  return s;
+  return (s.length >= 8 && s.length <= 16) ? s : null;
 }
 
-async function machineOwner(machineId: string): Promise<string | null> {
-  const url = SB_URL + '/rest/v1/machine_operators?select=operator_id&machine_id=eq.' + encodeURIComponent(machineId) + '&limit=1';
-  const r = await fetch(url, { headers: sbHeaders() });
-  const rows = await r.json();
-  return Array.isArray(rows) && rows[0] ? String(rows[0].operator_id) : null;
-}
-
-async function tenantLimit(ownerId: string): Promise<number> {
-  const url = SB_URL + '/rest/v1/operators?select=max_notify_numbers&id=eq.' + encodeURIComponent(ownerId) + '&limit=1';
-  const r = await fetch(url, { headers: sbHeaders() });
-  const rows = await r.json();
-  const v = Array.isArray(rows) && rows[0] ? rows[0].max_notify_numbers : 5;
-  return (typeof v === 'number' && v >= 0) ? v : 5;
+function normTgId(n: any): string | null {
+  const s = String(n || '').trim();
+  return /^-?\d+$/.test(s) ? s : null;
 }
 
 export async function GET(request: NextRequest) {
@@ -48,43 +33,61 @@ export async function GET(request: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     if (session.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
 
-    if (request.nextUrl.searchParams.get('tenants') === '1') {
-      const r = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,max_notify_numbers&order=name.asc', { headers: sbHeaders() });
-      const data = await r.json();
-      const ops = Array.isArray(data) ? data : [];
-      // Only show real tenants: operators who own at least one machine (exclude super_admin)
-      const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?select=operator_id', { headers: sbHeaders() });
-      const moRows = await moRes.json();
-      const owners = new Set((Array.isArray(moRows) ? moRows : []).map((x: any) => String(x.operator_id)));
-      const tenants = ops.filter((o: any) => o.role !== 'super_admin' && owners.has(String(o.id)));
+    const params = request.nextUrl.searchParams;
+
+    // Tenants list
+    if (params.get('tenants') === '1') {
+      // One query: operators + their machine ownership status
+      const [opsRes, moRes] = await Promise.all([
+        fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,max_notify_numbers,max_telegram_ids&order=name.asc', { headers: sbH() }),
+        fetch(SB_URL + '/rest/v1/machine_operators?select=operator_id', { headers: sbH() }),
+      ]);
+      const ops = await opsRes.json();
+      const mo = await moRes.json();
+      const owners = new Set((Array.isArray(mo) ? mo : []).map((x: any) => String(x.operator_id)));
+      const tenants = (Array.isArray(ops) ? ops : [])
+        .filter((o: any) => o.role !== 'super_admin' && owners.has(String(o.id)));
       return NextResponse.json(tenants, { headers: NO_STORE });
     }
 
-    const mres = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn&order=display_name.asc', { headers: sbHeaders() });
-    const machines = await mres.json();
-    const ares = await fetch(SB_URL + '/rest/v1/service_arrangement?select=*', { headers: sbHeaders() });
-    const arrangements = await ares.json();
+    // Main list — bulk fetch everything in 3 parallel queries
+    const [machinesRes, arrangementsRes, moAllRes] = await Promise.all([
+      fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn&order=display_name.asc', { headers: sbH() }),
+      fetch(SB_URL + '/rest/v1/service_arrangement?select=*', { headers: sbH() }),
+      fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id,operator_id', { headers: sbH() }),
+    ]);
+
+    const [machines, arrangements, moAll] = await Promise.all([
+      machinesRes.json(), arrangementsRes.json(), moAllRes.json(),
+    ]);
+
+    // Build lookup maps — O(n) not O(n²)
+    const machineOwnerMap: Record<string, string> = {};
+    (Array.isArray(moAll) ? moAll : []).forEach((mo: any) => {
+      machineOwnerMap[mo.machine_id] = mo.operator_id;
+    });
 
     const byMachine: Record<string, any> = {};
     const byOwnerDefault: Record<string, any> = {};
     (Array.isArray(arrangements) ? arrangements : []).forEach((a: any) => {
       if (a.machine_id) byMachine[a.machine_id] = a;
-      else byOwnerDefault[a.owner_id] = a;
+      else if (a.owner_id) byOwnerDefault[a.owner_id] = a;
     });
 
-    const out = [];
-    for (const m of (Array.isArray(machines) ? machines : [])) {
-      const owner = await machineOwner(m.id);
+    const out = (Array.isArray(machines) ? machines : []).map((m: any) => {
+      const owner = machineOwnerMap[m.id] || null;
       const arr = byMachine[m.id] || (owner ? byOwnerDefault[owner] : null);
-      out.push({
+      return {
         machine_id: m.id,
         machine_name: m.display_name || m.sn,
         owner_id: owner,
-        mode: arr ? arr.mode : 'self_service',
-        notify_numbers: arr && Array.isArray(arr.notify_numbers) ? arr.notify_numbers : [],
+        mode: arr?.mode || 'self_service',
+        notify_numbers: Array.isArray(arr?.notify_numbers) ? arr.notify_numbers : [],
+        telegram_chat_ids: Array.isArray(arr?.telegram_chat_ids) ? arr.telegram_chat_ids : [],
         source: byMachine[m.id] ? 'machine' : (arr ? 'owner_default' : 'none'),
-      });
-    }
+      };
+    });
+
     return NextResponse.json(out, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
@@ -99,60 +102,74 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
 
-    if (body.set_limit && body.set_limit.owner_id) {
+    // Update tenant limit
+    if (body.set_limit?.owner_id) {
+      const field = body.set_limit.field === 'telegram' ? 'max_telegram_ids' : 'max_notify_numbers';
       const max = parseInt(body.set_limit.max);
-      if (isNaN(max) || max < 0 || max > 100) return NextResponse.json({ error: 'invalid limit' }, { status: 400, headers: NO_STORE });
-      const patch = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + encodeURIComponent(body.set_limit.owner_id), {
-        method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify({ max_notify_numbers: max }),
+      if (isNaN(max) || max < 0 || max > 100) return NextResponse.json({ error: 'Invalid limit' }, { status: 400, headers: NO_STORE });
+      const r = await fetch(SB_URL + '/rest/v1/operators?id=eq.' + encodeURIComponent(body.set_limit.owner_id), {
+        method: 'PATCH', headers: sbH({ Prefer: 'return=representation' }),
+        body: JSON.stringify({ [field]: max }),
       });
-      const d = await patch.json();
-      if (!patch.ok) return NextResponse.json({ error: 'limit update failed', detail: d }, { status: 500, headers: NO_STORE });
+      if (!r.ok) return NextResponse.json({ error: 'Limit update failed' }, { status: 500, headers: NO_STORE });
       return NextResponse.json({ success: true }, { headers: NO_STORE });
     }
 
     const machine_id = String(body.machine_id || '');
     if (!machine_id) return NextResponse.json({ error: 'machine_id required' }, { status: 400, headers: NO_STORE });
 
-    const owner = await machineOwner(machine_id);
-    if (!owner) return NextResponse.json({ error: 'machine has no owner' }, { status: 400, headers: NO_STORE });
+    // Get machine owner — single query
+    const moRes = await fetch(SB_URL + '/rest/v1/machine_operators?select=operator_id&machine_id=eq.' + encodeURIComponent(machine_id) + '&limit=1', { headers: sbH() });
+    const moRows = await moRes.json();
+    const owner = Array.isArray(moRows) && moRows[0] ? String(moRows[0].operator_id) : null;
+    if (!owner) return NextResponse.json({ error: 'Machine has no owner' }, { status: 400, headers: NO_STORE });
 
-    let numbers: string[] = [];
-    if (Array.isArray(body.notify_numbers)) {
-      const seen = new Set<string>();
-      for (const n of body.notify_numbers) {
-        const nn = normNumber(n);
-        if (nn && !seen.has(nn)) { seen.add(nn); numbers.push(nn); }
-      }
+    // Validate and deduplicate numbers
+    const numbers: string[] = [];
+    const seenN = new Set<string>();
+    for (const n of (Array.isArray(body.notify_numbers) ? body.notify_numbers : [])) {
+      const nn = normPhone(n);
+      if (nn && !seenN.has(nn)) { seenN.add(nn); numbers.push(nn); }
     }
 
+    const telegramIds: string[] = [];
+    const seenT = new Set<string>();
+    for (const n of (Array.isArray(body.telegram_chat_ids) ? body.telegram_chat_ids : [])) {
+      const nn = normTgId(n);
+      if (nn && !seenT.has(nn)) { seenT.add(nn); telegramIds.push(nn); }
+    }
+
+    // Apply tenant limits (skip for Fruitlink super admin)
     if (owner !== FRUITLINK_SUPER_ADMIN_ID) {
-      const limit = await tenantLimit(owner);
-      if (numbers.length > limit) {
-        return NextResponse.json({ error: `Limit is ${limit} numbers for this tenant. Raise the limit first.`, limit }, { status: 400, headers: NO_STORE });
-      }
+      const opRes = await fetch(SB_URL + '/rest/v1/operators?select=max_notify_numbers,max_telegram_ids&id=eq.' + encodeURIComponent(owner) + '&limit=1', { headers: sbH() });
+      const opRows = await opRes.json();
+      const op = Array.isArray(opRows) && opRows[0] ? opRows[0] : {};
+      const waLimit = typeof op.max_notify_numbers === 'number' ? op.max_notify_numbers : 5;
+      const tgLimit = typeof op.max_telegram_ids === 'number' ? op.max_telegram_ids : 3;
+      if (numbers.length > waLimit) return NextResponse.json({ error: `WhatsApp limit is ${waLimit} for this tenant` }, { status: 400, headers: NO_STORE });
+      if (telegramIds.length > tgLimit) return NextResponse.json({ error: `Telegram limit is ${tgLimit} for this tenant` }, { status: 400, headers: NO_STORE });
     }
 
-    const mode = (body.mode === 'fruitlink_service') ? 'fruitlink_service' : 'self_service';
+    const mode = body.mode === 'fruitlink_service' ? 'fruitlink_service' : 'self_service';
+    const payload = { mode, notify_numbers: numbers, telegram_chat_ids: telegramIds, updated_at: new Date().toISOString() };
 
-    const existing = await fetch(SB_URL + '/rest/v1/service_arrangement?select=id&machine_id=eq.' + encodeURIComponent(machine_id) + '&limit=1', { headers: sbHeaders() });
-    const exRows = await existing.json();
+    // Upsert — check existing in one query
+    const exRes = await fetch(SB_URL + '/rest/v1/service_arrangement?select=id&machine_id=eq.' + encodeURIComponent(machine_id) + '&limit=1', { headers: sbH() });
+    const exRows = await exRes.json();
+
     if (Array.isArray(exRows) && exRows[0]) {
-      const patch = await fetch(SB_URL + '/rest/v1/service_arrangement?machine_id=eq.' + encodeURIComponent(machine_id), {
-        method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify({ mode, notify_numbers: numbers, updated_at: new Date().toISOString() }),
+      await fetch(SB_URL + '/rest/v1/service_arrangement?machine_id=eq.' + encodeURIComponent(machine_id), {
+        method: 'PATCH', headers: sbH({ Prefer: 'return=representation' }),
+        body: JSON.stringify(payload),
       });
-      const d = await patch.json();
-      if (!patch.ok) return NextResponse.json({ error: 'update failed', detail: d }, { status: 500, headers: NO_STORE });
     } else {
-      const ins = await fetch(SB_URL + '/rest/v1/service_arrangement', {
-        method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }),
-        body: JSON.stringify({ machine_id, owner_id: owner, mode, notify_numbers: numbers }),
+      await fetch(SB_URL + '/rest/v1/service_arrangement', {
+        method: 'POST', headers: sbH({ Prefer: 'return=representation' }),
+        body: JSON.stringify({ machine_id, owner_id: owner, ...payload }),
       });
-      const d = await ins.json();
-      if (!ins.ok) return NextResponse.json({ error: 'insert failed', detail: d }, { status: 500, headers: NO_STORE });
     }
-    return NextResponse.json({ success: true, notify_numbers: numbers, mode }, { headers: NO_STORE });
+
+    return NextResponse.json({ success: true, notify_numbers: numbers, telegram_chat_ids: telegramIds, mode }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
