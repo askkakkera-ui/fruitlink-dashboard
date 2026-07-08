@@ -1755,8 +1755,8 @@ function MachineGroupedList({ machines, search, expandedId, setExpandedId, stock
               </div>
             )}
           </div>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }
