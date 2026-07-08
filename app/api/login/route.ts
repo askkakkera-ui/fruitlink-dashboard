@@ -6,7 +6,7 @@ import { signSession, SESSION_COOKIE } from '@/lib/session';
 export const runtime = 'nodejs';
 
 const SUPABASE_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || '';
-const SUPABASE_KEY = process.env.SB_KEY || process.env.NEXT_PUBLIC_SB_KEY || '';
+const SUPABASE_KEY = process.env.SB_KEY || ''; // service key only — never anon
 const headers = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
 
 export async function POST(req: NextRequest) {
@@ -24,6 +24,35 @@ export async function POST(req: NextRequest) {
 
     const role = operator.role || 'operator';
 
+    // Fetch permissions for operators (not super_admin or field_staff)
+    let permissions: Record<string, boolean> = {};
+    if (role === 'operator') {
+      try {
+        const permRes = await fetch(SUPABASE_URL + '/rest/v1/operator_permissions?operator_id=eq.' + encodeURIComponent(operator.id) + '&limit=1', { headers });
+        const permData = await permRes.json();
+        if (Array.isArray(permData) && permData[0]) {
+          const p = permData[0];
+          permissions = {
+            can_view_console: p.can_view_console ?? true,
+            can_view_orders: p.can_view_orders ?? true,
+            can_view_alerts: p.can_view_alerts ?? true,
+            can_view_fleet_map: p.can_view_fleet_map ?? true,
+            can_view_warehouse: p.can_view_warehouse ?? true,
+            can_view_reports: p.can_view_reports ?? false,
+            can_view_field_staff: p.can_view_field_staff ?? false,
+            can_view_attendance: p.can_view_attendance ?? false,
+            can_view_notify_config: p.can_view_notify_config ?? false,
+            can_view_comm_log: p.can_view_comm_log ?? false,
+            can_edit_machine_config: p.can_edit_machine_config ?? false,
+            can_manage_field_staff: p.can_manage_field_staff ?? false,
+            can_manage_locations: p.can_manage_locations ?? false,
+            can_edit_office_location: p.can_edit_office_location ?? false,
+            can_export_data: p.can_export_data ?? false,
+          };
+        }
+      } catch { /* permissions default to empty = conservative access */ }
+    }
+
     // Mint a tamper-proof signed session token (role baked into the signature).
     const token = await signSession({
       sub: String(operator.id),
@@ -31,6 +60,7 @@ export async function POST(req: NextRequest) {
       name: operator.name || '',
       email: operator.email || '',
       owner_id: operator.owner_id ? String(operator.owner_id) : undefined,
+      permissions: Object.keys(permissions).length > 0 ? permissions : undefined,
     });
 
     // Build the JSON response the dashboard already expects.
@@ -42,6 +72,7 @@ export async function POST(req: NextRequest) {
       role,
       state: operator.state || '',
       country: operator.country || 'India',
+      permissions,
     });
 
     // Set the signed session as an HttpOnly cookie — browser JS / DevTools cannot
@@ -54,6 +85,17 @@ export async function POST(req: NextRequest) {
       path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
+
+    // Non-httpOnly cookie for dashboard nav visibility (not security-sensitive)
+    if (Object.keys(permissions).length > 0) {
+      response.cookies.set('fl_permissions', encodeURIComponent(JSON.stringify(permissions)), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
 
     return response;
   } catch (e: any) {
