@@ -1561,6 +1561,7 @@ const filtered = scopedOrders.filter((o: any) => {
 function MachinesPage({ machines, loading, fetchData }: any) {
   const [stockData, setStockData] = useState<any[]>([])
   const [search, setSearch] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const safeMachines = (machines || []).map((m: any) => {
     let st = m.state
@@ -1619,13 +1620,14 @@ function MachinesPage({ machines, loading, fetchData }: any) {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading machines...</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
           {safeMachines.filter((m: any) => {
             if (!search.trim()) return true;
             const q = search.toLowerCase();
             return (m.display_name || '').toLowerCase().includes(q) || (m.location || '').toLowerCase().includes(q) || (m.sn || '').toLowerCase().includes(q);
-          }).map((m: any) => {
+          }).map((m: any, idx: number, arr: any[]) => {
             const online = m.status === 'online'
+            const isExpanded = expandedId === m.id
             const temp = m.inner_temp_c
             const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
             const layers = [m.stock_l1, m.stock_l2, m.stock_l3]
@@ -1635,7 +1637,22 @@ function MachinesPage({ machines, loading, fetchData }: any) {
             const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
             const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
             return (
-              <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
+              <div key={m.id} style={{ background: C.surface, borderBottom: idx < arr.length - 1 ? '1px solid ' + C.border : 'none' }}>
+                {/* Compact row — always visible */}
+                <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: online ? C.green : C.red, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                    <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
+                    <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+                {/* Expanded detail — only when selected */}
+                {isExpanded && <div style={{ borderTop: '1px solid ' + C.border }}>
                 <div style={{ height: 3, background: `linear-gradient(90deg, ${online ? C.green : C.border2}, transparent)` }} />
                 <div style={{ padding: '18px 22px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -1698,6 +1715,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                     ))}
                   </div>
                 </div>
+              </div>}
               </div>
             )
           })}
@@ -1833,36 +1851,15 @@ function FleetMapPage({ machines }: { machines: any[] }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {machines.map((m: any) => {
             const online = m.status === 'online'
-            const temp = m.inner_temp_c
-            const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
             return (
-              <div key={m.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden' }}>
-                <div style={{ height: 3, background: online ? C.green : C.border2 }} />
-                <div style={{ padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                      <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
-                    </div>
-                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
+              <div key={m.id} style={{ borderBottom: '1px solid ' + C.border }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: online ? C.green : C.red, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                    <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: C.text2, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>📍 {m.location || '--'}</span>
-                    {(() => { const co = getCoords(m); return co ? <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng + '&z=17'} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none' }}>Open Maps →</a> : null })()}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                    {[
-                      { label: 'Temperature', value: temp != null ? temp + 'C' : '--', color: tempColor },
-                      { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
-                      { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--', color: C.text },
-                      { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
-                    ].map(f => (
-                      <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 9px' }}>
-                        <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: f.color }}>{f.value}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
                 </div>
               </div>
             )
