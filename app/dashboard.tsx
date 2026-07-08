@@ -117,7 +117,7 @@ const NAV_ITEMS = [
   { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
   { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
   { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management' },
-  { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', superAdmin: true },
+  { key: 'notifyconfig', label: 'WhatsApp Alerts', icon: '💬', group: 'System', superAdmin: true },
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdmin: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', superAdmin: true },
@@ -226,7 +226,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'Alert Notifications', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -1567,7 +1567,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
     let st = m.state
     if (typeof st === 'string') { try { st = JSON.parse(st) } catch { st = {} } }
     return { ...m, state: st || {} }
-  }).sort((a: any, b: any) => (a.display_name || '').localeCompare(b.display_name || ''))
+  })
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
   // ─── Edit machine name + location (super_admin only) ───
   const role = getCookie('fl_role') || 'operator'
@@ -1647,7 +1647,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
                     <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>📍 {m.location || m.sn}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
+                    <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}>{online ? 'Online' : 'Offline'}</Pill>
                     <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
                   </div>
                 </div>
@@ -2572,6 +2572,298 @@ function AssignMachinesModal({ op, onClose }: any) {
   )
 }
 
+// ─── Permissions Modal ───────────────────────────────────────────
+function PermissionsModal({ op, onClose }: any) {
+  const [perms, setPerms] = useState<Record<string, boolean>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const PERM_GROUPS = [
+    {
+      label: '📄 Pages', items: [
+        { key: 'can_view_console', label: 'Console' },
+        { key: 'can_view_orders', label: 'Orders' },
+        { key: 'can_view_alerts', label: 'Alerts' },
+        { key: 'can_view_fleet_map', label: 'Fleet Map' },
+        { key: 'can_view_warehouse', label: 'Warehouse' },
+        { key: 'can_view_reports', label: 'Reports' },
+        { key: 'can_view_field_staff', label: 'Field Staff' },
+        { key: 'can_view_attendance', label: 'Attendance' },
+        { key: 'can_view_notify_config', label: 'Alert Notifications' },
+        { key: 'can_view_comm_log', label: 'Comm Log' },
+      ]
+    },
+    {
+      label: '⚡ Actions', items: [
+        { key: 'can_edit_machine_config', label: 'Edit Machine Config' },
+        { key: 'can_manage_field_staff', label: 'Manage Field Staff' },
+        { key: 'can_manage_locations', label: 'Manage Locations' },
+        { key: 'can_edit_office_location', label: 'Edit Office Location' },
+        { key: 'can_export_data', label: 'Export Data' },
+      ]
+    }
+  ]
+
+  useEffect(() => {
+    fetch('/api/operator-permissions?operator_id=' + op.id)
+      .then(r => r.json())
+      .then(d => {
+        if (d) setPerms(d)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [op.id])
+
+  const toggle = (key: string) => setPerms(p => ({ ...p, [key]: !p[key] }))
+
+  const save = async () => {
+    setSaving(true); setMsg('')
+    try {
+      const r = await fetch('/api/operator-permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator_id: op.id, permissions: perms }),
+      })
+      const d = await r.json()
+      if (!r.ok || d.error) { setMsg('Error: ' + (d.error || r.status)); setSaving(false); return }
+      setMsg('✓ Saved')
+      setTimeout(() => { setMsg(''); onClose() }, 800)
+    } catch (e: any) { setMsg('Error: ' + e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: C.surface, borderRadius: 20, padding: 28, width: 520, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px #00000030' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>🔐 Permissions</div>
+            <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>{op.name || op.email}</div>
+          </div>
+          <button onClick={onClose} style={{ background: C.surface2, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13 }}>Close</button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>Loading…</div>
+        ) : (
+          <>
+            {PERM_GROUPS.map(group => (
+              <div key={group.label} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 10 }}>{group.label}</div>
+                <div style={{ background: C.surface2, borderRadius: 12, overflow: 'hidden' }}>
+                  {group.items.map((item, i) => (
+                    <div key={item.key} onClick={() => toggle(item.key)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer', borderBottom: i < group.items.length - 1 ? '1px solid ' + C.border : 'none', background: perms[item.key] ? '#f0fdf4' : C.surface2 }}>
+                      <span style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>{item.label}</span>
+                      <div style={{ width: 40, height: 22, borderRadius: 11, background: perms[item.key] ? C.green : C.border2, position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
+                        <div style={{ position: 'absolute' as const, top: 3, left: perms[item.key] ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+              <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+                {saving ? 'Saving…' : 'Save Permissions'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Locations Modal ─────────────────────────────────────────────
+function LocationsModal({ op, onClose }: any) {
+  const [locations, setLocations] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editLoc, setEditLoc] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [form, setForm] = useState({ name: '', address: '', lat: '', lng: '', geofence_radius_m: '100', is_office: false })
+
+  const loadLocations = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/locations?owner_id=' + op.id + '&with_machines=1')
+      const d = await r.json()
+      setLocations(Array.isArray(d) ? d : [])
+    } catch { }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadLocations() }, [op.id])
+
+  const openAdd = () => {
+    setForm({ name: '', address: '', lat: '', lng: '', geofence_radius_m: '100', is_office: false })
+    setEditLoc(null); setShowForm(true); setMsg('')
+  }
+
+  const openEdit = (loc: any) => {
+    setForm({
+      name: loc.name || '', address: loc.address || '',
+      lat: loc.lat != null ? String(loc.lat) : '',
+      lng: loc.lng != null ? String(loc.lng) : '',
+      geofence_radius_m: String(loc.geofence_radius_m || 100),
+      is_office: loc.is_office || false,
+    })
+    setEditLoc(loc); setShowForm(true); setMsg('')
+  }
+
+  const save = async () => {
+    if (!form.name.trim()) { setMsg('Name is required'); return }
+    setSaving(true); setMsg('')
+    try {
+      const body: any = {
+        name: form.name.trim(),
+        address: form.address.trim() || null,
+        lat: form.lat ? parseFloat(form.lat) : null,
+        lng: form.lng ? parseFloat(form.lng) : null,
+        geofence_radius_m: parseInt(form.geofence_radius_m) || 100,
+        is_office: form.is_office,
+        owner_id: op.id,
+      }
+      let r
+      if (editLoc) {
+        r = await fetch('/api/locations?id=' + editLoc.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      } else {
+        r = await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      }
+      const d = await r.json()
+      if (!r.ok || d.error) { setMsg('Error: ' + (d.error || r.status)); setSaving(false); return }
+      setMsg('✓ Saved'); await loadLocations()
+      setTimeout(() => { setShowForm(false); setMsg('') }, 800)
+    } catch (e: any) { setMsg('Error: ' + e.message) }
+    setSaving(false)
+  }
+
+  const deleteLoc = async (loc: any) => {
+    if (!confirm('Delete "' + loc.name + '"? Machines will be unassigned.')) return
+    try {
+      await fetch('/api/locations?id=' + loc.id, { method: 'DELETE' })
+      await loadLocations()
+    } catch (e: any) { setMsg('Delete failed: ' + e.message) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: C.surface, borderRadius: 20, padding: 28, width: 580, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px #00000030' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>📍 Locations</div>
+            <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>{op.name || op.email}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={openAdd} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ Add Location</button>
+            <button onClick={onClose} style={{ background: C.surface2, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13 }}>Close</button>
+          </div>
+        </div>
+
+        {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+
+        {/* Add/Edit form */}
+        {showForm && (
+          <div style={{ background: C.surface2, borderRadius: 14, padding: 18, marginBottom: 18, border: '1px solid ' + C.border }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 14 }}>{editLoc ? 'Edit Location' : 'New Location'}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Location Name *</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Boston Living Kondapur"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+              </div>
+              <div style={{ gridColumn: '1/-1' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Address</label>
+                <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Full address"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Latitude</label>
+                <input value={form.lat} onChange={e => setForm({ ...form, lat: e.target.value })} placeholder="e.g. 17.4485" type="number"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Longitude</label>
+                <input value={form.lng} onChange={e => setForm({ ...form, lng: e.target.value })} placeholder="e.g. 78.3908" type="number"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Geofence Radius (m)</label>
+                <input value={form.geofence_radius_m} onChange={e => setForm({ ...form, geofence_radius_m: e.target.value })} type="number"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, outline: 'none', color: C.text, boxSizing: 'border-box' as const }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 20 }}>
+                <div onClick={() => setForm({ ...form, is_office: !form.is_office })}
+                  style={{ width: 40, height: 22, borderRadius: 11, background: form.is_office ? C.green : C.border2, position: 'relative' as const, transition: 'background .2s', cursor: 'pointer', flexShrink: 0 }}>
+                  <div style={{ position: 'absolute' as const, top: 3, left: form.is_office ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+                </div>
+                <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>🏢 Office location</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowForm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+              <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+                {saving ? 'Saving…' : editLoc ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Locations list */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>Loading…</div>
+        ) : locations.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: C.text3, fontSize: 14 }}>No locations yet. Add one above.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {locations.map((loc: any) => (
+              <div key={loc.id} style={{ background: C.surface2, borderRadius: 12, padding: '14px 16px', border: '1px solid ' + C.border }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{loc.name}</span>
+                      {loc.is_office && <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', background: '#f5f3ff', padding: '2px 8px', borderRadius: 20 }}>🏢 Office</span>}
+                    </div>
+                    {loc.address && <div style={{ fontSize: 12, color: C.text2, marginBottom: 4 }}>📍 {loc.address}</div>}
+                    <div style={{ display: 'flex', gap: 12, fontSize: 12, color: C.text3 }}>
+                      {loc.lat && <span>GPS: {Number(loc.lat).toFixed(4)}, {Number(loc.lng).toFixed(4)}</span>}
+                      <span>Geofence: {loc.geofence_radius_m}m</span>
+                      <span>🖥 {loc.machine_count || 0} machine{loc.machine_count !== 1 ? 's' : ''}</span>
+                      <span>👷 {loc.staff_count || 0} staff</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                    <button onClick={() => openEdit(loc)} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>✏️ Edit</button>
+                    <button onClick={() => deleteLoc(loc)} style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 600, color: C.red, cursor: 'pointer' }}>🗑</button>
+                  </div>
+                </div>
+                {/* Machine chips */}
+                {loc.machines && loc.machines.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const, marginTop: 8 }}>
+                    {loc.machines.map((m: any) => (
+                      <span key={m.id} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 20, background: m.status === 'online' ? C.greenBg : C.surface, color: m.status === 'online' ? C.green : C.text2, border: '1px solid ' + C.border, fontWeight: 600 }}>
+                        🖥 {m.display_name || m.sn}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 function OperatorsPage({ myId }: any) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -2579,6 +2871,8 @@ function OperatorsPage({ myId }: any) {
   const [editOp, setEditOp] = useState<any>(null)
   const [delOp, setDelOp] = useState<any>(null)
   const [assignOp, setAssignOp] = useState<any>(null)
+  const [permissionsOp, setPermissionsOp] = useState<any>(null)
+  const [locationsOp, setLocationsOp] = useState<any>(null)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -2702,6 +2996,8 @@ function OperatorsPage({ myId }: any) {
                   <td style={{ padding: '13px 16px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => setAssignOp(op)} style={{ background: C.blueBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.blue, cursor: 'pointer' }}>🖥 Machines</button>
+                      <button onClick={() => setPermissionsOp(op)} style={{ background: '#f5f3ff', border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: '#7c3aed', cursor: 'pointer' }}>🔐 Perms</button>
+                      <button onClick={() => setLocationsOp(op)} style={{ background: C.greenBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.green, cursor: 'pointer' }}>📍 Locations</button>
                       <button onClick={() => openEdit(op)} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>✏️ Edit</button>
                       <button onClick={() => { setMsg(''); setDelOp(op) }} style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.red, cursor: 'pointer' }}>🗑 Del</button>
                     </div>
@@ -2758,6 +3054,8 @@ function OperatorsPage({ myId }: any) {
       )}
 
       {assignOp && <AssignMachinesModal op={assignOp} onClose={() => setAssignOp(null)} />}
+      {permissionsOp && <PermissionsModal op={permissionsOp} onClose={() => setPermissionsOp(null)} />}
+      {locationsOp && <LocationsModal op={locationsOp} onClose={() => setLocationsOp(null)} />}
 
       {delOp && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
