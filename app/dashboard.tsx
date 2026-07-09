@@ -133,9 +133,9 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
   const groups: Record<string, typeof NAV_ITEMS> = {}
   NAV_ITEMS.forEach((item: any) => {
     // superAdminOnly = never visible to non-super-admins
-    if (item.superAdminOnly && role !== 'super_admin') return
+    if (item.superAdminOnly && role !== 'super_admin') return // operators and sub_operators never see this
     // permission key = check operator permissions passed as prop
-    if (item.permission && role === 'operator') {
+    if (item.permission && (role === 'operator' || role === 'sub_operator')) {
       if (!permissions[item.permission]) return
     }
     // legacy superAdmin flag = hide from operators unless they have explicit permission
@@ -1568,6 +1568,73 @@ const filtered = scopedOrders.filter((o: any) => {
 
 
 // ─── Machine Grouped List ────────────────────────────────────────
+function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords }: any) {
+  const online = m.status === 'online'
+  const isExpanded = expandedId === m.id
+  const temp = m.inner_temp_c
+  const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
+  const mStock = stockData.find((s: any) => s.machine_id === m.id)
+  const msColor = !mStock?.stock_known ? C.text3 : mStock.cups_remaining <= 10 ? C.red : mStock.stock_pct <= 50 ? C.amber : C.green
+  const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
+  const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
+  const co = getCoords(m)
+  return (
+    <div style={{ background: C.surface, borderTop: '1px solid ' + C.border }}>
+      <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
+        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🖥</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+          <div style={{ fontSize: 11, color: C.text2, marginTop: 2, fontFamily: 'monospace' }}>SN: {m.sn} · ID: {m.id?.slice(0,8)}...</div>
+        </div>
+        <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
+        <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
+      </div>
+      {isExpanded && (
+        <div style={{ borderTop: '1px solid ' + C.border }}>
+          <div style={{ height: 3, background: online ? C.green : C.border2 }} />
+          <div style={{ padding: '14px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
+                <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
+                {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
+              </div>
+            </div>
+            {mStock?.stock_known ? (
+              <div style={{ background: msBg, borderRadius: 10, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>🍊</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: msColor }}>{mStock.cups_remaining} cups remaining ({mStock.stock_pct}%)</div>
+                  {msDays != null && <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>Last loaded {msDays === 0 ? 'today' : msDays + 'd ago'}</div>}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: C.surface2, borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: C.text3 }}>🍊 No stock data — log a loading visit</div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+              {[
+                { label: 'Temperature', value: temp != null ? temp + '°C' : '--', color: tempColor },
+                { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
+                { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--', color: C.text },
+                { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
+              ].map(f => (
+                <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 10px' }}>
+                  <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords }: any) {
   const [collapsedOps, setCollapsedOps] = useState<Record<string, boolean>>({})
 
@@ -3009,8 +3076,8 @@ function OperatorsPage({ myId }: any) {
     setDelOp(null); fetchOperators()
   }
 
-  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue, field_staff: C.orange }
-  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg, field_staff: '#fff3ea' }
+  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue, sub_operator: '#0891b2', field_staff: C.orange }
+  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg, sub_operator: '#e0f7fa', field_staff: '#fff3ea' }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -3029,6 +3096,7 @@ function OperatorsPage({ myId }: any) {
           { label: 'Total Operators', value: operators.length, color: C.blue, icon: '👥' },
           { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: '#7c3aed', icon: '👑' },
           { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.green, icon: '🧑‍💼' },
+          { label: 'Sub-Operators', value: operators.filter(o => o.role === 'sub_operator').length, color: '#0891b2', icon: '🧑‍💻' },
           { label: 'Field Staff', value: operators.filter(o => o.role === 'field_staff').length, color: C.orange, icon: '👷' },
         ].map(s => (
 <div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -3069,7 +3137,7 @@ function OperatorsPage({ myId }: any) {
                   <td style={{ padding: '13px 16px', color: C.text }}>{op.email}</td>
                   <td style={{ padding: '13px 16px' }}>
                     <Pill color={ROLE_COLOR[op.role] || C.text2} bg={ROLE_BG[op.role] || C.surface2}>
-                      {op.role === 'super_admin' ? '👑 Super Admin' : op.role === 'field_staff' ? '👷 Field Staff' : '🧑‍💼 Operator'}
+                      {op.role === 'super_admin' ? '👑 Super Admin' : op.role === 'field_staff' ? '👷 Field Staff' : op.role === 'sub_operator' ? '🧑‍💼 Sub-Operator' : '🧑‍💼 Operator'}
                     </Pill>
                   </td>
                   <td style={{ padding: '13px 16px' }}>
@@ -3118,6 +3186,7 @@ function OperatorsPage({ myId }: any) {
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: C.surface, color: C.text }}>
                   <option value="operator">Operator</option>
+                  <option value="sub_operator">Sub-Operator</option>
                   <option value="field_staff">Field Staff</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
@@ -3890,8 +3959,9 @@ export default function Dashboard() {
     setLoading(true)
     const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     let machineIds: string[] = []
-    if (role !== 'super_admin' && operatorId) {
-      const moRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + operatorId + '&select=machine_id'), { headers })
+    const effectiveOpId = role === 'sub_operator' ? (getCookie('fl_owner_id') || operatorId) : operatorId;
+    if (role !== 'super_admin' && effectiveOpId) {
+      const moRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + effectiveOpId + '&select=machine_id'), { headers })
       const moData = await moRes.json()
       machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
     }

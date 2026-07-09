@@ -12,6 +12,7 @@ export type SessionPayload = {
   email?: string;
   owner_id?: string;
   permissions?: Record<string, boolean>; // granular feature flags from operator_permissions
+  parent_id?: string; // for sub_operator: the parent operator's ID for machine scoping
 };
 
 // Sign a session token (7-day sliding expiry).
