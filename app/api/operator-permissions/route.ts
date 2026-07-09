@@ -71,11 +71,20 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-    if (session.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    if (session.role !== 'super_admin' && session.role !== 'operator') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
 
     const body = await request.json().catch(() => ({}));
     const operator_id = String(body.operator_id || '');
     if (!operator_id) return NextResponse.json({ error: 'operator_id required' }, { status: 400, headers: NO_STORE });
+
+    // Operators can only manage their own sub_operators
+    if (session.role === 'operator') {
+      const subRes = await fetch(SB_URL + '/rest/v1/operators?select=owner_id&id=eq.' + encodeURIComponent(operator_id) + '&limit=1', { headers: sbH() });
+      const subRows = await subRes.json();
+      if (!Array.isArray(subRows) || !subRows[0] || String(subRows[0].owner_id) !== String(session.sub)) {
+        return NextResponse.json({ error: 'You can only manage your own sub-operators' }, { status: 403, headers: NO_STORE });
+      }
+    }
 
     const permissions = body.permissions || {};
 

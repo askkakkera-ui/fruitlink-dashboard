@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // Report: super_admin/operator gets attendance in date range
     if (params.get('report') === '1') {
-      if (session.role !== 'super_admin' && session.role !== 'operator') {
+      if (session.role !== 'super_admin' && session.role !== 'operator' && session.role !== 'sub_operator') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       }
       let url = SB_URL + '/rest/v1/attendance?select=*&order=check_in_at.desc&limit=500';

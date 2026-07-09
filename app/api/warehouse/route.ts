@@ -37,12 +37,13 @@ export async function GET(request: NextRequest) {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     const role = session.role;
-    if (role !== 'super_admin' && role !== 'operator') {
+    if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
     const sp = request.nextUrl.searchParams;
     let ownerFilter = '';
     if (role === 'operator') ownerFilter = 'owner_id=eq.' + encodeURIComponent(ownerForOperator(session));
+    if (role === 'sub_operator') ownerFilter = 'owner_id=eq.' + encodeURIComponent(String(session.owner_id || ''));
     else if (sp.get('owner')) ownerFilter = 'owner_id=eq.' + encodeURIComponent(String(sp.get('owner')));
 
     if (sp.get('items') === '1') {
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     const role = session.role;
-    if (role !== 'super_admin' && role !== 'operator') {
+    if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
 
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(irows) || !irows[0]) return NextResponse.json({ error: 'item not found' }, { status: 404, headers: NO_STORE });
     const item = irows[0];
 
-    if (role === 'operator' && String(item.owner_id) !== ownerForOperator(session)) {
+    if ((role === 'operator' || role === 'sub_operator') && String(item.owner_id) !== ownerForOperator(session)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
     const ownerId = String(item.owner_id);
