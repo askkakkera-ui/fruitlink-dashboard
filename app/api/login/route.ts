@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch permissions for operators (not super_admin or field_staff)
     let permissions: Record<string, boolean> = {};
-    if (role === 'operator') {
+    if (role === 'operator' || role === 'sub_operator') {
       try {
         const permRes = await fetch(SUPABASE_URL + '/rest/v1/operator_permissions?operator_id=eq.' + encodeURIComponent(operator.id) + '&limit=1', { headers });
         const permData = await permRes.json();
@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
       name: operator.name || '',
       email: operator.email || '',
       owner_id: operator.owner_id ? String(operator.owner_id) : undefined,
+      // sub_operator: parent_operator_id used for machine scoping
+      parent_id: role === 'sub_operator' ? (operator.owner_id ? String(operator.owner_id) : undefined) : undefined,
       permissions: Object.keys(permissions).length > 0 ? permissions : undefined,
     });
 
@@ -73,6 +75,7 @@ export async function POST(req: NextRequest) {
       state: operator.state || '',
       country: operator.country || 'India',
       permissions,
+      owner_id: operator.owner_id || null,
     });
 
     // Set the signed session as an HttpOnly cookie — browser JS / DevTools cannot
