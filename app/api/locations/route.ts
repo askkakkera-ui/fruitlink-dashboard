@@ -30,8 +30,9 @@ export async function GET(request: NextRequest) {
     if (session.role === 'super_admin') {
       const ownerId = params.get('owner_id');
       if (ownerId) ownerFilter = '&owner_id=eq.' + encodeURIComponent(ownerId);
+    } else if (session.role === 'sub_operator') {
+      ownerFilter = '&owner_id=eq.' + encodeURIComponent(String(session.owner_id || session.sub));
     } else {
-      // Operators see only their own locations
       ownerFilter = '&owner_id=eq.' + encodeURIComponent(session.sub);
     }
 
