@@ -112,6 +112,19 @@ export default function VisitPage() {
 
   const machine = machines.find((m) => m.id === machineId);
 
+  // Name is a plain (non-HttpOnly) cookie set at login — safe to read here.
+  const [whoName, setWhoName] = useState('');
+  useEffect(() => {
+    const m = document.cookie.match(/(?:^|;\s*)fl_operator_name=([^;]*)/);
+    if (m) { try { setWhoName(decodeURIComponent(m[1])); } catch { /* ignore */ } }
+  }, []);
+
+  // The session cookie is HttpOnly, so only the server can clear it.
+  async function logout() {
+    try { await fetch('/api/logout', { method: 'POST' }); } catch { /* clear anyway */ }
+    window.location.href = '/login';
+  }
+
   // ── data ───────────────────────────────────────────────────────
   const loadAttendance = useCallback(async () => {
     try {
@@ -478,6 +491,17 @@ export default function VisitPage() {
                 <Btn kind="danger" onClick={checkOut} disabled={busy}>{busy ? '…' : '🔴 Check out now'}</Btn>
               </Card>
             )}
+            {/* Logout lives here and nowhere else: this is the only screen with
+                no photo in memory and no half-finished visit to lose. */}
+            <div style={{ textAlign: 'center' as const, marginTop: 18, fontSize: 12, color: C.text3 }}>
+              {whoName ? 'Signed in as ' + whoName : 'Signed in'}
+              {' · '}
+              <button
+                onClick={() => { if (confirm(attendance ? 'You are still checked in. Log out anyway?' : 'Log out?')) logout(); }}
+                style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 700, color: C.text2, textDecoration: 'underline', cursor: 'pointer' }}>
+                Log out
+              </button>
+            </div>
           </>
         )}
 
