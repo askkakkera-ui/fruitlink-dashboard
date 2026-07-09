@@ -56,14 +56,14 @@ function fmtDistance(m: number | null): string {
 /** How the geofence reads to a human. It never blocks; it only describes. */
 function verdictChip(l: Loc): { text: string; color: string; bg: string } {
   const d = fmtDistance(l.distance_meters);
-  const acc = l.accuracy_m != null ? ' ±' + l.accuracy_m + 'm' : '';
   switch (l.verdict) {
     case 'inside':
       return { text: '✓ You are here · ' + d, color: C.green, bg: C.greenBg };
     case 'outside':
-      return { text: d + ' away' + acc, color: C.red, bg: C.redBg };
+      return { text: d + ' away', color: C.red, bg: C.redBg };
     case 'uncertain':
-      return { text: '≈ ' + d + acc + ' · GPS unsure', color: C.amber, bg: C.amberBg };
+      // The phone cannot pin us down — usually indoors. Say so plainly and move on.
+      return { text: 'Around ' + d + ' · indoors?', color: C.amber, bg: C.amberBg };
     default:
       return { text: l.reason === 'no GPS fix' ? 'No GPS yet' : 'No coordinates set', color: C.text3, bg: C.surface2 };
   }
@@ -250,7 +250,10 @@ export default function VisitPage() {
   }
 
   // ── actions ────────────────────────────────────────────────────
-  const needsReason = !!loc && (loc.verdict === 'outside' || loc.verdict === 'uncertain');
+  // Only ask when the fix is confident AND says he is far. An 'uncertain' fix
+  // means the phone cannot see satellites (indoors) — that is not his fault,
+  // and prompting on it would fire on every honest visit until it means nothing.
+  const needsReason = !!loc && loc.verdict === 'outside';
 
   async function checkIn(visitMode: 'office' | 'machine') {
     if (!loc) { setErr('Pick a location first.'); return; }
@@ -389,11 +392,7 @@ export default function VisitPage() {
   const GpsPanel = () => (
     <div style={{ background: C.surface2, borderRadius: 11, padding: 12, marginBottom: 12 }}>
       {gpsState === 'ok' && gps ? (
-        <div style={{ fontSize: 12, color: C.text2 }}>
-          📍 {gps.addr}<br />
-          <span style={{ color: C.text3 }}>±{gps.accuracy}m accuracy</span>
-          {gps.accuracy > 100 && <span style={{ color: C.amber, fontWeight: 600 }}> · weak fix</span>}
-        </div>
+        <div style={{ fontSize: 12, color: C.text2 }}>📍 {gps.addr}</div>
       ) : gpsState === 'getting' ? (
         <div style={{ fontSize: 13, color: C.text2 }}>Getting your location…</div>
       ) : gpsState === 'error' ? (
@@ -447,9 +446,9 @@ export default function VisitPage() {
     needsReason && loc ? (
       <div style={{ marginTop: 12 }}>
         <div style={{ fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 6 }}>
-          {loc.verdict === 'uncertain' ? 'GPS cannot confirm you are here.' : 'You look far from this location.'} Tell us why — you will still be checked in.
+          You look far from {loc.name}. Tell us why — you will still be checked in.
         </div>
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. GPS weak inside the mall" style={inputStyle} />
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. parked across the road" style={inputStyle} />
       </div>
     ) : null;
 
