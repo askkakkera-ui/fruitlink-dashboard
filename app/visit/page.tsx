@@ -499,7 +499,7 @@ export default function VisitPage() {
 
   const machinesHere = loc ? machines.filter((m) => m.location_id === loc.id) : machines;
   useEffect(() => {
-    if (machinesHere.length && !machineId) setMachineId(machinesHere[0].id);
+    if (machinesHere.length === 1 && !machineId) setMachineId(machinesHere[0].id);
   }, [machinesHere, machineId]);
   const officeLoc = locations.find((l) => l.is_office) || null;
 
