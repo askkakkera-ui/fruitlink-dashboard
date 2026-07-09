@@ -87,6 +87,17 @@ export default function VisitPage() {
   const [loc, setLoc] = useState<Loc | null>(null);
   const [reason, setReason] = useState('');
 
+  // The chosen location is a snapshot. When a new GPS fix re-scores every
+  // location, re-adopt the fresh copy of the one we picked — otherwise the
+  // chip keeps reporting the distance from the moment it was tapped.
+  useEffect(() => {
+    if (!loc) return;
+    const fresh = locations.find((l) => l.id === loc.id);
+    if (fresh && (fresh.distance_meters !== loc.distance_meters || fresh.verdict !== loc.verdict)) {
+      setLoc(fresh);
+    }
+  }, [locations, loc]);
+
   const [attendance, setAttendance] = useState<Attendance | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -426,7 +437,11 @@ export default function VisitPage() {
       style={{
         width: '100%', padding: '13px 16px', borderRadius: 11, fontSize: 15, fontWeight: 700, cursor: disabled ? 'default' : 'pointer',
         border: kind === 'ghost' ? '1px solid ' + C.border : 'none',
-        background: disabled ? '#C9CDD6' : kind === 'ghost' ? C.surface : kind === 'danger' ? C.red : C.orange,
+        background: disabled ? '#C9CDD6'
+          : kind === 'ghost' ? C.surface
+          : kind === 'danger' ? C.red
+          : kind === 'go' ? C.green   // the fence confirms you are on site
+          : C.orange,
         color: kind === 'ghost' ? C.text2 : '#fff', opacity: disabled ? 0.75 : 1,
       }}>{children}</button>
   );
@@ -585,7 +600,9 @@ export default function VisitPage() {
                 </div>
                 <ReasonBox />
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
-                  <Btn onClick={() => checkIn('machine')} disabled={busy}>{busy ? '…' : '🟢 Check in'}</Btn>
+                  <Btn kind={loc.verdict === 'inside' ? 'go' : undefined} onClick={() => checkIn('machine')} disabled={busy}>
+                    {busy ? '…' : loc.verdict === 'inside' ? '✓ Check in here' : 'Check in'}
+                  </Btn>
                   <Btn kind="ghost" onClick={() => { setStep(1); setLoc(null); }}>← Different location</Btn>
                 </div>
               </Card>
@@ -731,7 +748,9 @@ export default function VisitPage() {
                     </div>
                     <ReasonBox />
                     <div style={{ marginTop: 14 }}>
-                      <Btn onClick={() => checkIn('office')} disabled={busy || !loc}>{busy ? '…' : '🟢 Check in'}</Btn>
+                      <Btn kind={loc && loc.verdict === 'inside' ? 'go' : undefined} onClick={() => checkIn('office')} disabled={busy || !loc}>
+                        {busy ? '…' : loc && loc.verdict === 'inside' ? '✓ Check in here' : 'Check in'}
+                      </Btn>
                     </div>
                   </>
                 ) : (
