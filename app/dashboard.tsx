@@ -136,7 +136,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
     // superAdminOnly = never visible to non-super-admins
     if (item.superAdminOnly && role !== 'super_admin') return
     // operatorOnly = only true operators (they manage their own team)
-    if (item.operatorOnly && role !== 'operator') return // operators and sub_operators never see this
+    if (item.operatorOnly && role !== 'operator') return
     // permission key = check operator permissions passed as prop
     if (item.permission && (role === 'operator' || role === 'sub_operator')) {
       if (!permissions[item.permission]) return
@@ -238,7 +238,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -2737,26 +2737,31 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
 
   const PERM_GROUPS = [
     {
-      label: '📄 Pages', items: [
-        { key: 'can_view_console', label: 'Console' },
-        { key: 'can_view_orders', label: 'Orders' },
-        { key: 'can_view_alerts', label: 'Alerts' },
-        { key: 'can_view_fleet_map', label: 'Fleet Map' },
-        { key: 'can_view_warehouse', label: 'Warehouse' },
-        { key: 'can_view_reports', label: 'Reports' },
-        { key: 'can_view_field_staff', label: 'Field Staff' },
-        { key: 'can_view_attendance', label: 'Attendance' },
-        { key: 'can_view_notify_config', label: 'Alert Notifications' },
-        { key: 'can_view_comm_log', label: 'Comm Log' },
+      label: '👁 Can View',
+      note: 'Which pages appear in their sidebar. Read-only.',
+      items: [
+        { key: 'can_view_console', label: 'Console', hint: 'Dashboard home & live sales' },
+        { key: 'can_view_orders', label: 'Orders List', hint: 'Customer order history' },
+        { key: 'can_view_alerts', label: 'Machine Alerts', hint: 'Fault & temperature alerts' },
+        { key: 'can_view_fleet_map', label: 'Fleet Map', hint: 'Machine locations on a map' },
+        { key: 'can_view_warehouse', label: 'Warehouse', hint: 'Stock levels & movements' },
+        { key: 'can_view_reports', label: 'Reports', hint: 'Analytics & summaries' },
+        { key: 'can_view_field_staff', label: 'Field Staff — view list', hint: 'See who the staff are' },
+        { key: 'can_view_attendance', label: 'Attendance', hint: 'Staff check-in / check-out records' },
+        { key: 'can_view_notify_config', label: 'Notification Settings', hint: 'WhatsApp & Telegram recipients' },
+        { key: 'can_view_comm_log', label: 'Comm Log', hint: 'Raw machine messages' },
       ]
     },
     {
-      label: '⚡ Actions', items: [
-        { key: 'can_edit_machine_config', label: 'Edit Machine Config' },
-        { key: 'can_manage_field_staff', label: 'Manage Field Staff' },
-        { key: 'can_manage_locations', label: 'Manage Locations' },
-        { key: 'can_edit_office_location', label: 'Edit Office Location' },
-        { key: 'can_export_data', label: 'Export Data' },
+      label: '⚡ Can Change',
+      note: 'These write data. Grant with care.',
+      danger: true,
+      items: [
+        { key: 'can_edit_machine_config', label: 'Edit machine config', hint: 'Change pricing & machine settings' },
+        { key: 'can_manage_field_staff', label: 'Add & edit field staff', hint: 'Create, edit and assign staff' },
+        { key: 'can_manage_locations', label: 'Add & edit locations', hint: 'Create, rename, delete locations' },
+        { key: 'can_edit_office_location', label: 'Edit office location', hint: 'Move the office GPS pin' },
+        { key: 'can_export_data', label: 'Export data', hint: 'Download CSV / PDF reports' },
       ]
     }
   ]
@@ -2809,15 +2814,21 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
           <>
             {PERM_GROUPS.map(group => (
               <div key={group.label} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 10 }}>{group.label}</div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: (group as any).danger ? C.orange : C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{group.label}</div>
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>{(group as any).note}</div>
+                </div>
                 <div style={{ background: C.surface2, borderRadius: 12, overflow: 'hidden' }}>
                   {group.items.map((item, i) => (
                     <div key={item.key} onClick={() => toggle(item.key)}
                       title={!canGrant(item.key) && !perms[item.key] ? 'You do not have this permission, so you cannot grant it' : undefined}
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: (!canGrant(item.key) && !perms[item.key]) ? 'not-allowed' : 'pointer', opacity: (!canGrant(item.key) && !perms[item.key]) ? 0.45 : 1, borderBottom: i < group.items.length - 1 ? '1px solid ' + C.border : 'none', background: perms[item.key] ? '#f0fdf4' : C.surface2 }}>
-                      <span style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>
-                        {item.label}{!canGrant(item.key) && !perms[item.key] ? ' 🔒' : ''}
-                      </span>
+                      <div style={{ minWidth: 0, paddingRight: 12 }}>
+                        <div style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>
+                          {item.label}{!canGrant(item.key) && !perms[item.key] ? ' 🔒' : ''}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{(item as any).hint}</div>
+                      </div>
                       <div style={{ width: 40, height: 22, borderRadius: 11, background: perms[item.key] ? C.green : C.border2, position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
                         <div style={{ position: 'absolute' as const, top: 3, left: perms[item.key] ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                       </div>
