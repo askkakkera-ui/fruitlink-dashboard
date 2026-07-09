@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
     }
     if (request.nextUrl.searchParams.get('machines') === '1') {
       if (session.role === 'super_admin') {
-        const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_lat,location_lng&order=display_name.asc', { headers: sbHeaders() });
+        const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_id,location_lat,location_lng&order=display_name.asc', { headers: sbHeaders() });
         const all = await res.json();
         return NextResponse.json(Array.isArray(all) ? all : [], { headers: NO_STORE });
       }
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
       const ids = await tenantMachineIds(session.role === 'field_staff' ? staffId : owner);
       if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
       const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
-      const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_lat,location_lng&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
+      const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_id,location_lat,location_lng&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
       const data = await res.json();
       return NextResponse.json(Array.isArray(data) ? data : [], { headers: NO_STORE });
     }
@@ -175,6 +175,40 @@ export async function POST(request: NextRequest) {
     }
 
     const staffId = String(session.sub || '');
+
+    // ── Step order, enforced here rather than in React ──────────────────
+    // A visit may only be logged while an attendance row is open. This is what
+    // makes "check in -> photo -> details" an audit trail instead of a UI hint:
+    // a reload, a back button, or a hand-rolled request cannot reorder it.
+    // check_in_at is taken from that row, never from the request body.
+    let openAttendanceId: string | null = null;
+    let openCheckInAt: string | null = null;
+    if (session.role === 'field_staff') {
+      const attRes = await fetch(
+        SB_URL + '/rest/v1/attendance?select=id,check_in_at&staff_id=eq.' + encodeURIComponent(staffId) +
+        '&check_out_at=is.null&order=check_in_at.desc&limit=1',
+        { headers: sbHeaders() }
+      );
+      const attRows = await attRes.json();
+      const open = Array.isArray(attRows) ? attRows[0] : null;
+      if (!open) {
+        return NextResponse.json(
+          { error: 'not_checked_in', message: 'Check in before logging a visit.' },
+          { status: 409, headers: NO_STORE }
+        );
+      }
+      openAttendanceId = String(open.id);
+      openCheckInAt = open.check_in_at;
+
+      // A visit without a photo is not evidence. Required for field staff.
+      if (!body.photo_url) {
+        return NextResponse.json(
+          { error: 'photo_required', message: 'A photo is required for every visit.' },
+          { status: 400, headers: NO_STORE }
+        );
+      }
+    }
+
     let ownerId = session.owner_id ? String(session.owner_id) : '';
     if (session.role === 'field_staff') {
       if (!ownerId) return NextResponse.json({ error: 'No tenant for staff' }, { status: 403, headers: NO_STORE });
@@ -205,8 +239,14 @@ export async function POST(request: NextRequest) {
       photo_url: body.photo_url ? String(body.photo_url).slice(0, 500) : null,
       lat: (body.lat != null && !isNaN(parseFloat(body.lat))) ? parseFloat(body.lat) : null,
       lng: (body.lng != null && !isNaN(parseFloat(body.lng))) ? parseFloat(body.lng) : null,
+      // Accuracy of the fix, in metres. Without it, lat/lng cannot be judged later.
+      gps_accuracy_m: (body.gps_accuracy_m != null && !isNaN(parseInt(body.gps_accuracy_m))) ? parseInt(body.gps_accuracy_m) : null,
+      // Which location this visit belongs to. Advisory — never enforced.
+      location_id: body.location_id ? String(body.location_id) : null,
       address: body.address ? String(body.address).slice(0, 500) : null,
-      check_in_at: body.check_in_at || null,
+      // Server-stamped from the open attendance row. Never trusted from the client.
+      attendance_id: openAttendanceId,
+      check_in_at: openCheckInAt || body.check_in_at || null,
       check_out_at: body.check_out_at || new Date().toISOString(),
     };
 

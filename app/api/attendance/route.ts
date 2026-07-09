@@ -88,16 +88,28 @@ export async function POST(request: NextRequest) {
     // Check if already checked in
     const existing = await fetch(SB_URL + '/rest/v1/attendance?select=id&staff_id=eq.' + encodeURIComponent(staffId) + '&check_out_at=is.null&limit=1', { headers: sbHeaders() }).then(r => r.json());
     if (Array.isArray(existing) && existing[0]) {
-      return NextResponse.json({ error: 'Already checked in', id: existing[0].id }, { status: 409, headers: NO_STORE });
+      // Already checked in. The guided flow calls this idempotently, so hand back
+      // the open row rather than treating it as an error the UI must recover from.
+      return NextResponse.json({ already_open: true, id: existing[0].id }, { status: 200, headers: NO_STORE });
     }
+    const VALID_VERDICTS = ['inside', 'outside', 'uncertain', 'unknown'];
+    const verdict = VALID_VERDICTS.includes(String(body.geofence_verdict)) ? String(body.geofence_verdict) : null;
+
     const row = {
       staff_id: staffId,
       owner_id: session.owner_id || null,
       machine_id: body.machine_id ? String(body.machine_id) : null,
+      location_id: body.location_id ? String(body.location_id) : null,
+      visit_mode: (body.visit_mode === 'office' || body.visit_mode === 'machine') ? body.visit_mode : null,
       check_in_at: new Date().toISOString(),
       check_in_lat: body.lat != null ? parseFloat(body.lat) : null,
       check_in_lng: body.lng != null ? parseFloat(body.lng) : null,
       check_in_address: body.address ? String(body.address).slice(0, 500) : null,
+      // Geofence is evidence, not a gate: we record what we saw and move on.
+      gps_accuracy_m: (body.gps_accuracy_m != null && !isNaN(parseInt(body.gps_accuracy_m))) ? parseInt(body.gps_accuracy_m) : null,
+      distance_meters: (body.distance_meters != null && !isNaN(parseInt(body.distance_meters))) ? parseInt(body.distance_meters) : null,
+      geofence_verdict: verdict,
+      override_reason: body.override_reason ? String(body.override_reason).slice(0, 500) : null,
     };
     const res = await fetch(SB_URL + '/rest/v1/attendance', { method: 'POST', headers: sbHeaders(), body: JSON.stringify(row) });
     const data = await res.json();
@@ -114,6 +126,24 @@ export async function PATCH(request: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400, headers: NO_STORE });
+
+    // Ownership: a staff member may only close their OWN open attendance row.
+    // Without this, anyone holding a row id could check another person out.
+    const ownRes = await fetch(
+      SB_URL + '/rest/v1/attendance?select=id,staff_id,check_out_at&id=eq.' + encodeURIComponent(id) + '&limit=1',
+      { headers: sbHeaders() }
+    );
+    const ownRows = await ownRes.json();
+    const row = Array.isArray(ownRows) ? ownRows[0] : null;
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: NO_STORE });
+    if (session.role !== 'super_admin' && String(row.staff_id) !== String(session.sub)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    }
+    if (row.check_out_at) {
+      // Already closed. Idempotent: don't error, just report it.
+      return NextResponse.json({ already_closed: true, id: row.id }, { headers: NO_STORE });
+    }
+
     const body = await request.json().catch(() => ({}));
     const update = {
       check_out_at: new Date().toISOString(),
