@@ -120,6 +120,7 @@ const NAV_ITEMS = [
   { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', permission: 'can_view_notify_config', superAdmin: true },
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
+  { key: 'myteam', label: 'My Team', icon: '👥', group: 'Operator Management', operatorOnly: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
@@ -133,7 +134,9 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
   const groups: Record<string, typeof NAV_ITEMS> = {}
   NAV_ITEMS.forEach((item: any) => {
     // superAdminOnly = never visible to non-super-admins
-    if (item.superAdminOnly && role !== 'super_admin') return // operators and sub_operators never see this
+    if (item.superAdminOnly && role !== 'super_admin') return
+    // operatorOnly = only true operators (they manage their own team)
+    if (item.operatorOnly && role !== 'operator') return // operators and sub_operators never see this
     // permission key = check operator permissions passed as prop
     if (item.permission && (role === 'operator' || role === 'sub_operator')) {
       if (!permissions[item.permission]) return
@@ -2723,7 +2726,10 @@ function AssignMachinesModal({ op, onClose }: any) {
 }
 
 // ─── Permissions Modal ───────────────────────────────────────────
-function PermissionsModal({ op, onClose }: any) {
+function PermissionsModal({ op, onClose, limitTo = null }: any) {
+  // limitTo: when provided (operator managing their own team), a permission can only
+  // be granted if the grantor holds it. Revoking is always allowed.
+  const canGrant = (key: string) => !limitTo || limitTo[key] === true
   const [perms, setPerms] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -2765,7 +2771,10 @@ function PermissionsModal({ op, onClose }: any) {
       .catch(() => setLoading(false))
   }, [op.id])
 
-  const toggle = (key: string) => setPerms(p => ({ ...p, [key]: !p[key] }))
+  const toggle = (key: string) => {
+    if (!canGrant(key) && !perms[key]) return // cannot grant what you don't hold
+    setPerms(p => ({ ...p, [key]: !p[key] }))
+  }
 
   const save = async () => {
     setSaving(true); setMsg('')
@@ -2804,8 +2813,11 @@ function PermissionsModal({ op, onClose }: any) {
                 <div style={{ background: C.surface2, borderRadius: 12, overflow: 'hidden' }}>
                   {group.items.map((item, i) => (
                     <div key={item.key} onClick={() => toggle(item.key)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer', borderBottom: i < group.items.length - 1 ? '1px solid ' + C.border : 'none', background: perms[item.key] ? '#f0fdf4' : C.surface2 }}>
-                      <span style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>{item.label}</span>
+                      title={!canGrant(item.key) && !perms[item.key] ? 'You do not have this permission, so you cannot grant it' : undefined}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: (!canGrant(item.key) && !perms[item.key]) ? 'not-allowed' : 'pointer', opacity: (!canGrant(item.key) && !perms[item.key]) ? 0.45 : 1, borderBottom: i < group.items.length - 1 ? '1px solid ' + C.border : 'none', background: perms[item.key] ? '#f0fdf4' : C.surface2 }}>
+                      <span style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>
+                        {item.label}{!canGrant(item.key) && !perms[item.key] ? ' 🔒' : ''}
+                      </span>
                       <div style={{ width: 40, height: 22, borderRadius: 11, background: perms[item.key] ? C.green : C.border2, position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
                         <div style={{ position: 'absolute' as const, top: 3, left: perms[item.key] ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                       </div>
@@ -3013,6 +3025,94 @@ function LocationsModal({ op, onClose }: any) {
   )
 }
 
+
+// ─── My Team (operator manages their own sub-operators & field staff) ───
+function MyTeamPage() {
+  const [team, setTeam] = useState<any[]>([])
+  const [myPerms, setMyPerms] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [permsFor, setPermsFor] = useState<any>(null)
+  const [err, setErr] = useState('')
+
+  const load = async () => {
+    setLoading(true); setErr('')
+    try {
+      const r = await fetch('/api/my-team')
+      const d = await r.json()
+      if (!r.ok || d.error) { setErr(d.error || 'Failed to load team'); setTeam([]) }
+      else { setTeam(Array.isArray(d.team) ? d.team : []); setMyPerms(d.my_permissions || null) }
+    } catch (e: any) { setErr(e.message) }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const subOps = team.filter((t: any) => t.role === 'sub_operator')
+  const staff = team.filter((t: any) => t.role === 'field_staff')
+
+  const Row = ({ m }: any) => {
+    const granted = m.permissions ? Object.keys(m.permissions).filter((k) => k.startsWith('can_') && m.permissions[k] === true).length : 0
+    const isSub = m.role === 'sub_operator'
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderTop: '1px solid ' + C.border, background: C.surface }}>
+        <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSub ? '#e0f7fa' : '#fff3ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: isSub ? '#0891b2' : C.orange, flexShrink: 0 }}>
+          {(m.name || m.email || '?').charAt(0).toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.name || '—'}</div>
+          <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>{m.email}</div>
+        </div>
+        <Pill color={isSub ? '#0891b2' : C.orange} bg={isSub ? '#e0f7fa' : '#fff3ea'}>
+          {isSub ? '🧑‍💼 Sub-Operator' : '👷 Field Staff'}
+        </Pill>
+        <span style={{ fontSize: 12, color: C.text3, minWidth: 92, textAlign: 'right' as const }}>{granted} permission{granted !== 1 ? 's' : ''}</span>
+        {isSub && (
+          <button onClick={() => setPermsFor(m)}
+            style={{ background: '#f5f3ff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#7c3aed', cursor: 'pointer', flexShrink: 0 }}>
+            🔐 Perms
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const Section = ({ title, rows, empty }: any) => (
+    <div style={{ border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', marginBottom: 18 }}>
+      <div style={{ padding: '11px 18px', background: C.surface2, fontSize: 12, fontWeight: 800, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+        {title} <span style={{ color: C.text3, fontWeight: 600 }}>· {rows.length}</span>
+      </div>
+      {rows.length === 0
+        ? <div style={{ padding: 26, textAlign: 'center' as const, color: C.text3, fontSize: 13, background: C.surface }}>{empty}</div>
+        : rows.map((m: any) => <Row key={m.id} m={m} />)}
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>My Team</div>
+        <div style={{ fontSize: 13, color: C.text2, marginTop: 3 }}>
+          People who work under your account. You can grant sub-operators any permission you hold yourself.
+        </div>
+      </div>
+
+      {err && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: C.redBg, color: C.red, fontSize: 13, fontWeight: 600 }}>{err}</div>}
+
+      {loading ? (
+        <div style={{ textAlign: 'center' as const, padding: 60, color: C.text3 }}>Loading team…</div>
+      ) : (
+        <>
+          <Section title="Sub-Operators" rows={subOps} empty="No sub-operators yet. Ask Fruitlink to add one under your account." />
+          <Section title="Field Staff" rows={staff} empty="No field staff yet." />
+          <div style={{ fontSize: 12, color: C.text3, padding: '0 2px' }}>
+            🔒 A permission you don&rsquo;t hold yourself is locked and cannot be granted.
+          </div>
+        </>
+      )}
+
+      {permsFor && <PermissionsModal op={permsFor} limitTo={myPerms || {}} onClose={() => { setPermsFor(null); load() }} />}
+    </div>
+  )
+}
 
 function OperatorsPage({ myId }: any) {
   const [operators, setOperators] = useState<any[]>([])
@@ -4038,6 +4138,9 @@ export default function Dashboard() {
     operators: role === 'super_admin'
       ? <OperatorsPage myId={operatorId} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    myteam: role === 'operator'
+      ? <ErrorBoundary><MyTeamPage /></ErrorBoundary>
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Only operators can manage a team.</div>,
     commlog: role === 'super_admin'
       ? <CommLogPage machines={machines} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,

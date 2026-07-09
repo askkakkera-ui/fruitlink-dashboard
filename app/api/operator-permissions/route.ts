@@ -77,16 +77,40 @@ export async function PUT(request: NextRequest) {
     const operator_id = String(body.operator_id || '');
     if (!operator_id) return NextResponse.json({ error: 'operator_id required' }, { status: 400, headers: NO_STORE });
 
-    // Operators can only manage their own sub_operators
+    const permissions = body.permissions || {};
+
+    // Operators: (a) may only manage their own team, and
+    //            (b) may never grant a permission they do not hold themselves.
     if (session.role === 'operator') {
-      const subRes = await fetch(SB_URL + '/rest/v1/operators?select=owner_id&id=eq.' + encodeURIComponent(operator_id) + '&limit=1', { headers: sbH() });
+      const [subRes, myPermRes] = await Promise.all([
+        fetch(SB_URL + '/rest/v1/operators?select=owner_id,role&id=eq.' + encodeURIComponent(operator_id) + '&limit=1', { headers: sbH() }),
+        fetch(SB_URL + '/rest/v1/operator_permissions?select=*&operator_id=eq.' + encodeURIComponent(String(session.sub)) + '&limit=1', { headers: sbH() }),
+      ]);
       const subRows = await subRes.json();
+      const myPermRows = await myPermRes.json();
+
+      // (a) ownership
       if (!Array.isArray(subRows) || !subRows[0] || String(subRows[0].owner_id) !== String(session.sub)) {
-        return NextResponse.json({ error: 'You can only manage your own sub-operators' }, { status: 403, headers: NO_STORE });
+        return NextResponse.json({ error: 'You can only manage your own team members' }, { status: 403, headers: NO_STORE });
+      }
+      // never let an operator edit another operator or a super_admin
+      const targetRole = String(subRows[0].role || '');
+      if (targetRole !== 'sub_operator' && targetRole !== 'field_staff') {
+        return NextResponse.json({ error: 'You can only manage sub-operators and field staff' }, { status: 403, headers: NO_STORE });
+      }
+
+      // (b) grant ceiling — cannot grant what you do not have. Revoking is always allowed.
+      const mine = Array.isArray(myPermRows) && myPermRows[0] ? myPermRows[0] : {};
+      const escalated = PERMISSION_KEYS.filter(
+        (k) => (permissions[k] === true || permissions[k] === 'true') && mine[k] !== true
+      );
+      if (escalated.length > 0) {
+        return NextResponse.json(
+          { error: 'You cannot grant permissions you do not have', permissions: escalated },
+          { status: 403, headers: NO_STORE }
+        );
       }
     }
-
-    const permissions = body.permissions || {};
 
     // Validate only known permission keys
     const patch: Record<string, any> = { operator_id, updated_at: new Date().toISOString() };
