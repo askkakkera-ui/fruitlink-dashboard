@@ -4134,7 +4134,10 @@ export default function Dashboard() {
 
   useEffect(() => { if (ready) fetchData() }, [ready, fetchData])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // fl_session is HttpOnly — document.cookie cannot delete it, so the server
+    // must. Without this the session survived "logout" for its full 7 days.
+    try { await fetch('/api/logout', { method: 'POST' }) } catch { /* clear locally anyway */ }
     document.cookie.split(';').forEach(c => {
       document.cookie = c.split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
     })
