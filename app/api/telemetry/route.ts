@@ -16,7 +16,7 @@ async function getSession(request: NextRequest) {
 // Does this SN belong to a machine the operator is granted? (super_admin: always yes)
 async function snAllowed(sn: string, session: any): Promise<boolean> {
   if (session.role === 'super_admin') return true;
-  if (session.role !== 'operator') return false;
+  if (session.role !== 'operator' && session.role !== 'sub_operator') return false;
   // machine id for this SN
   const mRes = await fetch(SB_URL + '/rest/v1/machines?select=id&sn=eq.' + encodeURIComponent(sn), { headers: sbHeaders() });
   const mRows = mRes.ok ? await mRes.json() : [];
