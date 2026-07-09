@@ -128,9 +128,9 @@ export default function AttendanceSection() {
         const vals = [
           String(r.staff_name || '—').slice(0, 20),
           String(r.machine_name || 'Office').slice(0, 22),
-          inDate ? inDate.toLocaleDateString('en-IN') : '—',
-          inDate ? inDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—',
-          r.check_out_at ? new Date(r.check_out_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'Still in',
+          inDate ? inDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '—',
+          inDate ? inDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '—',
+          r.check_out_at ? new Date(r.check_out_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : 'Still in',
           fmtDuration(r.check_in_at, r.check_out_at),
           r.check_in_lat != null ? r.check_in_lat.toFixed(5) + ', ' + r.check_in_lng.toFixed(5) : '—',
           r.check_out_lat != null ? r.check_out_lat.toFixed(5) + ', ' + r.check_out_lng.toFixed(5) : '—',
