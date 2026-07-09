@@ -1,7 +1,10 @@
 // Fruitlink PWA service worker — app-shell caching only.
 // The dashboard is a LIVE tool: data always comes fresh from the network.
 // This SW makes the app install + load fast, and shows a clean state when offline.
-const CACHE = 'fruitlink-v1';
+// Bump this on any release that changes app behaviour. The old value was never
+// changed, so cache-first script entries could survive a deploy and keep serving
+// stale code to a phone that had already loaded the app once.
+const CACHE = 'fruitlink-v3';
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -37,10 +40,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Cache-first for static assets (icons, fonts, JS chunks) — speeds up load.
+  // Scripts and styles carry the app's behaviour, so they go network-first: a
+  // stale chunk is worse than a slow one. Images and fonts stay cache-first.
+  const behavioural = req.destination === 'script' || req.destination === 'style';
+
+  if (behavioural) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+        return res;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-      if (res.ok && (req.destination === 'image' || req.destination === 'script' || req.destination === 'style' || req.destination === 'font')) {
+      if (res.ok && (req.destination === 'image' || req.destination === 'font')) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));
       }
