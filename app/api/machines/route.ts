@@ -38,6 +38,13 @@ export async function GET(request: NextRequest) {
       const ids = await allowedMachineIds(sub);
       if (ids.length === 0) return NextResponse.json([]);
       scopeFilter = 'id=in.(' + ids.map(encodeURIComponent).join(',') + ')';
+    } else if (role === 'sub_operator') {
+      // sub_operator sees their parent operator's machines
+      const parentId = String(session.owner_id || '');
+      if (!parentId) return NextResponse.json([]);
+      const ids = await allowedMachineIds(parentId);
+      if (ids.length === 0) return NextResponse.json([]);
+      scopeFilter = 'id=in.(' + ids.map(encodeURIComponent).join(',') + ')';
     } else {
       return NextResponse.json([]);
     }
