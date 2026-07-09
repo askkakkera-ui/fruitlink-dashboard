@@ -659,20 +659,22 @@ export default function VisitPage() {
               <Card>
                 <H n={4}>Photo of {(machine && (machine.display_name || machine.sn)) || 'the machine'}</H>
                 <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 12 }}>Required. Time, GPS and machine name are stamped onto the image.</div>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-                  onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) onPhotoPicked(f); }} />
                 {photoPreview ? (
                   <>
                     <img src={photoPreview} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 10 }} />
-                    <button onClick={() => fileRef.current && fileRef.current.click()}
-                      style={{ width: '100%', padding: '10px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface, fontSize: 13, fontWeight: 700, color: C.text2, cursor: 'pointer', marginBottom: 12 }}>Retake</button>
+                    <label style={{ display: 'block', width: '100%', padding: '10px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface, fontSize: 13, fontWeight: 700, color: C.text2, cursor: 'pointer', marginBottom: 12, textAlign: 'center' as const, boxSizing: 'border-box' as const }}>
+                      Retake
+                      <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                        onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) onPhotoPicked(f); }} />
+                    </label>
                   </>
                 ) : (
-                  <div onClick={() => fileRef.current && fileRef.current.click()}
-                    style={{ border: '2px dashed ' + C.border, borderRadius: 12, padding: '38px 12px', textAlign: 'center' as const, cursor: 'pointer', marginBottom: 12 }}>
+                  <label style={{ display: 'block', border: '2px dashed ' + C.border, borderRadius: 12, padding: '38px 12px', textAlign: 'center' as const, cursor: 'pointer', marginBottom: 12 }}>
                     <div style={{ fontSize: 30 }}>📷</div>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text2, marginTop: 6 }}>{processing ? 'Processing…' : 'Tap to take the photo'}</div>
-                  </div>
+                    <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                      onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) onPhotoPicked(f); }} />
+                  </label>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
                   <Btn onClick={() => { setErr(''); setStep(5); }} disabled={!photoBlob || processing}>Next → Details</Btn>
