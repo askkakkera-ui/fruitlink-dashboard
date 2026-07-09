@@ -3942,12 +3942,14 @@ export default function Dashboard() {
   const [role, setRole] = useState('operator')
   const [name, setName] = useState('Admin')
   const [operatorId, setOperatorId] = useState('')
+  const [ownerId, setOwnerId] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
   const [ready, setReady] = useState(false)          
   useEffect(() => {
     setRole(getCookie('fl_role') || 'operator')
     setName(getCookie('fl_operator_name') || 'Admin')
     setOperatorId(getCookie('fl_operator_id') || '')
+    setOwnerId(getCookie('fl_owner_id') || '')
     try {
       const raw = getCookie('fl_permissions')
       if (raw) setPermissions(JSON.parse(decodeURIComponent(raw)))
@@ -3959,7 +3961,7 @@ export default function Dashboard() {
     setLoading(true)
     const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     let machineIds: string[] = []
-    const effectiveOpId = role === 'sub_operator' ? (getCookie('fl_owner_id') || operatorId) : operatorId;
+    const effectiveOpId = role === 'sub_operator' ? (ownerId || operatorId) : operatorId;
     if (role !== 'super_admin' && effectiveOpId) {
       const moRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + effectiveOpId + '&select=machine_id'), { headers })
       const moData = await moRes.json()
@@ -3998,7 +4000,7 @@ export default function Dashboard() {
         setMachines(enriched)
     setAlerts(Array.isArray(aData) ? aData : [])
     setLoading(false)
-  }, [role, operatorId])
+  }, [role, operatorId, ownerId])
 
   useEffect(() => { if (ready) fetchData() }, [ready, fetchData])
 
