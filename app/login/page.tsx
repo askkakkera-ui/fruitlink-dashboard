@@ -49,6 +49,9 @@ export default function Login() {
       document.cookie = 'fl_operator_id=' + data.id + '; path=/; max-age=' + maxAge;
       document.cookie = 'fl_operator_name=' + data.name + '; path=/; max-age=' + maxAge;
       document.cookie = 'fl_role=' + data.role + '; path=/; max-age=' + maxAge;
+      if (data.owner_id) {
+        document.cookie = 'fl_owner_id=' + data.owner_id + '; path=/; max-age=' + maxAge;
+      }
       document.cookie = 'fl_state=' + data.state + '; path=/; max-age=' + maxAge;
       document.cookie = 'fl_country=' + data.country + '; path=/; max-age=' + maxAge;
       if (data.permissions && Object.keys(data.permissions).length > 0) {
