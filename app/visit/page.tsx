@@ -60,7 +60,8 @@ function verdictChip(l: Loc): { text: string; color: string; bg: string } {
     case 'inside':
       return { text: '✓ You are here · ' + d, color: C.green, bg: C.greenBg };
     case 'outside':
-      return { text: d + ' away', color: C.red, bg: C.redBg };
+      // Stated as a measurement, not an accusation — the pin is as likely wrong as the person.
+      return { text: d + ' from saved pin', color: C.amber, bg: C.amberBg };
     case 'uncertain':
       // The phone cannot pin us down — usually indoors. Say so plainly and move on.
       return { text: 'Around ' + d + ' · indoors?', color: C.amber, bg: C.amberBg };
@@ -159,33 +160,77 @@ export default function VisitPage() {
   }, []);
 
   // GPS is requested on demand — never on page load. Android blocks silent asks.
+  //
+  // Two things matter here and both bit us in the field:
+  //
+  //   maximumAge: 0   A cached fix is often a coarse Wi-Fi estimate from before
+  //                   the GPS chip locked on. Accepting a 30s-old one made the
+  //                   office read "110m from pin" when it was really 17m.
+  //
+  //   watchPosition   The FIRST fix is almost always the worst. Accuracy
+  //                   improves over a few seconds as satellites are acquired,
+  //                   so we watch, keep the best reading, and stop early once
+  //                   it is good enough. This is the difference between a
+  //                   geofence that works and one that cries wolf.
+  const GOOD_ENOUGH_M = 20;
+  const MAX_WAIT_MS = 12000;
+
   const getGps = useCallback(() => {
     if (!('geolocation' in navigator)) { setGpsState('error'); setGpsErr('This device has no GPS.'); return; }
     setGpsState('getting'); setGpsErr('');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude, lng = pos.coords.longitude;
-        const accuracy = Math.round(pos.coords.accuracy);
-        let addr = lat.toFixed(4) + 'N ' + lng.toFixed(4) + 'E';
-        try {
-          const r = await fetch('https://api.fruitlinktech.in/rest/app/geocode?lat=' + lat + '&lng=' + lng, { cache: 'no-store' });
-          const d = await r.json();
-          if (d && d.addr) addr = d.addr;
-        } catch { /* address is a nicety, not a requirement */ }
-        const fix: Gps = { lat, lng, accuracy, addr };
-        setGps(fix); gpsRef.current = fix; setGpsState('ok');
-        fetchLocations(fix);
+
+    let best: { lat: number; lng: number; accuracy: number } | null = null;
+    let watchId: number | null = null;
+    let settled = false;
+
+    const stop = () => {
+      if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    };
+
+    const finish = async () => {
+      if (settled) return;
+      settled = true;
+      stop();
+      clearTimeout(timer);
+
+      if (!best) {
+        setGpsState('error');
+        setGpsErr('Could not get a location. Step outside or near a window, then retry.');
+        fetchLocations(null); // never strand: show the list anyway
+        return;
+      }
+      let addr = best.lat.toFixed(4) + 'N ' + best.lng.toFixed(4) + 'E';
+      try {
+        const r = await fetch('https://api.fruitlinktech.in/rest/app/geocode?lat=' + best.lat + '&lng=' + best.lng, { cache: 'no-store' });
+        const d = await r.json();
+        if (d && d.addr) addr = d.addr;
+      } catch { /* address is a nicety, not a requirement */ }
+      const fix: Gps = { lat: best.lat, lng: best.lng, accuracy: best.accuracy, addr };
+      setGps(fix); gpsRef.current = fix; setGpsState('ok');
+      fetchLocations(fix);
+    };
+
+    const timer = setTimeout(finish, MAX_WAIT_MS);
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const acc = Math.round(pos.coords.accuracy);
+        if (!best || acc < best.accuracy) {
+          best = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: acc };
+        }
+        if (best.accuracy <= GOOD_ENOUGH_M) finish(); // tight lock, no need to wait
       },
       (e: GeolocationPositionError) => {
+        if (best) return; // we already have something usable
+        if (settled) return;
+        settled = true; stop(); clearTimeout(timer);
         setGpsState('error');
         if (e.code === 1) setGpsErr('Location blocked. Settings → Apps → Chrome → Permissions → Location → Allow.');
         else if (e.code === 2) setGpsErr('Location unavailable. Step near a window and retry.');
         else setGpsErr('Location timed out. Tap retry.');
-        // Still show the list — a missing fix must not strand anyone.
         fetchLocations(null);
       },
-      // High accuracy matters: a 100m geofence cannot be judged by a ±1500m Wi-Fi fix.
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: MAX_WAIT_MS, maximumAge: 0 }
     );
   }, [fetchLocations]);
 
@@ -270,7 +315,7 @@ export default function VisitPage() {
 
   async function checkIn(visitMode: 'office' | 'machine') {
     if (!loc) { setErr('Pick a location first.'); return; }
-    if (needsReason && !reason.trim()) { setErr('Tell us why you are away from this location.'); return; }
+    // No geofence gate. The reason is recorded when offered and skipped when not.
     setBusy(true); setErr('');
     try {
       const fix = gpsRef.current;
@@ -407,7 +452,7 @@ export default function VisitPage() {
       {gpsState === 'ok' && gps ? (
         <div style={{ fontSize: 12, color: C.text2 }}>📍 {gps.addr}</div>
       ) : gpsState === 'getting' ? (
-        <div style={{ fontSize: 13, color: C.text2 }}>Getting your location…</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>Getting a precise location… <span style={{ color: C.text3 }}>(a few seconds)</span></div>
       ) : gpsState === 'error' ? (
         <div style={{ fontSize: 12, color: C.red }}>{gpsErr}</div>
       ) : (
@@ -458,10 +503,21 @@ export default function VisitPage() {
   const ReasonBox = () =>
     needsReason && loc ? (
       <div style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 6 }}>
-          You look far from {loc.name}. Tell us why — you will still be checked in.
+        <div style={{ fontSize: 12, color: C.text2, fontWeight: 600, marginBottom: 7 }}>
+          GPS places you {fmtDistance(loc.distance_meters)} from the saved pin for {loc.name}.
+          You can check in either way — a note just helps us fix the pin. <span style={{ color: C.text3, fontWeight: 500 }}>(optional)</span>
         </div>
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. parked across the road" style={inputStyle} />
+        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
+          {['At the machine', 'Inside the building', 'Just arrived, outside', 'Pin looks wrong'].map((r) => (
+            <button key={r} onClick={() => setReason(reason === r ? '' : r)}
+              style={{
+                fontSize: 11.5, fontWeight: 700, padding: '6px 10px', borderRadius: 20, cursor: 'pointer',
+                border: '1px solid ' + (reason === r ? C.orange : C.border),
+                background: reason === r ? C.orange : C.surface, color: reason === r ? '#fff' : C.text2,
+              }}>{r}</button>
+          ))}
+        </div>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="or type a note" style={{ ...inputStyle, fontSize: 14 }} />
       </div>
     ) : null;
 
