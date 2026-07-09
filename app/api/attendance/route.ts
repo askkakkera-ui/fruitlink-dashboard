@@ -80,8 +80,12 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-    if (session.role !== 'field_staff' && session.role !== 'super_admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    // Operators and sub-operators were silently refused here with a bare 403,
+    // which the UI rendered as "Check in failed" with no hint why. Attendance is
+    // a record, not a privilege — anyone who can reach the visit page may check in.
+    if (session.role !== 'field_staff' && session.role !== 'super_admin'
+        && session.role !== 'operator' && session.role !== 'sub_operator') {
+      return NextResponse.json({ error: 'Your role cannot check in (' + session.role + ')' }, { status: 403, headers: NO_STORE });
     }
     const body = await request.json().catch(() => ({}));
     const staffId = String(session.sub);
