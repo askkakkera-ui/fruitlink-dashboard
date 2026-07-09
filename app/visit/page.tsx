@@ -3,6 +3,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
 
+// Bump on every visit-page change. Shown on the mode screen so a stale cached
+// build can be identified in one glance instead of three rounds of guessing.
+const BUILD = '2026-07-09-a';
+
 type Machine = { id: string; display_name?: string; sn?: string; location?: string; location_id?: string };
 type Verdict = 'inside' | 'outside' | 'uncertain' | 'unknown';
 type Loc = {
@@ -340,8 +344,14 @@ export default function VisitPage() {
           override_reason: needsReason ? reason.trim() : null,
         }),
       });
-      const d = await r.json();
-      if (!d || !d.id) { setErr((d && d.error) || 'Check in failed.'); setBusy(false); return; }
+      const d = await r.json().catch(() => null);
+      if (!d || !d.id) {
+        // Say exactly what the server said, and its status. "Check in failed"
+        // on its own is unactionable from a mall.
+        const detail = (d && (d.error || d.message)) || 'no response body';
+        setErr('Check in failed — HTTP ' + r.status + ': ' + detail);
+        setBusy(false); return;
+      }
       setAttendance({ id: d.id, check_in_at: d.check_in_at });
       setMsg(d.already_open ? 'You were already checked in.' : '✓ Checked in');
       setTimeout(() => setMsg(''), 2500);
@@ -565,6 +575,7 @@ export default function VisitPage() {
             {/* Logout lives here and nowhere else: this is the only screen with
                 no photo in memory and no half-finished visit to lose. */}
             <div style={{ textAlign: 'center' as const, marginTop: 18, fontSize: 12, color: C.text3 }}>
+              <div style={{ fontSize: 10, color: C.text3, marginBottom: 6, fontFamily: 'monospace' }}>build {BUILD}</div>
               {whoName ? 'Signed in as ' + whoName : 'Signed in'}
               {' · '}
               <button
