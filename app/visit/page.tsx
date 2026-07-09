@@ -498,6 +498,9 @@ export default function VisitPage() {
   );
 
   const machinesHere = loc ? machines.filter((m) => m.location_id === loc.id) : machines;
+  useEffect(() => {
+    if (machinesHere.length && !machineId) setMachineId(machinesHere[0].id);
+  }, [machinesHere, machineId]);
   const officeLoc = locations.find((l) => l.is_office) || null;
 
   function pickLocation(l: Loc) { setLoc(l); setReason(''); setErr(''); setStep(2); }
