@@ -103,6 +103,23 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
     return { block: true };
   }
 
+  // sub_operator: same as operator but scoped to parent operator's machines
+  if (role === 'sub_operator') {
+    const parentId = String(session.owner_id || '');
+    if (!parentId) return { block: true };
+    if (table === 'operators') return { path: appendFilter(rawPath, 'id=eq.' + encodeURIComponent(sub)) };
+    if (table === 'machine_operators') return { path: appendFilter(rawPath, 'operator_id=eq.' + encodeURIComponent(parentId)) };
+    if (OPERATOR_READABLE_ALL.includes(table)) return { path: rawPath };
+    if (MACHINE_ID_TABLES.includes(table) || MACHINE_SCOPED_TABLES.includes(table)) {
+      const ids = await allowedMachineIds(parentId);
+      if (ids.length === 0) return { empty: true };
+      const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
+      if (MACHINE_ID_TABLES.includes(table)) return { path: appendFilter(rawPath, 'id=in.' + inList) };
+      return { path: appendFilter(rawPath, 'machine_id=in.' + inList) };
+    }
+    return { block: true };
+  }
+
   // Unknown role -> refuse.
   return { block: true };
 }
