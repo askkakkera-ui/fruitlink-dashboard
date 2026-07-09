@@ -120,6 +120,7 @@ const NAV_ITEMS = [
   { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', permission: 'can_view_notify_config', superAdmin: true },
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
+  { key: 'myteam', label: 'My Team', icon: '👥', group: 'Operator Management', operatorOnly: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
@@ -133,7 +134,9 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
   const groups: Record<string, typeof NAV_ITEMS> = {}
   NAV_ITEMS.forEach((item: any) => {
     // superAdminOnly = never visible to non-super-admins
-    if (item.superAdminOnly && role !== 'super_admin') return // operators and sub_operators never see this
+    if (item.superAdminOnly && role !== 'super_admin') return
+    // operatorOnly = only true operators (they manage their own team)
+    if (item.operatorOnly && role !== 'operator') return
     // permission key = check operator permissions passed as prop
     if (item.permission && (role === 'operator' || role === 'sub_operator')) {
       if (!permissions[item.permission]) return
@@ -216,7 +219,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
           }}>{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
-            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : 'Operator'}</div>
+            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : role === 'sub_operator' ? 'Sub-Operator' : role === 'field_staff' ? 'Field Staff' : 'Operator'}</div>
           </div>
           <button onClick={onLogout} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textSide3, fontSize: 16, padding: 2 }} title="Logout">⏻</button>
         </div>
@@ -235,7 +238,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -2692,9 +2695,6 @@ function AssignMachinesModal({ op, onClose }: any) {
         const insRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id }))) })
         if (!insRes.ok) { const t = await insRes.text().catch(() => ''); setMsg('Error saving: ' + (t || insRes.status)); setSaving(false); return }
       }
-      if (op.role === 'field_staff') {
-        await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + op.id), { method: 'PATCH', headers: J, body: JSON.stringify({ owner_id: 'b3a5c89d-c243-46c6-be86-4293b5765e70' }) })
-      }
       setMsg('\u2713 Saved'); setTimeout(onClose, 800)
     } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
@@ -2726,7 +2726,10 @@ function AssignMachinesModal({ op, onClose }: any) {
 }
 
 // ─── Permissions Modal ───────────────────────────────────────────
-function PermissionsModal({ op, onClose }: any) {
+function PermissionsModal({ op, onClose, limitTo = null }: any) {
+  // limitTo: when provided (operator managing their own team), a permission can only
+  // be granted if the grantor holds it. Revoking is always allowed.
+  const canGrant = (key: string) => !limitTo || limitTo[key] === true
   const [perms, setPerms] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -2734,26 +2737,31 @@ function PermissionsModal({ op, onClose }: any) {
 
   const PERM_GROUPS = [
     {
-      label: '📄 Pages', items: [
-        { key: 'can_view_console', label: 'Console' },
-        { key: 'can_view_orders', label: 'Orders' },
-        { key: 'can_view_alerts', label: 'Alerts' },
-        { key: 'can_view_fleet_map', label: 'Fleet Map' },
-        { key: 'can_view_warehouse', label: 'Warehouse' },
-        { key: 'can_view_reports', label: 'Reports' },
-        { key: 'can_view_field_staff', label: 'Field Staff' },
-        { key: 'can_view_attendance', label: 'Attendance' },
-        { key: 'can_view_notify_config', label: 'Alert Notifications' },
-        { key: 'can_view_comm_log', label: 'Comm Log' },
+      label: '👁 Can View',
+      note: 'Which pages appear in their sidebar. Read-only.',
+      items: [
+        { key: 'can_view_console', label: 'Console', hint: 'Dashboard home & live sales' },
+        { key: 'can_view_orders', label: 'Orders List', hint: 'Customer order history' },
+        { key: 'can_view_alerts', label: 'Machine Alerts', hint: 'Fault & temperature alerts' },
+        { key: 'can_view_fleet_map', label: 'Fleet Map', hint: 'Machine locations on a map' },
+        { key: 'can_view_warehouse', label: 'Warehouse', hint: 'Stock levels & movements' },
+        { key: 'can_view_reports', label: 'Reports', hint: 'Analytics & summaries' },
+        { key: 'can_view_field_staff', label: 'Field Staff — view list', hint: 'See who the staff are' },
+        { key: 'can_view_attendance', label: 'Attendance', hint: 'Staff check-in / check-out records' },
+        { key: 'can_view_notify_config', label: 'Notification Settings', hint: 'WhatsApp & Telegram recipients' },
+        { key: 'can_view_comm_log', label: 'Comm Log', hint: 'Raw machine messages' },
       ]
     },
     {
-      label: '⚡ Actions', items: [
-        { key: 'can_edit_machine_config', label: 'Edit Machine Config' },
-        { key: 'can_manage_field_staff', label: 'Manage Field Staff' },
-        { key: 'can_manage_locations', label: 'Manage Locations' },
-        { key: 'can_edit_office_location', label: 'Edit Office Location' },
-        { key: 'can_export_data', label: 'Export Data' },
+      label: '⚡ Can Change',
+      note: 'These write data. Grant with care.',
+      danger: true,
+      items: [
+        { key: 'can_edit_machine_config', label: 'Edit machine config', hint: 'Change pricing & machine settings' },
+        { key: 'can_manage_field_staff', label: 'Add & edit field staff', hint: 'Create, edit and assign staff' },
+        { key: 'can_manage_locations', label: 'Add & edit locations', hint: 'Create, rename, delete locations' },
+        { key: 'can_edit_office_location', label: 'Edit office location', hint: 'Move the office GPS pin' },
+        { key: 'can_export_data', label: 'Export data', hint: 'Download CSV / PDF reports' },
       ]
     }
   ]
@@ -2768,7 +2776,10 @@ function PermissionsModal({ op, onClose }: any) {
       .catch(() => setLoading(false))
   }, [op.id])
 
-  const toggle = (key: string) => setPerms(p => ({ ...p, [key]: !p[key] }))
+  const toggle = (key: string) => {
+    if (!canGrant(key) && !perms[key]) return // cannot grant what you don't hold
+    setPerms(p => ({ ...p, [key]: !p[key] }))
+  }
 
   const save = async () => {
     setSaving(true); setMsg('')
@@ -2803,12 +2814,21 @@ function PermissionsModal({ op, onClose }: any) {
           <>
             {PERM_GROUPS.map(group => (
               <div key={group.label} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 10 }}>{group.label}</div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: (group as any).danger ? C.orange : C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{group.label}</div>
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>{(group as any).note}</div>
+                </div>
                 <div style={{ background: C.surface2, borderRadius: 12, overflow: 'hidden' }}>
                   {group.items.map((item, i) => (
                     <div key={item.key} onClick={() => toggle(item.key)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: 'pointer', borderBottom: i < group.items.length - 1 ? '1px solid ' + C.border : 'none', background: perms[item.key] ? '#f0fdf4' : C.surface2 }}>
-                      <span style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>{item.label}</span>
+                      title={!canGrant(item.key) && !perms[item.key] ? 'You do not have this permission, so you cannot grant it' : undefined}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', cursor: (!canGrant(item.key) && !perms[item.key]) ? 'not-allowed' : 'pointer', opacity: (!canGrant(item.key) && !perms[item.key]) ? 0.45 : 1, borderBottom: i < group.items.length - 1 ? '1px solid ' + C.border : 'none', background: perms[item.key] ? '#f0fdf4' : C.surface2 }}>
+                      <div style={{ minWidth: 0, paddingRight: 12 }}>
+                        <div style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>
+                          {item.label}{!canGrant(item.key) && !perms[item.key] ? ' 🔒' : ''}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{(item as any).hint}</div>
+                      </div>
                       <div style={{ width: 40, height: 22, borderRadius: 11, background: perms[item.key] ? C.green : C.border2, position: 'relative' as const, transition: 'background .2s', flexShrink: 0 }}>
                         <div style={{ position: 'absolute' as const, top: 3, left: perms[item.key] ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                       </div>
@@ -3017,6 +3037,94 @@ function LocationsModal({ op, onClose }: any) {
 }
 
 
+// ─── My Team (operator manages their own sub-operators & field staff) ───
+function MyTeamPage() {
+  const [team, setTeam] = useState<any[]>([])
+  const [myPerms, setMyPerms] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [permsFor, setPermsFor] = useState<any>(null)
+  const [err, setErr] = useState('')
+
+  const load = async () => {
+    setLoading(true); setErr('')
+    try {
+      const r = await fetch('/api/my-team')
+      const d = await r.json()
+      if (!r.ok || d.error) { setErr(d.error || 'Failed to load team'); setTeam([]) }
+      else { setTeam(Array.isArray(d.team) ? d.team : []); setMyPerms(d.my_permissions || null) }
+    } catch (e: any) { setErr(e.message) }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const subOps = team.filter((t: any) => t.role === 'sub_operator')
+  const staff = team.filter((t: any) => t.role === 'field_staff')
+
+  const Row = ({ m }: any) => {
+    const granted = m.permissions ? Object.keys(m.permissions).filter((k) => k.startsWith('can_') && m.permissions[k] === true).length : 0
+    const isSub = m.role === 'sub_operator'
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderTop: '1px solid ' + C.border, background: C.surface }}>
+        <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSub ? '#e0f7fa' : '#fff3ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: isSub ? '#0891b2' : C.orange, flexShrink: 0 }}>
+          {(m.name || m.email || '?').charAt(0).toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.name || '—'}</div>
+          <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>{m.email}</div>
+        </div>
+        <Pill color={isSub ? '#0891b2' : C.orange} bg={isSub ? '#e0f7fa' : '#fff3ea'}>
+          {isSub ? '🧑‍💼 Sub-Operator' : '👷 Field Staff'}
+        </Pill>
+        <span style={{ fontSize: 12, color: C.text3, minWidth: 92, textAlign: 'right' as const }}>{granted} permission{granted !== 1 ? 's' : ''}</span>
+        {isSub && (
+          <button onClick={() => setPermsFor(m)}
+            style={{ background: '#f5f3ff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#7c3aed', cursor: 'pointer', flexShrink: 0 }}>
+            🔐 Perms
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const Section = ({ title, rows, empty }: any) => (
+    <div style={{ border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', marginBottom: 18 }}>
+      <div style={{ padding: '11px 18px', background: C.surface2, fontSize: 12, fontWeight: 800, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+        {title} <span style={{ color: C.text3, fontWeight: 600 }}>· {rows.length}</span>
+      </div>
+      {rows.length === 0
+        ? <div style={{ padding: 26, textAlign: 'center' as const, color: C.text3, fontSize: 13, background: C.surface }}>{empty}</div>
+        : rows.map((m: any) => <Row key={m.id} m={m} />)}
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>My Team</div>
+        <div style={{ fontSize: 13, color: C.text2, marginTop: 3 }}>
+          People who work under your account. You can grant sub-operators any permission you hold yourself.
+        </div>
+      </div>
+
+      {err && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: C.redBg, color: C.red, fontSize: 13, fontWeight: 600 }}>{err}</div>}
+
+      {loading ? (
+        <div style={{ textAlign: 'center' as const, padding: 60, color: C.text3 }}>Loading team…</div>
+      ) : (
+        <>
+          <Section title="Sub-Operators" rows={subOps} empty="No sub-operators yet. Ask Fruitlink to add one under your account." />
+          <Section title="Field Staff" rows={staff} empty="No field staff yet." />
+          <div style={{ fontSize: 12, color: C.text3, padding: '0 2px' }}>
+            🔒 A permission you don&rsquo;t hold yourself is locked and cannot be granted.
+          </div>
+        </>
+      )}
+
+      {permsFor && <PermissionsModal op={permsFor} limitTo={myPerms || {}} onClose={() => { setPermsFor(null); load() }} />}
+    </div>
+  )
+}
+
 function OperatorsPage({ myId }: any) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -3026,25 +3134,32 @@ function OperatorsPage({ myId }: any) {
   const [assignOp, setAssignOp] = useState<any>(null)
   const [permissionsOp, setPermissionsOp] = useState<any>(null)
   const [locationsOp, setLocationsOp] = useState<any>(null)
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const J = { 'Content-Type': 'application/json' }
+  // Roles that must belong to a parent operator
+  const NEEDS_PARENT = ['sub_operator', 'field_staff']
+  // Only true operators can be a parent
+  const parentOperators = operators.filter((o: any) => o.role === 'operator')
   const fetchOperators = async () => {
     setLoading(true)
-    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,created_at&order=created_at.desc'))
+    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,created_at&order=created_at.desc'))
     const data = await res.json()
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
   useEffect(() => { fetchOperators() }, [])
-  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India' }); setEditOp(null); setShowAdd(true); setMsg('') }
-  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India' }); setEditOp(op); setShowAdd(true); setMsg('') }
+  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
+  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '' }); setEditOp(op); setShowAdd(true); setMsg('') }
   const saveOperator = async () => {
+    if (NEEDS_PARENT.includes(form.role) && !form.owner_id) {
+      setMsg('Please select the parent operator for this role'); return
+    }
     setSaving(true); setMsg('')
     try {
       if (editOp) {
-        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: form.role === 'field_staff' ? 'b3a5c89d-c243-46c6-be86-4293b5765e70' : null }
+        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null }
         if (form.password) {
           const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
@@ -3055,7 +3170,7 @@ function OperatorsPage({ myId }: any) {
       } else {
         const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
-        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: form.role === 'field_staff' ? 'b3a5c89d-c243-46c6-be86-4293b5765e70' : null }) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null }) })
         if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Added')
       }
@@ -3197,6 +3312,21 @@ function OperatorsPage({ myId }: any) {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
               </div>
             </div>
+            {NEEDS_PARENT.includes(form.role) && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Belongs To (Parent Operator) *</label>
+                <select value={form.owner_id} onChange={e => setForm({ ...form, owner_id: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: C.surface, color: C.text }}>
+                  <option value="">— Select operator —</option>
+                  {parentOperators.map((o: any) => (
+                    <option key={o.id} value={o.id}>{o.name || o.email}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>
+                  {form.role === 'sub_operator' ? 'Sub-operators manage this operator\u2019s machines.' : 'Field staff log visits for this operator\u2019s machines.'}
+                </div>
+              </div>
+            )}
             {msg && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAdd(false)} style={{ padding: '9px 18px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
@@ -4004,7 +4134,10 @@ export default function Dashboard() {
 
   useEffect(() => { if (ready) fetchData() }, [ready, fetchData])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // fl_session is HttpOnly — document.cookie cannot delete it, so the server
+    // must. Without this the session survived "logout" for its full 7 days.
+    try { await fetch('/api/logout', { method: 'POST' }) } catch { /* clear locally anyway */ }
     document.cookie.split(';').forEach(c => {
       document.cookie = c.split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'
     })
@@ -4019,6 +4152,9 @@ export default function Dashboard() {
     operators: role === 'super_admin'
       ? <OperatorsPage myId={operatorId} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    myteam: role === 'operator'
+      ? <ErrorBoundary><MyTeamPage /></ErrorBoundary>
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Only operators can manage a team.</div>,
     commlog: role === 'super_admin'
       ? <CommLogPage machines={machines} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
