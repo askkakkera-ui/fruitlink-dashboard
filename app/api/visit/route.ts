@@ -31,7 +31,9 @@ async function tenantMachineIds(ownerId: string): Promise<string[]> {
 }
 
 function tenantOf(session: any): string {
-  return session.owner_id ? String(session.owner_id) : '';
+  // A top-level operator IS the tenant: their own id is the owner id.
+  // Sub-operators and field staff carry owner_id pointing at their operator.
+  return session.owner_id ? String(session.owner_id) : String(session.sub || '');
 }
 
 async function sendTelegram(message: string) {
