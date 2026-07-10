@@ -152,6 +152,24 @@ export async function POST(request: NextRequest) {
     if (movement_type === 'sale' && !sold_to_operator_id && !sold_to_name) {
       return NextResponse.json({ error: 'sale needs a buyer (operator or name)' }, { status: 400, headers: NO_STORE });
     }
+    // Negative-stock guard: a movement may never take an owner's balance below zero.
+    // Applies to every stock-out (dispatch, sale, damage_warehouse, adjust-down).
+    // Corrections use 'receive' or 'adjust' up, never a forced negative.
+    if (signed < 0) {
+      const bres = await fetch(
+        SB_URL + '/rest/v1/stock_movements?select=qty_base&owner_id=eq.' + encodeURIComponent(ownerId) +
+        '&item_id=eq.' + encodeURIComponent(item_id),
+        { headers: sbHeaders() }
+      );
+      const brows = await bres.json();
+      const onHand = (Array.isArray(brows) ? brows : []).reduce((t: number, r: any) => t + Number(r.qty_base || 0), 0);
+      if (onHand + signed < 0) {
+        const unit = item.base_unit || 'unit';
+        return NextResponse.json({
+          error: 'Not enough stock. On hand: ' + onHand + ' ' + unit + 's; this would leave ' + (onHand + signed) + '.'
+        }, { status: 400, headers: NO_STORE });
+      }
+    }
 
     const row = {
       owner_id: ownerId,
