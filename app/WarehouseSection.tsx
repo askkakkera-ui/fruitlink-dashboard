@@ -24,7 +24,7 @@ type Movement = {
 };
 
 export default function WarehouseSection() {
-  const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'log'>('onhand');
+  const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'sale' | 'damage' | 'log'>('onhand');
   const [items, setItems] = useState<Item[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -37,6 +37,9 @@ export default function WarehouseSection() {
   const [packs, setPacks] = useState('');
   const [machineId, setMachineId] = useState('');
   const [note, setNote] = useState('');
+  const [operators, setOperators] = useState<{id:string;name:string}[]>([]);
+  const [soldToOp, setSoldToOp] = useState('');
+  const [soldToName, setSoldToName] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function loadOnhand() {
@@ -53,6 +56,14 @@ export default function WarehouseSection() {
       if (Array.isArray(d)) { setMachines(d); if (!machineId && d[0]) setMachineId(d[0].id); }
     } catch { /* ignore */ }
   }
+  async function loadOperators() {
+    try {
+      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role&role=eq.operator&order=name.asc'), { cache: 'no-store' });
+      const d = await r.json();
+      const arr = Array.isArray(d) ? d : [];
+      setOperators(arr.map((o:any)=>({id:o.id,name:o.name||o.email})));
+    } catch { /* ignore */ }
+  }
   async function loadLog() {
     try {
       const r = await fetch('/api/warehouse?movements=1', { cache: 'no-store' });
@@ -62,7 +73,7 @@ export default function WarehouseSection() {
   }
 
   useEffect(() => {
-    (async () => { setLoading(true); await loadOnhand(); await loadMachines(); await loadLog(); setLoading(false); })();
+    (async () => { setLoading(true); await loadOnhand(); await loadMachines(); await loadOperators(); await loadLog(); setLoading(false); })();
   }, []);
 
   useEffect(() => {
@@ -77,15 +88,17 @@ export default function WarehouseSection() {
   const selItem = itemById(itemId);
   const previewBase = selItem && packs ? Number(packs) * selItem.pack_size : 0;
 
-  async function record(movement_type: 'receive' | 'dispatch') {
+  async function record(movement_type: 'receive' | 'dispatch' | 'sale' | 'damage_warehouse') {
     setErr(''); setMsg('');
     if (!itemId) { setErr('Pick an item'); return; }
     if (!packs || Number(packs) <= 0) { setErr('Enter a quantity'); return; }
     if (movement_type === 'dispatch' && !machineId) { setErr('Pick a machine'); return; }
+    if (movement_type === 'sale' && !soldToOp && !soldToName.trim()) { setErr('Pick a buyer or type a name'); return; }
     setSaving(true);
     try {
       const body: any = { item_id: itemId, movement_type, packs: Number(packs), note: note.trim() || null };
       if (movement_type === 'dispatch') body.machine_id = machineId;
+      if (movement_type === 'sale') { if (soldToOp) body.sold_to_operator_id = soldToOp; else body.sold_to_name = soldToName.trim(); }
       const r = await fetch('/api/warehouse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Failed'); setSaving(false); return; }
@@ -105,7 +118,7 @@ export default function WarehouseSection() {
     <div style={{ padding: 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
       {/* tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-        {([['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['log', 'Movement log']] as const).map(([k, l]) => (
+        {([['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']] as const).map(([k, l]) => (
           <button key={k} onClick={() => { setTab(k); setErr(''); setMsg(''); }}
             style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
         ))}
@@ -120,7 +133,7 @@ export default function WarehouseSection() {
       {!loading && tab === 'onhand' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 }}>
           <div style={card}>
-            <div style={cardTitle}>Fruit (oranges)</div>
+            <div style={cardTitle}>Fruit</div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th><th style={{ ...th, textAlign: 'right' }}>Boxes</th></tr></thead>
               <tbody>
@@ -182,6 +195,53 @@ export default function WarehouseSection() {
         </div>
       )}
 
+      {!loading && tab === 'sale' && (
+        <div style={{ ...card, maxWidth: 560 }}>
+          <div style={cardTitle}>Sell stock to an operator or buyer</div>
+          <label style={lbl}>Item</label>
+          <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
+            <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+            <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+          </select>
+          <label style={lbl}>Buyer (operator)</label>
+          <select style={inp} value={soldToOp} onChange={e => { setSoldToOp(e.target.value); if (e.target.value) setSoldToName(''); }}>
+            <option value="">— Other buyer (type below) —</option>
+            {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          {!soldToOp && (<>
+            <label style={lbl}>Other buyer name</label>
+            <input style={inp} value={soldToName} onChange={e => setSoldToName(e.target.value)} placeholder="Buyer name (non-operator)" />
+          </>)}
+          <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
+          <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
+          {selItem && packs && <div style={{ marginTop: 6, color: C.orange, fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''}</div>}
+          <label style={lbl}>Note (optional)</label>
+          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Invoice / reference…" />
+          <button onClick={() => record('sale')} disabled={saving}
+            style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: C.orange, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving…' : 'Record sale'}
+          </button>
+        </div>
+      )}
+      {!loading && tab === 'damage' && (
+        <div style={{ ...card, maxWidth: 560 }}>
+          <div style={cardTitle}>Write off damaged stock from warehouse</div>
+          <label style={lbl}>Item</label>
+          <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
+            <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+            <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+          </select>
+          <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
+          <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
+          {selItem && packs && <div style={{ marginTop: 6, color: '#B00020', fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''} written off</div>}
+          <label style={lbl}>Reason</label>
+          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Rotten / spoiled / damaged…" />
+          <button onClick={() => record('damage_warehouse')} disabled={saving}
+            style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: '#B00020', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving…' : 'Write off damaged'}
+          </button>
+        </div>
+      )}
       {/* LOG */}
       {!loading && tab === 'log' && (
         <div style={card}>

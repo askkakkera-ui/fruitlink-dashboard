@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const item_id = String(body.item_id || '');
     const movement_type = String(body.movement_type || '');
-    if (!item_id || !['receive', 'dispatch', 'adjust'].includes(movement_type)) {
+    if (!item_id || !['receive', 'dispatch', 'adjust', 'sale', 'damage_warehouse'].includes(movement_type)) {
       return NextResponse.json({ error: 'item_id and valid movement_type required' }, { status: 400, headers: NO_STORE });
     }
 
@@ -140,12 +140,19 @@ export async function POST(request: NextRequest) {
 
     let signed = qty_base;
     if (movement_type === 'dispatch') signed = -Math.abs(qty_base);
+    if (movement_type === 'sale') signed = -Math.abs(qty_base);
+    if (movement_type === 'damage_warehouse') signed = -Math.abs(qty_base);
     if (movement_type === 'receive') signed = Math.abs(qty_base);
     if (movement_type === 'adjust' && body.direction === 'down') signed = -Math.abs(qty_base);
 
     const machine_id = body.machine_id ? String(body.machine_id) : null;
     if (movement_type === 'dispatch' && !machine_id) {
       return NextResponse.json({ error: 'dispatch needs a machine' }, { status: 400, headers: NO_STORE });
+    }
+    const sold_to_operator_id = body.sold_to_operator_id ? String(body.sold_to_operator_id) : null;
+    const sold_to_name = body.sold_to_name ? String(body.sold_to_name).slice(0, 200) : null;
+    if (movement_type === 'sale' && !sold_to_operator_id && !sold_to_name) {
+      return NextResponse.json({ error: 'sale needs a buyer (operator or name)' }, { status: 400, headers: NO_STORE });
     }
 
     const row = {
@@ -156,6 +163,8 @@ export async function POST(request: NextRequest) {
       packs: packs,
       machine_id,
       note: body.note ? String(body.note).slice(0, 500) : null,
+      sold_to_operator_id,
+      sold_to_name,
       created_by: String(session.sub || ''),
     };
     const res = await fetch(SB_URL + '/rest/v1/stock_movements', {
