@@ -17,7 +17,7 @@ type Visit = { id: string; staff_id: string; machine_id?: string; visit_type?: s
 
 function fmtDate(t?: string) {
   if (!t) return '—';
-  try { return new Date(t).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return t; }
+  try { return new Date(t).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }); } catch { return t; }
 }
 function fmtAgo(t?: string) {
   if (!t) return '';
