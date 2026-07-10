@@ -4164,7 +4164,7 @@ export default function Dashboard() {
     machines: <ErrorBoundary><MachinesPage machines={machines} loading={loading} fetchData={fetchData} /></ErrorBoundary>,
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
-    warehouse: <WarehouseSection />,
+    warehouse: <WarehouseSection role={uRole} />,
     notifyconfig: <NotifyConfigSection />,
     reports: <ReportsSection />,
     fieldstaff: role === 'super_admin'

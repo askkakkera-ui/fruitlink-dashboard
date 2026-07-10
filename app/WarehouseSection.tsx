@@ -23,8 +23,9 @@ type Movement = {
   machine_id?: string; note?: string; created_at: string; created_by_name?: string;
 };
 
-export default function WarehouseSection() {
-  const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'sale' | 'damage' | 'log'>('onhand');
+export default function WarehouseSection({ role = 'operator' }: { role?: string }) {
+  const isSuper = role === 'super_admin';
+  const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'sale' | 'damage' | 'transfer' | 'incoming' | 'log'>('onhand');
   const [items, setItems] = useState<Item[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -40,6 +41,8 @@ export default function WarehouseSection() {
   const [operators, setOperators] = useState<{id:string;name:string}[]>([]);
   const [soldToOp, setSoldToOp] = useState('');
   const [soldToName, setSoldToName] = useState('');
+  const [xferTo, setXferTo] = useState('');
+  const [pending, setPending] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
   async function loadOnhand() {
@@ -64,6 +67,24 @@ export default function WarehouseSection() {
       setOperators(arr.map((o:any)=>({id:o.id,name:o.name||o.email})));
     } catch { /* ignore */ }
   }
+  async function loadPending() {
+    try {
+      const r = await fetch('/api/transfer?pending=1', { cache: 'no-store' });
+      const d = await r.json();
+      setPending(Array.isArray(d) ? d : []);
+    } catch { /* ignore */ }
+  }
+  async function resolveTransfer(transfer_id: string, action: 'confirm' | 'reject') {
+    setErr(''); setMsg(''); setSaving(true);
+    try {
+      const r = await fetch('/api/transfer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transfer_id, action }) });
+      const d = await r.json();
+      if (!r.ok || d.error) { setErr(d.error || 'Failed'); setSaving(false); return; }
+      setMsg(action === 'confirm' ? 'Receipt confirmed. Stock added to your warehouse.' : 'Transfer rejected. Stock returned to sender.');
+      await loadPending(); await loadOnhand(); await loadLog();
+    } catch { setErr('Network problem'); }
+    setSaving(false);
+  }
   async function loadLog() {
     try {
       const r = await fetch('/api/warehouse?movements=1', { cache: 'no-store' });
@@ -73,7 +94,7 @@ export default function WarehouseSection() {
   }
 
   useEffect(() => {
-    (async () => { setLoading(true); await loadOnhand(); await loadMachines(); await loadOperators(); await loadLog(); setLoading(false); })();
+    (async () => { setLoading(true); await loadOnhand(); await loadMachines(); await loadOperators(); await loadPending(); await loadLog(); setLoading(false); })();
   }, []);
 
   useEffect(() => {
@@ -88,17 +109,19 @@ export default function WarehouseSection() {
   const selItem = itemById(itemId);
   const previewBase = selItem && packs ? Number(packs) * selItem.pack_size : 0;
 
-  async function record(movement_type: 'receive' | 'dispatch' | 'sale' | 'damage_warehouse') {
+  async function record(movement_type: 'receive' | 'dispatch' | 'sale' | 'damage_warehouse' | 'transfer_out') {
     setErr(''); setMsg('');
     if (!itemId) { setErr('Pick an item'); return; }
     if (!packs || Number(packs) <= 0) { setErr('Enter a quantity'); return; }
     if (movement_type === 'dispatch' && !machineId) { setErr('Pick a machine'); return; }
     if (movement_type === 'sale' && !soldToOp && !soldToName.trim()) { setErr('Pick a buyer or type a name'); return; }
+    if (movement_type === 'transfer_out' && !xferTo) { setErr('Pick an operator to transfer to'); return; }
     setSaving(true);
     try {
       const body: any = { item_id: itemId, movement_type, packs: Number(packs), note: note.trim() || null };
       if (movement_type === 'dispatch') body.machine_id = machineId;
       if (movement_type === 'sale') { if (soldToOp) body.sold_to_operator_id = soldToOp; else body.sold_to_name = soldToName.trim(); }
+      if (movement_type === 'transfer_out') body.transfer_to_operator_id = xferTo;
       const r = await fetch('/api/warehouse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Failed'); setSaving(false); return; }
@@ -118,7 +141,9 @@ export default function WarehouseSection() {
     <div style={{ padding: 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
       {/* tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-        {([['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']] as const).map(([k, l]) => (
+        {((isSuper
+          ? [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['transfer', 'Transfer'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]
+          : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['incoming', 'Incoming' + (pending.length ? ' (' + pending.length + ')' : '')], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][]).map(([k, l]) => (
           <button key={k} onClick={() => { setTab(k); setErr(''); setMsg(''); }}
             style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
         ))}
@@ -240,6 +265,58 @@ export default function WarehouseSection() {
             style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: '#B00020', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
             {saving ? 'Saving…' : 'Write off damaged'}
           </button>
+        </div>
+      )}
+      {!loading && tab === 'transfer' && isSuper && (
+        <div style={{ ...card, maxWidth: 560 }}>
+          <div style={cardTitle}>Transfer stock to an operator</div>
+          <div style={{ fontSize: 13, color: C.text2, marginBottom: 10 }}>Stock leaves your warehouse immediately and stays in transit until the operator confirms receipt.</div>
+          <label style={lbl}>Item</label>
+          <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
+            <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+            <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+          </select>
+          <label style={lbl}>To operator</label>
+          <select style={inp} value={xferTo} onChange={e => setXferTo(e.target.value)}>
+            <option value="">— Pick an operator —</option>
+            {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
+          <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
+          {selItem && packs && <div style={{ marginTop: 6, color: C.orange, fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''}</div>}
+          <label style={lbl}>Note (optional)</label>
+          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Delivery reference…" />
+          <button onClick={() => record('transfer_out')} disabled={saving}
+            style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: C.blue, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Sending…' : 'Send transfer'}
+          </button>
+        </div>
+      )}
+      {!loading && tab === 'incoming' && (
+        <div style={card}>
+          <div style={cardTitle}>Incoming stock awaiting your confirmation</div>
+          {pending.length === 0 && <div style={{ color: C.text2, fontSize: 14 }}>Nothing in transit.</div>}
+          {pending.map((t: any) => {
+            const it = itemById(t.item_id);
+            const qty = Math.abs(Number(t.qty_base || 0));
+            return (
+              <div key={t.transfer_id} style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{qty} {it?.base_unit || 'unit'}{qty !== 1 ? 's' : ''} · {it?.name || 'Item'}</div>
+                <div style={{ fontSize: 13, color: C.text2, marginTop: 3 }}>Sent {new Date(t.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                {t.note && <div style={{ fontSize: 13, color: C.text3, marginTop: 3, fontStyle: 'italic' }}>{t.note}</div>}
+                <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+                  <button onClick={() => resolveTransfer(t.transfer_id, 'confirm')} disabled={saving}
+                    style={{ padding: '9px 18px', border: 'none', borderRadius: 8, background: '#1B5E20', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                    Confirm receipt
+                  </button>
+                  <button onClick={() => resolveTransfer(t.transfer_id, 'reject')} disabled={saving}
+                    style={{ padding: '9px 18px', border: '1px solid ' + C.border, borderRadius: 8, background: C.surface, color: '#B00020', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       {/* LOG */}
