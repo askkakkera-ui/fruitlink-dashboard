@@ -41,22 +41,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
     const sp = request.nextUrl.searchParams;
-    let ownerFilter = '';
-    if (role === 'operator') ownerFilter = 'owner_id=eq.' + encodeURIComponent(ownerForOperator(session));
-    if (role === 'sub_operator') ownerFilter = 'owner_id=eq.' + encodeURIComponent(String(session.owner_id || ''));
-    else if (sp.get('owner')) ownerFilter = 'owner_id=eq.' + encodeURIComponent(String(sp.get('owner')));
+    // Tenant scope. owner_id is ALWAYS derived from the session, never client input.
+    // Only super_admin may inspect another owner's warehouse via ?owner=.
+    let scopeOwner = '';
+    if (role === 'super_admin') scopeOwner = String(sp.get('owner') || ownerForOperator(session));
+    else if (role === 'operator') scopeOwner = ownerForOperator(session);
+    else if (role === 'sub_operator') scopeOwner = String(session.owner_id || '');
+    const ownerFilter = scopeOwner ? 'owner_id=eq.' + encodeURIComponent(scopeOwner) : '';
 
     if (sp.get('items') === '1') {
-      let url = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true&order=category.asc,size.asc,name.asc';
-      if (ownerFilter) url += '&' + ownerFilter;
+      const url = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true&order=category.asc,size.asc,name.asc';
       const r = await fetch(url, { headers: sbHeaders() });
       const d = await r.json();
       return NextResponse.json(Array.isArray(d) ? d : [], { headers: NO_STORE });
     }
 
     if (sp.get('onhand') === '1') {
-      let iurl = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true';
-      if (ownerFilter) iurl += '&' + ownerFilter;
+      const iurl = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true';
       const ir = await fetch(iurl, { headers: sbHeaders() });
       const items = await ir.json();
       let murl = SB_URL + '/rest/v1/stock_movements?select=item_id,qty_base';
@@ -120,10 +121,7 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(irows) || !irows[0]) return NextResponse.json({ error: 'item not found' }, { status: 404, headers: NO_STORE });
     const item = irows[0];
 
-    if ((role === 'operator' || role === 'sub_operator') && String(item.owner_id) !== ownerForOperator(session)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
-    }
-    const ownerId = String(item.owner_id);
+    const ownerId = role === 'sub_operator' ? String(session.owner_id || '') : ownerForOperator(session);
 
     let qty_base: number;
     const packs = body.packs != null && body.packs !== '' ? Number(body.packs) : null;
