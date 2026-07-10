@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { randomUUID } from 'crypto';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const item_id = String(body.item_id || '');
     const movement_type = String(body.movement_type || '');
-    if (!item_id || !['receive', 'dispatch', 'adjust', 'sale', 'damage_warehouse'].includes(movement_type)) {
+    if (!item_id || !['receive', 'dispatch', 'adjust', 'sale', 'damage_warehouse', 'transfer_out'].includes(movement_type)) {
       return NextResponse.json({ error: 'item_id and valid movement_type required' }, { status: 400, headers: NO_STORE });
     }
 
@@ -140,12 +141,26 @@ export async function POST(request: NextRequest) {
     if (movement_type === 'dispatch') signed = -Math.abs(qty_base);
     if (movement_type === 'sale') signed = -Math.abs(qty_base);
     if (movement_type === 'damage_warehouse') signed = -Math.abs(qty_base);
+    if (movement_type === 'transfer_out') signed = -Math.abs(qty_base);
     if (movement_type === 'receive') signed = Math.abs(qty_base);
     if (movement_type === 'adjust' && body.direction === 'down') signed = -Math.abs(qty_base);
 
     const machine_id = body.machine_id ? String(body.machine_id) : null;
     if (movement_type === 'dispatch' && !machine_id) {
       return NextResponse.json({ error: 'dispatch needs a machine' }, { status: 400, headers: NO_STORE });
+    }
+    const transfer_to_operator_id = body.transfer_to_operator_id ? String(body.transfer_to_operator_id) : null;
+    if (movement_type === 'transfer_out') {
+      // Policy: only super_admin initiates transfers. Mechanism stays general (any owner -> any owner).
+      if (role !== 'super_admin') {
+        return NextResponse.json({ error: 'Only Fruitlink may transfer stock' }, { status: 403, headers: NO_STORE });
+      }
+      if (!transfer_to_operator_id) {
+        return NextResponse.json({ error: 'transfer needs a destination operator' }, { status: 400, headers: NO_STORE });
+      }
+      if (transfer_to_operator_id === ownerId) {
+        return NextResponse.json({ error: 'cannot transfer to yourself' }, { status: 400, headers: NO_STORE });
+      }
     }
     const sold_to_operator_id = body.sold_to_operator_id ? String(body.sold_to_operator_id) : null;
     const sold_to_name = body.sold_to_name ? String(body.sold_to_name).slice(0, 200) : null;
@@ -181,6 +196,9 @@ export async function POST(request: NextRequest) {
       note: body.note ? String(body.note).slice(0, 500) : null,
       sold_to_operator_id,
       sold_to_name,
+      transfer_to_operator_id,
+      transfer_id: movement_type === 'transfer_out' ? randomUUID() : null,
+      transfer_status: movement_type === 'transfer_out' ? 'in_transit' : null,
       created_by: String(session.sub || ''),
     };
     const res = await fetch(SB_URL + '/rest/v1/stock_movements', {
