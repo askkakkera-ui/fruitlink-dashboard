@@ -68,6 +68,16 @@ export async function GET(request: NextRequest) {
       const md = await mr.json();
       return NextResponse.json(Array.isArray(md) ? md : [], { headers: NO_STORE });
     }
+    // Operators this caller may sell to (never themselves).
+    if (sp.get('buyers') === '1') {
+      const me = role === 'sub_operator' ? String(session.owner_id || '') : ownerForOperator(session);
+      const r = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email&role=eq.operator&order=name.asc', { headers: sbHeaders() });
+      const rows = await r.json();
+      const out = (Array.isArray(rows) ? rows : [])
+        .filter((o: any) => String(o.id) !== String(me))
+        .map((o: any) => ({ id: o.id, name: o.name || o.email }));
+      return NextResponse.json(out, { headers: NO_STORE });
+    }
     if (sp.get('items') === '1') {
       const url = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true&order=category.asc,size.asc,name.asc';
       const r = await fetch(url, { headers: sbHeaders() });
@@ -221,6 +231,9 @@ export async function POST(request: NextRequest) {
     const sold_to_name = body.sold_to_name ? String(body.sold_to_name).slice(0, 200) : null;
     if (movement_type === 'sale' && !sold_to_operator_id && !sold_to_name) {
       return NextResponse.json({ error: 'sale needs a buyer (operator or name)' }, { status: 400, headers: NO_STORE });
+    }
+    if (movement_type === 'sale' && sold_to_operator_id && sold_to_operator_id === ownerId) {
+      return NextResponse.json({ error: 'cannot sell to yourself' }, { status: 400, headers: NO_STORE });
     }
     // Negative-stock guard: a movement may never take an owner's balance below zero.
     // Applies to every stock-out (dispatch, sale, damage_warehouse, adjust-down).

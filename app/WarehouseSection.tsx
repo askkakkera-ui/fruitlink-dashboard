@@ -62,7 +62,8 @@ export default function WarehouseSection({ role = 'operator' }: { role?: string 
   }
   async function loadOperators() {
     try {
-      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role&role=eq.operator&order=name.asc'), { cache: 'no-store' });
+      // Server decides who this user may sell/transfer to (never themselves).
+      const r = await fetch('/api/warehouse?buyers=1', { cache: 'no-store' });
       const d = await r.json();
       const arr = Array.isArray(d) ? d : [];
       setOperators(arr.map((o:any)=>({id:o.id,name:o.name||o.email})));
