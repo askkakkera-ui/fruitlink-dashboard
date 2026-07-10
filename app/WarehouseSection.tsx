@@ -53,8 +53,9 @@ export default function WarehouseSection({ role = 'operator' }: { role?: string 
     } catch { setErr('Could not load stock'); }
   }
   async function loadMachines() {
+    // Only machines this user may actually dispatch to (server decides; same rule the POST guard enforces).
     try {
-      const r = await fetch('/api/visit?machines=1', { cache: 'no-store' });
+      const r = await fetch('/api/warehouse?dispatchable=1', { cache: 'no-store' });
       const d = await r.json();
       if (Array.isArray(d)) { setMachines(d); if (!machineId && d[0]) setMachineId(d[0].id); }
     } catch { /* ignore */ }
@@ -124,11 +125,17 @@ export default function WarehouseSection({ role = 'operator' }: { role?: string 
       if (movement_type === 'transfer_out') body.transfer_to_operator_id = xferTo;
       const r = await fetch('/api/warehouse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
-      if (!r.ok || d.error) { setErr(d.error || 'Failed'); setSaving(false); return; }
+      if (!r.ok || d.error) { setErr(d.error || 'Failed'); setPacks(''); setSaving(false); return; }
       const it = itemById(itemId);
       const base = Number(packs) * (it ? it.pack_size : 1);
-      setMsg(`${movement_type === 'receive' ? 'Received' : 'Dispatched'} ${packs} ${it?.pack_label || ''}${Number(packs) > 1 ? 's' : ''} = ${base} ${it?.base_unit || ''}${base > 1 ? 's' : ''}.`);
-      setPacks(''); setNote('');
+      const verb = movement_type === 'receive' ? 'Received'
+        : movement_type === 'dispatch' ? 'Dispatched'
+        : movement_type === 'sale' ? 'Sold'
+        : movement_type === 'damage_warehouse' ? 'Wrote off'
+        : movement_type === 'transfer_out' ? 'Sent'
+        : 'Recorded';
+      setMsg(`${verb} ${packs} ${it?.pack_label || ''}${Number(packs) > 1 ? 's' : ''} = ${base} ${it?.base_unit || ''}${base > 1 ? 's' : ''}.`);
+      setPacks(''); setNote(''); setXferTo(''); setSoldToOp(''); setSoldToName('');
       await loadOnhand(); await loadLog();
     } catch { setErr('Network problem'); }
     setSaving(false);
@@ -201,9 +208,15 @@ export default function WarehouseSection({ role = 'operator' }: { role?: string 
 
           {tab === 'dispatch' && (<>
             <label style={lbl}>To machine</label>
-            <select style={inp} value={machineId} onChange={e => setMachineId(e.target.value)}>
-              {machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}</option>)}
-            </select>
+            {machines.length === 0 ? (
+              <div style={{ padding: '10px 12px', borderRadius: 8, background: '#fff3ea', color: '#B25000', fontSize: 13.5, marginBottom: 4 }}>
+                You do not service any machines. Use the Transfer tab to send stock to an operator.
+              </div>
+            ) : (
+              <select style={inp} value={machineId} onChange={e => setMachineId(e.target.value)}>
+                {machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}</option>)}
+              </select>
+            )}
           </>)}
 
           <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}${selItem.pack_size > 1 ? `s — 1 ${selItem.pack_label} = ${selItem.pack_size} ${selItem.base_unit}s` : 's'})` : ''}</label>

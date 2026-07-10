@@ -50,6 +50,24 @@ export async function GET(request: NextRequest) {
     else if (role === 'sub_operator') scopeOwner = String(session.owner_id || '');
     const ownerFilter = scopeOwner ? 'owner_id=eq.' + encodeURIComponent(scopeOwner) : '';
 
+    // Machines this caller may dispatch to (same rule the POST guard enforces).
+    if (sp.get('dispatchable') === '1') {
+      const wantMode = role === 'super_admin' ? 'fruitlink_service' : 'self_service';
+      const sr = await fetch(SB_URL + '/rest/v1/service_arrangement?select=machine_id,mode&mode=eq.' + wantMode, { headers: sbHeaders() });
+      const srows = await sr.json();
+      let ids: string[] = (Array.isArray(srows) ? srows : []).map((r: any) => r.machine_id).filter(Boolean);
+      if (role !== 'super_admin') {
+        const gr = await fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(String(session.sub || '')), { headers: sbHeaders() });
+        const grows = await gr.json();
+        const mine = new Set((Array.isArray(grows) ? grows : []).map((r: any) => String(r.machine_id)));
+        ids = ids.filter((id) => mine.has(String(id)));
+      }
+      if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
+      const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
+      const mr = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,name,sn,location&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
+      const md = await mr.json();
+      return NextResponse.json(Array.isArray(md) ? md : [], { headers: NO_STORE });
+    }
     if (sp.get('items') === '1') {
       const url = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true&order=category.asc,size.asc,name.asc';
       const r = await fetch(url, { headers: sbHeaders() });
