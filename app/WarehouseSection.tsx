@@ -144,7 +144,7 @@ export default function WarehouseSection({ role = 'operator' }: { role?: string 
         {((isSuper
           ? [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['transfer', 'Transfer'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]
           : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['incoming', 'Incoming' + (pending.length ? ' (' + pending.length + ')' : '')], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][]).map(([k, l]) => (
-          <button key={k} onClick={() => { setTab(k); setErr(''); setMsg(''); }}
+          <button key={k} onClick={() => { setTab(k as any); setErr(''); setMsg(''); }}
             style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
         ))}
       </div>
