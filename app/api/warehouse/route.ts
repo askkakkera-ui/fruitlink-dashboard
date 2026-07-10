@@ -149,6 +149,43 @@ export async function POST(request: NextRequest) {
     if (movement_type === 'dispatch' && !machine_id) {
       return NextResponse.json({ error: 'dispatch needs a machine' }, { status: 400, headers: NO_STORE });
     }
+    // Dispatch scoping: you may only load a machine you actually service.
+    // super_admin  -> machines on fruitlink_service
+    // operator/sub -> their own machines, on self_service
+    if (movement_type === 'dispatch' && machine_id) {
+      const sr = await fetch(
+        SB_URL + '/rest/v1/service_arrangement?select=mode,owner_id&machine_id=eq.' + encodeURIComponent(machine_id) + '&limit=1',
+        { headers: sbHeaders() }
+      );
+      const srows = await sr.json();
+      let mode = Array.isArray(srows) && srows[0] ? String(srows[0].mode || '') : '';
+      if (!mode) {
+        const dr = await fetch(
+          SB_URL + '/rest/v1/service_arrangement?select=mode&machine_id=is.null&owner_id=eq.' + encodeURIComponent(ownerId) + '&limit=1',
+          { headers: sbHeaders() }
+        );
+        const drows = await dr.json();
+        mode = Array.isArray(drows) && drows[0] ? String(drows[0].mode || 'self_service') : 'self_service';
+      }
+      if (role === 'super_admin') {
+        if (mode !== 'fruitlink_service') {
+          return NextResponse.json({ error: 'You do not service this machine. Transfer stock to the operator instead.' }, { status: 403, headers: NO_STORE });
+        }
+      } else {
+        const gr = await fetch(
+          SB_URL + '/rest/v1/machine_operators?select=machine_id&machine_id=eq.' + encodeURIComponent(machine_id) +
+          '&operator_id=eq.' + encodeURIComponent(String(session.sub || '')) + '&limit=1',
+          { headers: sbHeaders() }
+        );
+        const grows = await gr.json();
+        if (!Array.isArray(grows) || !grows[0]) {
+          return NextResponse.json({ error: 'That machine is not assigned to you' }, { status: 403, headers: NO_STORE });
+        }
+        if (mode !== 'self_service') {
+          return NextResponse.json({ error: 'Fruitlink services this machine' }, { status: 403, headers: NO_STORE });
+        }
+      }
+    }
     const transfer_to_operator_id = body.transfer_to_operator_id ? String(body.transfer_to_operator_id) : null;
     if (movement_type === 'transfer_out') {
       // Policy: only super_admin initiates transfers. Mechanism stays general (any owner -> any owner).
