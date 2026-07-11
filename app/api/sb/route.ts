@@ -14,7 +14,9 @@ const MACHINE_SCOPED_TABLES = ['orders', 'alerts', 'telemetry', 'stock_events', 
 // Tables scoped to the operator's own machine rows (by the machines.id column).
 const MACHINE_ID_TABLES = ['machines'];
 // Tables an operator may read fully (non-sensitive shared/reference data).
-const OPERATOR_READABLE_ALL = ['ad_campaign', 'ad_campaign_performance', 'ads', 'ad_impression', 'loyalty', 'machine_config', 'role_permissions'];
+const OPERATOR_READABLE_ALL = ['ads', 'ad_impression', 'loyalty', 'machine_config', 'role_permissions'];
+// Ad tables are operator-scoped by ad_campaign.operator_id (see scopeGetPath / guardWrite).
+const AD_OWNED_TABLES = ['ad_campaign', 'ad_campaign_performance'];
 // Tables where a plain operator may only see their own row(s).
 // operators -> own row (id = sub); machine_operators -> own grants (operator_id = sub)
 
@@ -87,6 +89,10 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
     if (table === 'operators') return { path: appendFilter(rawPath, 'id=eq.' + encodeURIComponent(sub)) };
     // machine_operators -> only their own grants
     if (table === 'machine_operators') return { path: appendFilter(rawPath, 'operator_id=eq.' + encodeURIComponent(sub)) };
+    // ad tables: operators see only their OWN campaigns (by operator_id).
+    if (AD_OWNED_TABLES.includes(table)) {
+      return { path: appendFilter(rawPath, 'operator_id=eq.' + encodeURIComponent(sub)) };
+    }
     // fully-readable reference/shared tables
     if (OPERATOR_READABLE_ALL.includes(table)) return { path: rawPath };
 
@@ -109,6 +115,10 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
     if (!parentId) return { block: true };
     if (table === 'operators') return { path: appendFilter(rawPath, 'id=eq.' + encodeURIComponent(sub)) };
     if (table === 'machine_operators') return { path: appendFilter(rawPath, 'operator_id=eq.' + encodeURIComponent(parentId)) };
+    // ad tables: sub-operators see the parent operator's campaigns.
+    if (AD_OWNED_TABLES.includes(table)) {
+      return { path: appendFilter(rawPath, 'operator_id=eq.' + encodeURIComponent(parentId)) };
+    }
     if (OPERATOR_READABLE_ALL.includes(table)) return { path: rawPath };
     if (MACHINE_ID_TABLES.includes(table) || MACHINE_SCOPED_TABLES.includes(table)) {
       const ids = await allowedMachineIds(parentId);
@@ -152,10 +162,97 @@ export async function GET(request: NextRequest) {
 // Shared write guard: logged in; sensitive tables need super_admin.
 const FIELD_STAFF_WRITE_TABLES = ['visits'];
 
+// Resolve the SNs (not ids) a given operator is allowed to target, for ad
+// machine_sns validation. Joins machine_operators -> machines.sn server-side.
+async function allowedMachineSns(operatorId: string): Promise<string[]> {
+  const ids = await allowedMachineIds(operatorId);
+  if (ids.length === 0) return [];
+  const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
+  const url = SB_URL + '/rest/v1/machines?select=sn&id=in.' + inList;
+  const res = await fetch(url, { headers: sbHeaders() });
+  if (!res.ok) return [];
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows.map((r: any) => r.sn).filter(Boolean) : [];
+}
+
+// Fetch a campaign's owner (operator_id) by id, to authorise edits/deletes.
+async function campaignOwner(campaignId: string): Promise<string | null> {
+  const url = SB_URL + '/rest/v1/ad_campaign?select=operator_id&id=eq.' + encodeURIComponent(campaignId) + '&limit=1';
+  const res = await fetch(url, { headers: sbHeaders() });
+  if (!res.ok) return null;
+  const rows = await res.json();
+  return Array.isArray(rows) && rows[0] ? String(rows[0].operator_id || '') : null;
+}
+
+// Pull the id from a PostgREST filter like ?id=eq.<uuid> (used for PATCH/DELETE).
+function idEqOf(path: string): string {
+  const m = path.match(/[?&]id=eq\.([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 async function guardWrite(request: NextRequest, method: string) {
   const session = await getSession(request);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const table = tableOf(pathParam(request));
+  const rawPath = pathParam(request);
+  const table = tableOf(rawPath);
+
+  // ── Ad campaigns: operator-scoped writes (super_admin unrestricted) ──
+  if (AD_OWNED_TABLES.includes(table) && session.role !== 'super_admin') {
+    // Only operators / sub_operators with the can_manage_ads permission.
+    const role = session.role;
+    if (role !== 'operator' && role !== 'sub_operator') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const perms = session.permissions || {};
+    if (perms.can_manage_ads !== true) {
+      return NextResponse.json({ error: 'Forbidden: ad management not permitted' }, { status: 403 });
+    }
+    // The operator whose ads these are: self for operator, parent for sub_operator.
+    const ownerOpId = role === 'sub_operator'
+      ? String(session.owner_id || session.parent_id || '')
+      : String(session.sub || '');
+    if (!ownerOpId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // ad_campaign_performance is read-only for operators (written by the system).
+    if (table === 'ad_campaign_performance') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // On edit/delete: the target campaign must belong to this operator.
+    if (method === 'PATCH' || method === 'DELETE') {
+      const cid = idEqOf(rawPath);
+      if (!cid) return NextResponse.json({ error: 'Forbidden: campaign id required' }, { status: 403 });
+      const owner = await campaignOwner(cid);
+      if (owner === null || owner !== ownerOpId) {
+        return NextResponse.json({ error: 'Forbidden: not your campaign' }, { status: 403 });
+      }
+    }
+
+    // On create/edit: validate the body — stamp operator_id, and ensure every
+    // targeted machine SN belongs to this operator.
+    if (method === 'POST' || method === 'PATCH') {
+      let body: any = {};
+      try { body = JSON.parse(await request.clone().text() || '{}'); } catch { body = {}; }
+      // machine targeting check
+      const sns: string[] = Array.isArray(body.machine_sns) ? body.machine_sns.map(String) : [];
+      if (sns.length > 0) {
+        const allowed = new Set(await allowedMachineSns(ownerOpId));
+        const bad = sns.filter((s) => !allowed.has(s));
+        if (bad.length > 0) {
+          return NextResponse.json({ error: 'Forbidden: machines not yours', machines: bad }, { status: 403 });
+        }
+      }
+      // Force operator_id to the correct owner (ignore any client-supplied value).
+      body.operator_id = ownerOpId;
+      // Operators may never self-approve third-party ads; approval stays server/DB-driven.
+      if ('approval' in body && body.approval === 'approved') delete body.approval;
+      // Rewrite the request body with the sanitised version.
+      return { rewriteBody: JSON.stringify(body) } as any;
+    }
+    return null;
+  }
+
+  // ── Existing rules ──
   if (SUPER_ADMIN_WRITE_TABLES.includes(table) && session.role !== 'super_admin') {
     return NextResponse.json({ error: 'Forbidden: super admin only' }, { status: 403 });
   }
@@ -169,9 +266,10 @@ async function guardWrite(request: NextRequest, method: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const blocked = await guardWrite(request, 'POST'); if (blocked) return blocked;
+    const g = await guardWrite(request, 'POST');
+    if (g instanceof NextResponse) return g;
     const url = SB_URL + pathParam(request);
-    const body = await request.text();
+    const body = (g && (g as any).rewriteBody) ? (g as any).rewriteBody : await request.text();
     const res = await fetch(url, { method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }), body });
     const data = await res.json();
     return NextResponse.json(data);
@@ -180,9 +278,10 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const blocked = await guardWrite(request, 'PATCH'); if (blocked) return blocked;
+    const g = await guardWrite(request, 'PATCH');
+    if (g instanceof NextResponse) return g;
     const url = SB_URL + pathParam(request);
-    const body = await request.text();
+    const body = (g && (g as any).rewriteBody) ? (g as any).rewriteBody : await request.text();
     const res = await fetch(url, { method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }), body });
     const text = await res.text();
     return new NextResponse(text, { status: res.status });
@@ -191,7 +290,8 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const blocked = await guardWrite(request, 'DELETE'); if (blocked) return blocked;
+    const g = await guardWrite(request, 'DELETE');
+    if (g instanceof NextResponse) return g;
     const url = SB_URL + pathParam(request);
     const res = await fetch(url, { method: 'DELETE', headers: sbHeaders({ Prefer: 'return=minimal' }) });
     return new NextResponse(null, { status: res.status });
