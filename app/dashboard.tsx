@@ -2041,10 +2041,142 @@ function FleetMapPage({ machines }: { machines: any[] }) {
 //      ads: <AdsPage machines={machines} />
 //  in the pages map keeps working with no edit.
 // ═══════════════════════════════════════════════════════════════════════
-function AdsPage({ machines }: { machines: any[] }) {
+// ─────────────────────────────────────────────────────────────────────────────
+//  BottomTilesPanel — per-machine idle-screen bottom tiles (left 60% / right 40%)
+//  These are the two fixed signage images below the top ad zone. They are NOT
+//  ad campaigns: they live in machines.state.screen_config.bottom_left_url /
+//  bottom_right_url and are read by the machine app's BottomTilesLoader.
+//  Uploading reuses the same /api/upload presigned-PUT flow as ad media.
+// ─────────────────────────────────────────────────────────────────────────────
+function BottomTilesPanel({ machines }: { machines: any[] }) {
+  const parseSC = (m: any) => {
+    try { const st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}); return st.screen_config || {} } catch { return {} }
+  }
+  const [sel, setSel] = useState<string>(machines[0]?.sn || '')
+  const [left, setLeft] = useState('')
+  const [right, setRight] = useState('')
+  const [busy, setBusy] = useState<'' | 'left' | 'right' | 'save'>('')
+  const [savedAt, setSavedAt] = useState<number>(0)
+  const [dirty, setDirty] = useState(false)
+
+  const machine = machines.find(m => m.sn === sel)
+
+  // Load the selected machine's current tile URLs whenever the selection changes.
+  useEffect(() => {
+    if (!machine) return
+    const sc = parseSC(machine)
+    setLeft(sc.bottom_left_url || '')
+    setRight(sc.bottom_right_url || '')
+    setDirty(false)
+  }, [sel])
+
+  const upload = async (which: 'left' | 'right', file: File) => {
+    const MAX_MB = 100
+    if (file.size > MAX_MB * 1024 * 1024) { alert('That file is ' + (file.size / 1048576).toFixed(1) + ' MB. Keep tile images under ' + MAX_MB + ' MB.'); return }
+    setBusy(which)
+    try {
+      const presignRes = await fetch('/api/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream', operator_id: getCookie('fl_operator_id') || 'shared' }),
+      })
+      const presign = await presignRes.json()
+      if (!presign.uploadUrl) { alert('Upload failed: ' + (presign.error || 'no upload url')); setBusy(''); return }
+      const put = await fetch(presign.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
+      if (!put.ok) { alert('Upload to storage failed (' + put.status + ')'); setBusy(''); return }
+      if (which === 'left') setLeft(presign.publicUrl); else setRight(presign.publicUrl)
+      setDirty(true)
+    } catch (e: any) { alert('Upload failed: ' + (e?.message || e)) }
+    setBusy('')
+  }
+
+  const save = async () => {
+    if (!machine) return
+    setBusy('save')
+    try {
+      const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+      // Read the freshest row so we never clobber other screen_config keys.
+      const rows = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=state&sn=eq.' + machine.sn), { headers }).then(r => r.json())
+      let st: any = {}
+      try { const raw = rows?.[0]?.state; st = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}) } catch { st = {} }
+      st.screen_config = st.screen_config || {}
+      st.screen_config.bottom_left_url = left || ''
+      st.screen_config.bottom_right_url = right || ''
+      await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?sn=eq.' + machine.sn),
+        { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ state: JSON.stringify(st) }) })
+      // reflect locally so a re-select shows the saved values
+      if (machine) machine.state = JSON.stringify(st)
+      setDirty(false); setSavedAt(Date.now())
+    } catch (e: any) { alert('Save failed: ' + (e?.message || e)) }
+    setBusy('')
+  }
+
+  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }
+  const inp = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }
+
+  const tile = (which: 'left' | 'right', url: string, setUrl: (s: string) => void, label: string, pct: string) => (
+    <div style={{ flex: which === 'left' ? 3 : 2, minWidth: 0 }}>
+      <label style={lbl}>{label} <span style={{ color: C.text3, fontWeight: 600 }}>· {pct}</span></label>
+      <div style={{ width: '100%', aspectRatio: which === 'left' ? '16/10' : '10/10', borderRadius: 10, border: '1px dashed ' + C.border, background: url ? '#000' : C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 8 }}>
+        {url
+          ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          : <span style={{ color: C.text3, fontSize: 12 }}>No image set</span>}
+      </div>
+      <input id={'tile-file-' + which} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) upload(which, f); (e.target as HTMLInputElement).value = '' }} />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <button type="button" disabled={busy === which} onClick={() => document.getElementById('tile-file-' + which)?.click()}
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid ' + C.orange, background: busy === which ? C.surface2 : C.orangeBg, color: C.orange, fontSize: 12.5, fontWeight: 700, cursor: busy === which ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+          {busy === which ? 'Uploading...' : '⬆ Upload image'}
+        </button>
+        {url && <button type="button" onClick={() => { setUrl(''); setDirty(true) }}
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Clear</button>}
+      </div>
+      <input style={inp} value={url} onChange={e => { setUrl(e.target.value); setDirty(true) }} placeholder="Upload above, or paste an image URL" />
+    </div>
+  )
+
+  if (machines.length === 0) return null
+
+  return (
+    <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 20, marginBottom: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, flexWrap: 'wrap' as const, gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Bottom Tiles <span style={{ fontSize: 12, fontWeight: 600, color: C.text3 }}>· idle-screen signage</span></div>
+          <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>The two fixed images below the ad zone. Left is wide (60%), right is square (40%). Set per machine.</div>
+        </div>
+        <select value={sel} onChange={e => setSel(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          {machines.map((m: any) => <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 14 }}>
+        {tile('left', left, setLeft, 'Left tile', '60% · wide')}
+        {tile('right', right, setRight, 'Right tile', '40% · square')}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+        <button type="button" disabled={!dirty || busy === 'save'} onClick={save}
+          style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: (!dirty || busy === 'save') ? C.surface2 : C.orange, color: (!dirty || busy === 'save') ? C.text3 : '#fff', fontSize: 13, fontWeight: 700, cursor: (!dirty || busy === 'save') ? 'default' : 'pointer' }}>
+          {busy === 'save' ? 'Saving...' : 'Save tiles'}
+        </button>
+        {dirty && <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>Unsaved changes</span>}
+        {!dirty && savedAt > 0 && <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>✓ Saved — appears on the machine at its next config sync</span>}
+      </div>
+    </div>
+  )
+}
+
+function AdsPage({ machines, permissions = {}, role: roleProp = '', operatorId = '', ownerId = '' }: { machines: any[]; permissions?: Record<string, boolean>; role?: string; operatorId?: string; ownerId?: string }) {
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const SCREENS = ['idle', 'ordering', 'dispensing', 'thanks']
-  const role = getCookie('fl_role') || 'operator'
+  const role = roleProp || getCookie('fl_role') || 'operator'
+  // Who may manage ads: super_admin always; operator/sub_operator only with the
+  // can_manage_ads permission. Others get a read-only view.
+  const canManageAds = role === 'super_admin' || permissions.can_manage_ads === true
+  // The operator that owns campaigns created here: self for operator,
+  // parent for sub_operator, '' for super_admin (server stamps nothing extra).
+  const myAdOwnerId = role === 'sub_operator' ? (ownerId || '') : (operatorId || '')
 
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [perf, setPerf] = useState<Record<string, any>>({})
@@ -2088,6 +2220,7 @@ function AdsPage({ machines }: { machines: any[] }) {
   const snName = (sn: string) => machines.find(m => m.sn === sn)?.display_name || sn
 
   const save = async (c: any) => {
+    if (!canManageAds) { alert('You have view-only access to ads. Ask Fruitlink to enable ad management.'); return }
     setSaving(true)
     try {
       const isOwn = (c.advertiser || '').trim().toLowerCase() === 'fruitlink'
@@ -2099,6 +2232,9 @@ function AdsPage({ machines }: { machines: any[] }) {
         start_hour: c.start_hour, end_hour: c.end_hour, weight: c.weight,
         status: c.status, rate_cpm: isOwn ? null : (c.rate_cpm ? Number(c.rate_cpm) : null),
       }
+      // Stamp ownership for operator-created campaigns (super_admin leaves as-is /
+      // may target any machine). The server re-validates and overrides this anyway.
+      if (role !== 'super_admin' && myAdOwnerId) body.operator_id = myAdOwnerId
       if (c.id) {
         await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + c.id),
           { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(body) })
@@ -2152,8 +2288,12 @@ function AdsPage({ machines }: { machines: any[] }) {
           {pendingCount > 0 && (
             <Pill color={C.amber} bg={C.amberBg}><Dot color={C.amber} pulse size={5} /> {pendingCount} pending approval</Pill>
           )}
-          <button onClick={() => setEditing({ _new: true, name: '', advertiser: 'Fruitlink', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: machines.map((m: any) => m.sn), days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
-            style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Campaign</button>
+          {canManageAds ? (
+            <button onClick={() => setEditing({ _new: true, name: '', advertiser: role === 'super_admin' ? 'Fruitlink' : '', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: machines.map((m: any) => m.sn), days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
+              style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Campaign</button>
+          ) : (
+            <Pill color={C.text3} bg={C.surface2}>View only — ask Fruitlink for ad access</Pill>
+          )}
         </div>
       </div>
 
@@ -2164,6 +2304,10 @@ function AdsPage({ machines }: { machines: any[] }) {
         <StatCard label="Ad Revenue" value={fmtINR(totalRev)} sub="third-party brands" color={C.green} icon="₹" pct={60} />
         <StatCard label="Pending Approval" value={pendingCount} sub={pendingCount ? 'needs review' : 'all clear'} color={pendingCount ? C.amber : C.green} icon="⏳" pct={pendingCount ? 100 : 0} />
       </div>
+
+      {/* Bottom tiles (per-machine idle-screen signage) — super_admin only for now,
+          pending verification of server-side write-scoping in /api/sb. */}
+      {role === 'super_admin' && <BottomTilesPanel machines={machines} />}
 
       {/* Machine filter */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' as const }}>
@@ -2762,6 +2906,7 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
         { key: 'can_manage_locations', label: 'Add & edit locations', hint: 'Create, rename, delete locations' },
         { key: 'can_edit_office_location', label: 'Edit office location', hint: 'Move the office GPS pin' },
         { key: 'can_export_data', label: 'Export data', hint: 'Download CSV / PDF reports' },
+        { key: 'can_manage_ads', label: 'Manage ads', hint: 'Create & edit ad campaigns on their own machines' },
       ]
     }
   ]
@@ -4158,7 +4303,7 @@ export default function Dashboard() {
     commlog: role === 'super_admin'
       ? <CommLogPage machines={machines} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    ads: <AdsPage machines={machines} />,
+    ads: <AdsPage machines={machines} permissions={permissions} role={role} operatorId={operatorId} ownerId={ownerId} />,
     loyalty: <LoyaltyPage />,
     settings: <SettingsPage />,
     machines: <ErrorBoundary><MachinesPage machines={machines} loading={loading} fetchData={fetchData} /></ErrorBoundary>,
