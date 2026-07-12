@@ -2720,7 +2720,23 @@ function FaultLogPage({ machines }: { machines: any[] }) {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   const machineMap: Record<string, string> = {}
-  machines.forEach(m => { machineMap[m.id] = m.display_name || m.sn })
+  const machineSnMap: Record<string, string> = {}
+  machines.forEach(m => { machineMap[m.id] = m.display_name || m.sn; machineSnMap[m.id] = m.sn })
+
+  const resolveFault = async (machineId: string, faultCode: string) => {
+    const sn = machineSnMap[machineId]
+    if (!sn) { alert('Machine SN not found'); return }
+    if (!confirm('Resolve fault ' + faultCode + ' on ' + (machineMap[machineId] || sn) + '?')) return
+    try {
+      const r = await fetch('https://api.fruitlinktech.in/api/device/fault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' },
+        body: JSON.stringify({ sn, event: 'clear', fault_code: faultCode, resolution: 'manual_dashboard' })
+      })
+      const data = await r.json()
+      if (data.code === 1) { loadEvents() } else { alert('Failed: ' + (data.msg || 'unknown error')) }
+    } catch (e: any) { alert('Error: ' + e.message) }
+  }
 
   const loadEvents = async () => {
     setLoading(true)
@@ -2812,6 +2828,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
               <span style={{ color: C.text2, fontSize: 13 }}>{e.fault_name || '—'}</span>
               <span style={{ color: C.text3, fontSize: 12 }}>since {fmtTime(e.opened_at)}</span>
               {e.order_code && <span style={{ color: C.orange, fontSize: 12, fontFamily: 'monospace' }}>order {e.order_code}</span>}
+              <button onClick={() => resolveFault(e.machine_id, e.fault_code)} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#E53935', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Resolve</button>
             </div>
           ))}
         </div>
@@ -2835,6 +2852,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Duration</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Resolution</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Order</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -2849,6 +2867,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
                   <td style={{ padding: '10px 12px', fontWeight: 600 }}>{e.cleared_at ? fmtDur(e.duration_s) : '—'}</td>
                   <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.resolution || '—'}</td>
                   <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.text3 }}>{e.order_code || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>{!e.cleared_at && <button onClick={() => resolveFault(e.machine_id, e.fault_code)} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: C.orange, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Resolve</button>}</td>
                 </tr>
               ))}
             </tbody>
