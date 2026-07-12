@@ -1572,7 +1572,7 @@ const filtered = scopedOrders.filter((o: any) => {
 
 
 // ─── Machine Grouped List ────────────────────────────────────────
-function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords }: any) {
+function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
   const online = m.status === 'online'
   const isExpanded = expandedId === m.id
   const temp = m.inner_temp_c
@@ -1605,6 +1605,14 @@ function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
+                {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
+                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                    {[['reboot','🔄 Reboot'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
+                      <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
+                    )}
+                  </div>}
+                </div>}
                 {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
               </div>
             </div>
@@ -1639,7 +1647,7 @@ function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit
   )
 }
 
-function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords }: any) {
+function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
   const [collapsedOps, setCollapsedOps] = useState<Record<string, boolean>>({})
 
   const filtered = (machines || []).filter((m: any) => {
@@ -1753,6 +1761,14 @@ function MachineGroupedList({ machines, search, expandedId, setExpandedId, stock
                                   </div>
                                   <div style={{ display: 'flex', gap: 6 }}>
                                     {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
+                {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
+                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                    {[['reboot','🔄 Reboot'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
+                      <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
+                    )}
+                  </div>}
+                </div>}
                                     {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
                                   </div>
                                 </div>
@@ -1841,6 +1857,24 @@ function MachinesPage({ machines, loading, fetchData }: any) {
       if (typeof fetchData === 'function') fetchData()
     } catch (e: any) { setEErr('Save failed: ' + (e?.message || 'error')); setESaving(false) }
   }
+  const [cmdMenu, setCmdMenu] = useState<string | null>(null)
+  const [cmdSending, setCmdSending] = useState(false)
+  const sendCommand = async (machineId: string, sn: string, command: string, params: any = {}) => {
+    const name = safeMachines.find((m: any) => m.id === machineId)?.display_name || sn
+    if (!confirm('Send ' + command.toUpperCase() + ' to ' + name + '?')) return
+    setCmdSending(true)
+    try {
+      const r = await fetch('https://api.fruitlinktech.in/api/device/commands/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' },
+        body: JSON.stringify({ machine_id: machineId, command, params, created_by: 'dashboard' })
+      })
+      const data = await r.json()
+      if (data.code === 1) { alert(command + ' command sent to ' + name + '. It will execute on the next heartbeat (~5 min).'); setCmdMenu(null) }
+      else alert('Failed: ' + (data.msg || 'unknown'))
+    } catch (e: any) { alert('Error: ' + e.message) }
+    setCmdSending(false)
+  }
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -1874,6 +1908,10 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           role={role}
           canEdit={canEdit}
           openEdit={openEdit}
+          sendCommand={sendCommand}
+          cmdMenu={cmdMenu}
+          setCmdMenu={setCmdMenu}
+          cmdSending={cmdSending}
           fmtTime={fmtTime}
           getCoords={(m: any) => { if (m.location_lat != null && m.location_lng != null) return { lat: m.location_lat, lng: m.location_lng }; return null; }}
         />
