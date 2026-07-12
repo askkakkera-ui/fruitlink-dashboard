@@ -124,6 +124,7 @@ const NAV_ITEMS = [
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
+  { key: 'faultlog', label: 'Fault Log', icon: '⚠', group: 'Equipment Management', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
@@ -238,7 +239,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', faultlog: 'Fault Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -2706,6 +2707,164 @@ function LoyaltyPage() {
   )
 }
 
+
+// ─── Fault Log ────────────────────────────────────────────────────────
+function FaultLogPage({ machines }: { machines: any[] }) {
+  const [events, setEvents] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [machineFilter, setMachineFilter] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('')
+  const [dateRange, setDateRange] = useState('7d')
+
+  const machineMap: Record<string, string> = {}
+  machines.forEach(m => { machineMap[m.id] = m.display_name || m.sn })
+
+  const loadEvents = async () => {
+    setLoading(true)
+    try {
+      const cutoff = new Date()
+      if (dateRange === '24h') cutoff.setHours(cutoff.getHours() - 24)
+      else if (dateRange === '7d') cutoff.setDate(cutoff.getDate() - 7)
+      else if (dateRange === '30d') cutoff.setDate(cutoff.getDate() - 30)
+      else cutoff.setFullYear(cutoff.getFullYear() - 1)
+      const path = '/rest/v1/fault_events?select=*&order=opened_at.desc&limit=200&opened_at=gte.' + cutoff.toISOString()
+      const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+      const r = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers })
+      const data = await r.json()
+      setEvents(Array.isArray(data) ? data : [])
+    } catch (e) { console.error('FaultLog load error:', e) }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadEvents() }, [dateRange])
+
+  const filtered = events.filter(e => {
+    if (machineFilter && e.machine_id !== machineFilter) return false
+    if (severityFilter && e.severity !== severityFilter) return false
+    return true
+  })
+
+  const active = filtered.filter(e => !e.cleared_at)
+  const resolved = filtered.filter(e => e.cleared_at)
+
+  const fmtTime = (iso: string) => {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ', ' +
+      d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  }
+  const fmtDur = (s: number | null) => {
+    if (!s && s !== 0) return '—'
+    if (s < 60) return s + 's'
+    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's'
+    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+  }
+  const sevColor = (sev: string) => sev === 'critical' ? '#E53935' : sev === 'warning' ? '#F9A825' : C.text2
+
+  const inp: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, cursor: 'pointer' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 12, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Fault Log</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Machine faults — every open, clear, and duration</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+          <select value={machineFilter} onChange={e => setMachineFilter(e.target.value)} style={inp}>
+            <option value="">All machines</option>
+            {machines.map(m => <option key={m.id} value={m.id}>{m.display_name || m.sn}</option>)}
+          </select>
+          <select value={severityFilter} onChange={e => setSeverityFilter(e.target.value)} style={inp}>
+            <option value="">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="warning">Warning</option>
+          </select>
+          <select value={dateRange} onChange={e => setDateRange(e.target.value)} style={inp}>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="all">All time</option>
+          </select>
+          <button onClick={loadEvents} style={{ ...inp, background: C.orange, color: '#fff', border: 'none', fontWeight: 700 }}>↻ Refresh</button>
+        </div>
+      </div>
+
+      {active.length > 0 && (
+        <div style={{ background: '#FBEAE9', border: '1px solid #E53935', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, color: '#E53935', marginBottom: 8 }}>🔴 {active.length} Active Fault{active.length > 1 ? 's' : ''}</div>
+          {active.map((e, i) => (
+            <div key={e.id || i} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '6px 0', borderTop: i ? '1px solid #F5C6C6' : 'none' }}>
+              <span style={{ fontWeight: 700, color: '#E53935', minWidth: 60, fontFamily: 'monospace', fontSize: 13 }}>{e.fault_code}</span>
+              <span style={{ fontWeight: 700, color: C.text, flex: 1 }}>{machineMap[e.machine_id] || '?'}</span>
+              <span style={{ color: C.text2, fontSize: 13 }}>{e.fault_name || '—'}</span>
+              <span style={{ color: C.text3, fontSize: 12 }}>since {fmtTime(e.opened_at)}</span>
+              {e.order_code && <span style={{ color: C.orange, fontSize: 12, fontFamily: 'monospace' }}>order {e.order_code}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>Loading fault events...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>No fault events found for this period.</div>
+      ) : (
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.surface2 }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Machine</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Code</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Fault</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Severity</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Opened</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Cleared</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Duration</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Resolution</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Order</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((e, i) => (
+                <tr key={e.id || i} style={{ background: !e.cleared_at ? '#FFF4E5' : i % 2 ? C.surface2 : C.surface, borderBottom: '1px solid ' + C.border }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 700 }}>{machineMap[e.machine_id] || '?'}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: C.orange }}>{e.fault_code}</td>
+                  <td style={{ padding: '10px 12px' }}>{e.fault_name || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}><span style={{ fontWeight: 700, color: sevColor(e.severity), fontSize: 12, textTransform: 'uppercase' as const }}>{e.severity}</span></td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{fmtTime(e.opened_at)}</td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.cleared_at ? fmtTime(e.cleared_at) : <span style={{ color: '#E53935', fontWeight: 700 }}>ACTIVE</span>}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{e.cleared_at ? fmtDur(e.duration_s) : '—'}</td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.resolution || '—'}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.text3 }}>{e.order_code || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' as const }}>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 16, flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Summary</div>
+          <div style={{ fontSize: 12, color: C.text2 }}>Total events: <strong style={{ color: C.text }}>{filtered.length}</strong></div>
+          <div style={{ fontSize: 12, color: C.text2 }}>Active now: <strong style={{ color: active.length > 0 ? '#E53935' : C.green }}>{active.length}</strong></div>
+          <div style={{ fontSize: 12, color: C.text2 }}>Resolved: <strong style={{ color: C.text }}>{resolved.length}</strong></div>
+        </div>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 16, flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>By Fault Code</div>
+          {Object.entries(filtered.reduce((acc: Record<string, number>, e) => { acc[e.fault_code] = (acc[e.fault_code] || 0) + 1; return acc }, {})).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 5).map(([code, count]) => (
+            <div key={code} style={{ fontSize: 12, color: C.text2, display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: 'monospace', color: C.orange }}>{code}</span>
+              <strong style={{ color: C.text }}>{count as number}×</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Comm Log (super admin only) ─────────────────────────────────
 function CommLogPage({ machines }: any) {
   const [sn, setSn] = useState('')
@@ -4302,6 +4461,9 @@ export default function Dashboard() {
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Only operators can manage a team.</div>,
     commlog: role === 'super_admin'
       ? <CommLogPage machines={machines} />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    faultlog: role === 'super_admin'
+      ? <FaultLogPage machines={machines} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     ads: <AdsPage machines={machines} permissions={permissions} role={role} operatorId={operatorId} ownerId={ownerId} />,
     loyalty: <LoyaltyPage />,
