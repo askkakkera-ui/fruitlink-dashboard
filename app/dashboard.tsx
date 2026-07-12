@@ -1037,12 +1037,12 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                 </div>
                 {/* Alert rows */}
                 {isOpen && (
-                  <div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
                       <thead>
                         <tr style={{ background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
                           {['Severity', 'Alert', 'Time', 'Status'].map((h, i) => (
-                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
+                            <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1607,7 +1607,7 @@ function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit
                 {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
                 {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
                   <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
-                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
                     {[['reboot','🔄 Reboot'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
                       <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
                     )}
@@ -1763,7 +1763,7 @@ function MachineGroupedList({ machines, search, expandedId, setExpandedId, stock
                                     {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
                 {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
                   <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
-                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
                     {[['reboot','🔄 Reboot'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
                       <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
                     )}
@@ -2860,7 +2860,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
         <div style={{ background: '#FBEAE9', border: '1px solid #E53935', borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <div style={{ fontWeight: 800, color: '#E53935', marginBottom: 8 }}>🔴 {active.length} Active Fault{active.length > 1 ? 's' : ''}</div>
           {active.map((e, i) => (
-            <div key={e.id || i} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '6px 0', borderTop: i ? '1px solid #F5C6C6' : 'none' }}>
+            <div key={e.id || i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', flexWrap: 'wrap' as const, borderTop: i ? '1px solid #F5C6C6' : 'none' }}>
               <span style={{ fontWeight: 700, color: '#E53935', minWidth: 60, fontFamily: 'monospace', fontSize: 13 }}>{e.fault_code}</span>
               <span style={{ fontWeight: 700, color: C.text, flex: 1 }}>{machineMap[e.machine_id] || '?'}</span>
               <span style={{ color: C.text2, fontSize: 13 }}>{e.fault_name || '—'}</span>
@@ -2878,26 +2878,27 @@ function FaultLogPage({ machines }: { machines: any[] }) {
         <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>No fault events found for this period.</div>
       ) : (
         <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 800 }}>
             <thead>
               <tr style={{ background: C.surface2 }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Machine</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Code</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Fault</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Severity</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Opened</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Cleared</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Duration</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Resolution</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Order</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 12 }}>Action</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Machine</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Code</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Fault</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Severity</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Opened</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Cleared</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Duration</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Resolution</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Order</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {paged.map((e, i) => (
                 <tr key={e.id || i} style={{ background: !e.cleared_at ? '#FFF4E5' : i % 2 ? C.surface2 : C.surface, borderBottom: '1px solid ' + C.border }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700 }}>{machineMap[e.machine_id] || '?'}</td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: C.orange }}>{e.fault_code}</td>
+                  <td style={{ padding: '8px 10px', fontWeight: 700, fontSize: 12 }}>{machineMap[e.machine_id] || '?'}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 700, color: C.orange, fontSize: 12 }}>{e.fault_code}</td>
                   <td style={{ padding: '10px 12px' }}>{e.fault_name || '—'}</td>
                   <td style={{ padding: '10px 12px' }}><span style={{ fontWeight: 700, color: sevColor(e.severity), fontSize: 12, textTransform: 'uppercase' as const }}>{e.severity}</span></td>
                   <td style={{ padding: '10px 12px', fontSize: 12 }}>{fmtTime(e.opened_at)}</td>
@@ -2910,6 +2911,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -2948,6 +2950,8 @@ function CommLogPage({ machines }: any) {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [fetchedAt, setFetchedAt] = useState('')
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!sn && machines && machines.length > 0) setSn(machines[0].sn)
@@ -2955,83 +2959,129 @@ function CommLogPage({ machines }: any) {
 
   const loadLog = async (forSn: string) => {
     if (!forSn) return
-    setLoading(true); setErr(''); setLog('')
+    setLoading(true); setErr('')
     try {
-      const res = await fetch('/api/sb?path=' + encodeURIComponent('/storage/v1/object/commlogs/' + forSn + '.txt'))
-      if (res.status === 403) { setErr('Access restricted to Super Admins.'); setLoading(false); return }
-      if (res.status === 404 || res.status === 400) { setErr('No comm log found for this machine yet. (The machine app has not uploaded one.)'); setLoading(false); return }
-      if (!res.ok) { setErr('Could not load log (status ' + res.status + ').'); setLoading(false); return }
-      const text = await res.text()
-      if (!text || text.trim() === '' || text.trim().startsWith('{"error"')) {
-        setErr('No comm log found for this machine yet.')
-      } else {
-        setLog(text)
-        setFetchedAt(new Date().toLocaleString('en-IN', { hour12: true }))
-      }
-    } catch (e: any) {
-      setErr('Error: ' + e.message)
-    }
+      const r = await fetch('https://api.fruitlinktech.in/api/device/commlog?sn=' + encodeURIComponent(forSn), {
+        headers: { 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' }
+      })
+      const text = await r.text()
+      if (!r.ok) { setErr('Error loading log (HTTP ' + r.status + ')'); setLog(''); }
+      else if (!text || text.includes('No log entries yet')) { setErr(text || 'No log entries yet.'); setLog(''); }
+      else { setLog(text); setFetchedAt(new Date().toLocaleString('en-IN', { hour12: true })); setErr(''); }
+    } catch (e: any) { setErr('Network error: ' + e.message); setLog(''); }
     setLoading(false)
   }
 
   useEffect(() => { if (sn) loadLog(sn) }, [sn])
+  useEffect(() => {
+    if (!autoRefresh || !sn) return
+    const t = setInterval(() => loadLog(sn), 30000)
+    return () => clearInterval(t)
+  }, [autoRefresh, sn])
 
   const download = () => {
     const blob = new Blob([log], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = (sn || 'machine') + '_commlog.txt'
-    a.click()
-    URL.revokeObjectURL(url)
+    a.click(); URL.revokeObjectURL(url)
   }
 
   const selected = machines?.find((m: any) => m.sn === sn)
-  const lineCount = log ? log.split('\n').length : 0
+  const lines = log ? log.split('\n').filter((l: string) => l.trim()) : []
+  const filtered = search ? lines.filter((l: string) => l.toLowerCase().includes(search.toLowerCase())) : lines
+  const lineCount = lines.length
+
+  const typeColor = (line: string) => {
+    if (line.includes('[HEARTBEAT ')) return '#58A6FF'
+    if (line.includes('[FAULT     ')) return '#F85149'
+    if (line.includes('[ORDER     ')) return '#3FB950'
+    if (line.includes('[COMMAND   ')) return '#D29922'
+    if (line.includes('[CMD_CREATE')) return '#D29922'
+    return '#8B949E'
+  }
+
+  const inp: React.CSSProperties = { padding: '8px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, background: C.surface, color: C.text, cursor: 'pointer' }
 
   return (
-    <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Comm Log</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>Serial communication log pulled from the machine{selected ? ' — ' + (selected.display_name || selected.sn) : ''}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={sn} onChange={e => setSn(e.target.value)}
-            style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, background: C.surface, color: C.text, cursor: 'pointer', minWidth: 180 }}>
-            {(!machines || machines.length === 0) && <option value="">No machines</option>}
-            {machines && machines.map((m: any) => (
-              <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>
-            ))}
-          </select>
-          <button onClick={() => loadLog(sn)} disabled={loading || !sn}
-            style={{ padding: '9px 16px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13, opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Loading…' : '↻ Refresh'}
-          </button>
-          <button onClick={download} disabled={!log}
-            style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: log ? C.text2 : C.text3, fontWeight: 600, cursor: log ? 'pointer' : 'not-allowed', fontSize: 13 }}>
-            ⬇ Download
-          </button>
+    <div style={{ padding: '16px 20px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Comm Log</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>
+          Server-side communication log{selected ? ' — ' + (selected.display_name || selected.sn) : ''}
         </div>
       </div>
 
+      {/* Controls — wraps on mobile */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 12 }}>
+        <select value={sn} onChange={e => setSn(e.target.value)} style={{ ...inp, minWidth: 160, flex: '1 1 160px' }}>
+          {(!machines || machines.length === 0) && <option value="">No machines</option>}
+          {machines && machines.map((m: any) => (
+            <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>
+          ))}
+        </select>
+        <input type="text" placeholder="🔍 Filter logs..." value={search} onChange={e => setSearch(e.target.value)}
+          style={{ ...inp, flex: '1 1 140px', minWidth: 120 }} />
+        <button onClick={() => loadLog(sn)} disabled={loading || !sn}
+          style={{ ...inp, background: C.orange, color: '#fff', border: 'none', fontWeight: 700, opacity: loading ? 0.7 : 1 }}>
+          {loading ? '...' : '↻ Refresh'}
+        </button>
+        <button onClick={() => setAutoRefresh(!autoRefresh)}
+          style={{ ...inp, background: autoRefresh ? C.green : C.surface2, color: autoRefresh ? '#fff' : C.text3, border: autoRefresh ? 'none' : '1px solid ' + C.border, fontWeight: 700 }}>
+          {autoRefresh ? '⏸ Live' : '▶ Auto'}
+        </button>
+        <button onClick={download} disabled={!log}
+          style={{ ...inp, background: C.surface2, color: log ? C.text2 : C.text3, fontWeight: 600 }}>
+          ⬇ Save
+        </button>
+      </div>
+
+      {/* Stats bar */}
       {sn && (
-        <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 12, color: C.text3, flexWrap: 'wrap' }}>
-          <span><b style={{ color: C.text2 }}>SN:</b> <span style={{ fontFamily: 'monospace' }}>{sn}</span></span>
-          {log && <span><b style={{ color: C.text2 }}>Lines:</b> {lineCount.toLocaleString('en-IN')}</span>}
-          {fetchedAt && <span><b style={{ color: C.text2 }}>Fetched:</b> {fetchedAt}</span>}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: C.text3, flexWrap: 'wrap' as const }}>
+          <span><b style={{ color: C.text2 }}>SN:</b> <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{sn}</span></span>
+          {lineCount > 0 && <span><b style={{ color: C.text2 }}>Lines:</b> {lineCount.toLocaleString('en-IN')}</span>}
+          {search && filtered.length !== lineCount && <span><b style={{ color: C.orange }}>Showing:</b> {filtered.length} of {lineCount}</span>}
+          {fetchedAt && <span><b style={{ color: C.text2 }}>Updated:</b> {fetchedAt}</span>}
+          {autoRefresh && <span style={{ color: C.green, fontWeight: 700 }}>● Live (30s)</span>}
         </div>
       )}
 
+      {/* Log viewer */}
       {err ? (
-        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 14 }}>{err}</div>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 20px', textAlign: 'center', color: C.text3, fontSize: 14 }}>{err}</div>
       ) : loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading comm log…</div>
-      ) : log ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading comm log...</div>
+      ) : filtered.length > 0 ? (
         <div style={{ background: '#0d1117', borderRadius: 14, border: '1px solid ' + C.border2, overflow: 'hidden' }}>
-          <pre style={{ margin: 0, padding: '18px 20px', maxHeight: '70vh', overflow: 'auto', fontSize: 12.5, lineHeight: 1.55, color: '#c9d1d9', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', whiteSpace: 'pre', WebkitOverflowScrolling: 'touch' }}>{log}</pre>
+          <div style={{ maxHeight: '65vh', overflow: 'auto', padding: '12px 16px', WebkitOverflowScrolling: 'touch' as any }}>
+            {filtered.map((line: string, i: number) => (
+              <div key={i} style={{
+                fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+                fontSize: 12, lineHeight: 1.6, color: typeColor(line),
+                borderBottom: '1px solid #21262d', padding: '3px 0',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all' as const
+              }}>
+                {line}
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
-        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 14 }}>Select a machine to view its comm log.</div>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 20px', textAlign: 'center', color: C.text3, fontSize: 14 }}>
+          Select a machine to view its comm log.
+        </div>
+      )}
+
+      {/* Legend */}
+      {filtered.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: C.text3, flexWrap: 'wrap' as const }}>
+          <span><span style={{ color: '#58A6FF' }}>●</span> Heartbeat</span>
+          <span><span style={{ color: '#F85149' }}>●</span> Fault</span>
+          <span><span style={{ color: '#3FB950' }}>●</span> Order</span>
+          <span><span style={{ color: '#D29922' }}>●</span> Command</span>
+        </div>
       )}
     </div>
   )
