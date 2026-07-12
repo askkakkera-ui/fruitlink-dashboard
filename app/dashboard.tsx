@@ -4585,9 +4585,9 @@ export default function Dashboard() {
     myteam: role === 'operator'
       ? <ErrorBoundary><MyTeamPage /></ErrorBoundary>
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Only operators can manage a team.</div>,
-    commlog: role === 'super_admin'
+    commlog: (role === 'super_admin' || permissions.can_view_comm_log)
       ? <CommLogPage machines={machines} />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
     faultlog: role === 'super_admin'
       ? <FaultLogPage machines={machines} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
@@ -4600,12 +4600,12 @@ export default function Dashboard() {
     warehouse: <WarehouseSection role={role} />,
     notifyconfig: <NotifyConfigSection />,
     reports: <ReportsSection />,
-    fieldstaff: role === 'super_admin'
+    fieldstaff: (role === 'super_admin' || permissions.can_view_field_staff)
       ? <FieldStaffSection />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    attendance: role === 'super_admin'
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
+    attendance: (role === 'super_admin' || permissions.can_view_attendance)
       ? <AttendanceSection />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
   }
 
   return (
