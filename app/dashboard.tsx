@@ -2715,12 +2715,16 @@ function FaultLogPage({ machines }: { machines: any[] }) {
   const [machineFilter, setMachineFilter] = useState('')
   const [severityFilter, setSeverityFilter] = useState('')
   const [dateRange, setDateRange] = useState('7d')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 50
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
   const machineMap: Record<string, string> = {}
   machines.forEach(m => { machineMap[m.id] = m.display_name || m.sn })
 
   const loadEvents = async () => {
     setLoading(true)
+    setPage(0)
     try {
       const cutoff = new Date()
       if (dateRange === '24h') cutoff.setHours(cutoff.getHours() - 24)
@@ -2737,6 +2741,11 @@ function FaultLogPage({ machines }: { machines: any[] }) {
   }
 
   useEffect(() => { loadEvents() }, [dateRange])
+  useEffect(() => {
+    if (!autoRefresh) return
+    const timer = setInterval(() => { loadEvents() }, 60000)
+    return () => clearInterval(timer)
+  }, [autoRefresh, dateRange])
 
   const filtered = events.filter(e => {
     if (machineFilter && e.machine_id !== machineFilter) return false
@@ -2746,6 +2755,8 @@ function FaultLogPage({ machines }: { machines: any[] }) {
 
   const active = filtered.filter(e => !e.cleared_at)
   const resolved = filtered.filter(e => e.cleared_at)
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const fmtTime = (iso: string) => {
     if (!iso) return '—'
@@ -2787,6 +2798,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
             <option value="all">All time</option>
           </select>
           <button onClick={loadEvents} style={{ ...inp, background: C.orange, color: '#fff', border: 'none', fontWeight: 700 }}>↻ Refresh</button>
+          <button onClick={() => setAutoRefresh(!autoRefresh)} style={{ ...inp, background: autoRefresh ? C.green : C.surface2, color: autoRefresh ? '#fff' : C.text3, border: autoRefresh ? 'none' : '1px solid ' + C.border, fontWeight: 700 }}>{autoRefresh ? '⏸ Live' : '▶ Auto'}</button>
         </div>
       </div>
 
@@ -2826,7 +2838,7 @@ function FaultLogPage({ machines }: { machines: any[] }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e, i) => (
+              {paged.map((e, i) => (
                 <tr key={e.id || i} style={{ background: !e.cleared_at ? '#FFF4E5' : i % 2 ? C.surface2 : C.surface, borderBottom: '1px solid ' + C.border }}>
                   <td style={{ padding: '10px 12px', fontWeight: 700 }}>{machineMap[e.machine_id] || '?'}</td>
                   <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: C.orange }}>{e.fault_code}</td>
@@ -2844,6 +2856,13 @@ function FaultLogPage({ machines }: { machines: any[] }) {
         </div>
       )}
 
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button disabled={page === 0} onClick={() => setPage(page - 1)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: page === 0 ? C.surface2 : C.surface, color: page === 0 ? C.text3 : C.text, fontWeight: 700, cursor: page === 0 ? 'default' : 'pointer', fontSize: 13 }}>← Prev</button>
+          <span style={{ fontSize: 13, color: C.text2 }}>Page {page + 1} of {totalPages} ({filtered.length} events)</span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: page >= totalPages - 1 ? C.surface2 : C.surface, color: page >= totalPages - 1 ? C.text3 : C.text, fontWeight: 700, cursor: page >= totalPages - 1 ? 'default' : 'pointer', fontSize: 13 }}>Next →</button>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' as const }}>
         <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 16, flex: 1, minWidth: 200 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Summary</div>
