@@ -1134,7 +1134,8 @@ function OrdersPage() {
       }
       const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
       setAllowedIds(ids)
-      const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=500' + f), { headers: h }).then(r => r.json())
+      const thirtyDaysAgo = new Date(Date.now() - 30*86400000).toISOString();
+      const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=2000&created_at=gte.' + thirtyDaysAgo + f), { headers: h }).then(r => r.json())
       setOrders(Array.isArray(os) ? os : [])
       setLoading(false)
     }
@@ -1190,7 +1191,7 @@ function OrdersPage() {
   // Tab filter for order list
 const filtered = scopedOrders.filter((o: any) => {
     if (filter === 'paid') return o.pay_state === 1
-    if (filter === 'pending') return o.pay_state === 0
+    if (filter === 'failed') return o.pay_state === 1 && o.delivery_state === 2
     if (filter === 'delivered') return o.delivery_state === 1
     if (filter === 'refunded') return (o.refund_state || 0) >= 1
     return o.pay_state !== 0
@@ -1198,7 +1199,7 @@ const filtered = scopedOrders.filter((o: any) => {
 
   const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
   const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
-  const REFUND_STATE: any = { 1: { label: 'Refunded', color: C.green, bg: C.greenBg }, 2: { label: 'Refund Failed', color: C.red, bg: C.redBg } }
+  const REFUND_STATE: any = { 0: { label: '—', color: C.text3, bg: 'transparent' }, 1: { label: 'Refunded', color: C.green, bg: C.greenBg }, 2: { label: 'Manual', color: C.amber, bg: C.amberBg }, 3: { label: 'Processing', color: C.amber, bg: C.amberBg } }
   const isRefundView = filter === 'refunded'
   // ─── Export: CSV (all rows) + PDF (summary). Pulls fresh from DB for the chosen range ───
   const _esc = (v: any) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
@@ -1440,7 +1441,7 @@ const filtered = scopedOrders.filter((o: any) => {
             <div style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>Paid orders only</div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 160 }}>
               {dailyData.map((d, i) => {
-                const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 4 : 2)
+                const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 8 : 0)
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     {d.revenue > 0 && (
@@ -1497,7 +1498,7 @@ const filtered = scopedOrders.filter((o: any) => {
         <div>
           {/* Order list filter tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: '1px solid ' + C.border }}>
-            {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered'], ['refunded','Refunded']].map(([f, label]) => (
+            {[['all','All Orders'], ['paid','Paid'], ['failed','Failed'], ['delivered','Delivered'], ['refunded','Refunded']].map(([f, label]) => (
               <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === f ? C.orange : 'transparent', color: filter === f ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>{label}</button>
             ))}
           </div>
@@ -1535,7 +1536,7 @@ const filtered = scopedOrders.filter((o: any) => {
                           <>
                             <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: o.refund_state === 1 ? C.green : C.red, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
                             <td style={{ padding: '12px 16px' }}>
-                              {(() => { const rs = REFUND_STATE[o.refund_state] || REFUND_STATE[2]; return <Pill color={rs.color} bg={rs.bg}>{rs.label}</Pill> })()}
+                              {(() => { const rs = REFUND_STATE[o.refund_state] || REFUND_STATE[0]; return <Pill color={rs.color} bg={rs.bg}>{rs.label}</Pill> })()}
                               {o.refund_note && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.refund_note}</div>}
                             </td>
                           </>
@@ -4619,7 +4620,7 @@ export default function Dashboard() {
 
     const [mRes, aRes] = await Promise.all([
       fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
-      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter), { headers }),
+      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500&resolved_at=is.null' + alertFilter), { headers }),
     ])
     const [mDataRaw, aData] = await Promise.all([mRes.json(), aRes.json()])
 
