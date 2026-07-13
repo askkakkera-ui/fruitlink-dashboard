@@ -377,7 +377,18 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const visible = (machines || []).filter((m: any) => m && m.sn)
   const machine = (machineSel && machineSel !== 'all'
     ? visible.find((m: any) => m.id === machineSel)
-    : visible.find((m: any) => m.status === 'online') || visible[0]) || visible[0] || null
+    : (() => {
+        // When "All machines": pick the online machine with lowest stock (most urgent)
+        const onlineWithStock = visible.filter((m: any) => m.status === 'online' && (stockData || []).find((s: any) => s.machine_id === m.id && s.stock_known))
+        if (onlineWithStock.length > 0) {
+          return onlineWithStock.sort((a: any, b: any) => {
+            const sa = (stockData || []).find((s: any) => s.machine_id === a.id)
+            const sb = (stockData || []).find((s: any) => s.machine_id === b.id)
+            return (sa?.stock_pct ?? 999) - (sb?.stock_pct ?? 999)
+          })[0]
+        }
+        return visible.find((m: any) => m.status === 'online') || visible[0]
+      })()) || visible[0] || null
   // Per-machine fruit/stock tuning from Settings → Fruit & Stock (falls back to defaults)
   const tuning = (() => {
     try {
@@ -1624,7 +1635,7 @@ function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit
                 {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
                   <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
                   {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-                    {[['reboot','🔄 Reboot'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
+                    {[['reboot','🔄 Reboot'],['reset_mcu','⚡ Reset MCU'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
                       <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
                     )}
                   </div>}
@@ -1780,7 +1791,7 @@ function MachineGroupedList({ machines, search, expandedId, setExpandedId, stock
                 {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
                   <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
                   {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-                    {[['reboot','🔄 Reboot'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
+                    {[['reboot','🔄 Reboot'],['reset_mcu','⚡ Reset MCU'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
                       <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
                     )}
                   </div>}
