@@ -337,7 +337,7 @@ export default function VisitPage() {
       const r = await fetch('/api/attendance', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          machine_id: null, location_id: loc.id, visit_mode: visitMode,
+          machine_id: machineId || null, location_id: loc.id, visit_mode: visitMode,
           lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, address: fix ? fix.addr : null,
           gps_accuracy_m: fix ? fix.accuracy : null,
           distance_meters: loc.distance_meters, geofence_verdict: loc.verdict,
@@ -632,7 +632,17 @@ export default function VisitPage() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8, marginBottom: 14 }}>
                     {machinesHere.map((m) => (
-                      <div key={m.id} onClick={() => setMachineId(m.id)}
+                      <div key={m.id} onClick={() => {
+                      setMachineId(m.id);
+                      // Update attendance with the selected machine
+                      if (attendance) {
+                        fetch('/api/attendance?id=' + attendance.id, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ machine_id: m.id, updated_at: new Date().toISOString() }),
+                        }).catch(() => {});
+                      }
+                    }}
                         style={{ border: '1px solid ' + (machineId === m.id ? C.orange : C.border), background: machineId === m.id ? '#FFF7F2' : C.surface, borderRadius: 11, padding: '11px 13px', cursor: 'pointer' }}>
                         <div style={{ fontSize: 14.5, fontWeight: 700, color: C.text }}>🖥 {m.display_name || m.sn}</div>
                         <div style={{ fontSize: 11, color: C.text3, fontFamily: 'monospace' }}>{m.sn}</div>
