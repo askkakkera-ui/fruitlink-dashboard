@@ -75,9 +75,11 @@ export default function FieldStaffSection() {
     if (!visitsByStaff[id]) {
       setVisitLoading(prev => ({ ...prev, [id]: true }));
       try {
-        const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/visits?select=*&staff_id=eq.' + id + '&order=created_at.desc&limit=50'));
+        const res = await fetch('/api/visit?report=1');
         const d = await res.json();
-        setVisitsByStaff(prev => ({ ...prev, [id]: Array.isArray(d) ? d : [] }));
+        const allVisits = Array.isArray(d) ? d : [];
+        const staffVisits = allVisits.filter((v: any) => v.staff_id === id).slice(0, 50);
+        setVisitsByStaff(prev => ({ ...prev, [id]: staffVisits }));
       } catch { setVisitsByStaff(prev => ({ ...prev, [id]: [] })); }
       setVisitLoading(prev => ({ ...prev, [id]: false }));
     }
