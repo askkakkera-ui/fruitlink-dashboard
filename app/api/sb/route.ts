@@ -10,7 +10,7 @@ const SUPER_ADMIN_WRITE_TABLES = ['operators', 'machines', 'machine_operators'];
 
 // ── Read scoping model ────────────────────────────────────────────────
 // Tables that are scoped to an operator's own machines (by machine_id column).
-const MACHINE_SCOPED_TABLES = ['orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'serial_logs', 'ad_machine_state'];
+const MACHINE_SCOPED_TABLES = ['orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'ad_machine_state', 'machine_commands'];
 // Tables scoped to the operator's own machine rows (by the machines.id column).
 const MACHINE_ID_TABLES = ['machines'];
 // Tables an operator may read fully (non-sensitive shared/reference data).
