@@ -1134,7 +1134,7 @@ function OrdersPage() {
   const [exporting, setExporting] = useState('')
 
   const [uRole] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || 'operator') : 'operator')
-  const [uOpId] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '')
+  const [uOpId] = useState(() => { if (typeof document === 'undefined') return ''; const role = document.cookie.match(/fl_role=([^;]+)/)?.[1] || ''; const opId = document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || ''; const ownerId = document.cookie.match(/fl_owner_id=([^;]+)/)?.[1] || ''; return role === 'sub_operator' ? (ownerId || opId) : opId; })
 
   useEffect(() => {
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
@@ -4117,6 +4117,7 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
   }
   const [phone, setPhone] = useState('')
   const [emails, setEmails] = useState('')
+  const [telegramIds, setTelegramIds] = useState('')
   const [alerts, setAlerts] = useState<Record<string, boolean>>(DEFAULT_ALERTS)
   const [channels, setChannels] = useState<Record<string, boolean>>({ telegram: true, whatsapp: true, email: true })
   const [primaryId, setPrimaryId] = useState<string>('')
@@ -4129,6 +4130,7 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
           let st: any = {}; try { st = typeof d[0].state === 'string' ? JSON.parse(d[0].state || '{}') : (d[0].state || {}) } catch (e) {}
           const n = (st.machine_config && st.machine_config.notifications) || {}
           if (n.phone) setPhone(n.phone)
+          if (n.telegram_chat_ids) setTelegramIds(Array.isArray(n.telegram_chat_ids) ? n.telegram_chat_ids.join(', ') : String(n.telegram_chat_ids))
           if (n.emails) setEmails(Array.isArray(n.emails) ? n.emails.join(', ') : String(n.emails)); else if (n.email) setEmails(String(n.email))
           if (n.alerts) setAlerts({ ...DEFAULT_ALERTS, ...n.alerts })
           if (n.channels) setChannels({ telegram: true, whatsapp: true, email: true, ...n.channels })
@@ -4142,7 +4144,7 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
       const cur = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + primaryId + '&select=state'), { headers }).then(r => r.json()).then(d => Array.isArray(d) && d[0] ? d[0] : {})
       let st: any = {}; try { st = typeof cur.state === 'string' ? JSON.parse(cur.state || '{}') : (cur.state || {}) } catch (e) {}
       const mc = st.machine_config || {}
-      mc.notifications = { phone, emails: emails.split(',').map(s => s.trim()).filter(Boolean), alerts, channels }
+      mc.notifications = { phone, emails: emails.split(',').map(s => s.trim()).filter(Boolean), telegram_chat_ids: telegramIds.split(',').map(s => s.trim()).filter(Boolean), alerts, channels }
       st.machine_config = mc
       await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + primaryId), { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ state: JSON.stringify(st) }) })
       showSaved()
@@ -4169,6 +4171,12 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
         <input value={emails} disabled={!canEdit} onChange={e => setEmails(e.target.value)} placeholder="ops@fruitlinktech.in, owner@fruitlinktech.in"
           style={{ width: '100%', maxWidth: 420, padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: canEdit ? C.surface : C.surface2, cursor: canEdit ? 'text' : 'not-allowed', boxSizing: 'border-box' as const }} />
         <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Comma-separated. Sent via Resend. Leave blank to use the default address.</div>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>Telegram Chat IDs</label>
+        <input value={telegramIds} disabled={!canEdit} onChange={e => setTelegramIds(e.target.value)} placeholder="8562917946, 8977110142"
+          style={{ width: '100%', maxWidth: 420, padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: canEdit ? C.surface : C.surface2, cursor: canEdit ? 'text' : 'not-allowed', boxSizing: 'border-box' as const }} />
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Comma-separated Telegram user/group IDs. Message @userinfobot on Telegram to get your ID.</div>
       </div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Channels</div>
