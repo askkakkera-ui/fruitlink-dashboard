@@ -1398,7 +1398,7 @@ const filtered = scopedOrders.filter((o: any) => {
   }
 
   return (
-    <div style={{ padding: '22px 28px' }}>
+    <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Revenue & Orders</div>
@@ -1538,7 +1538,8 @@ const filtered = scopedOrders.filter((o: any) => {
             </div>
           ) : (
             <div style={{ background: C.surface, borderRadius: 16, border: '1px solid ' + C.border, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 700 }}>
                 <thead>
                   <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
                     {(isRefundView ? ['Order Code', 'Machine', 'Refunded', 'Status', 'Cups', 'Time'] : ['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time']).map(h => (
@@ -1586,6 +1587,7 @@ const filtered = scopedOrders.filter((o: any) => {
                   })}
                 </tbody>
               </table>
+              </div>
               <div style={{ padding: '10px 16px', borderTop: '1px solid ' + C.border, background: C.surface2, fontSize: 11, color: C.text3 }}>
                 Showing {filtered.length} of {orders.length} orders
               </div>
@@ -2352,7 +2354,7 @@ function AdsPage({ machines, permissions = {}, role: roleProp = '', operatorId =
   }
 
   return (
-    <div style={{ padding: '22px 28px' }}>
+    <div style={{ padding: '24px 28px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
@@ -2677,7 +2679,7 @@ function LoyaltyPage() {
   const eligible = customers.filter((c: any) => c.points >= config.redeem_threshold).length
 
   return (
-    <div style={{ padding: '22px 28px' }}>
+    <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Loyalty Programme</div>
@@ -3117,7 +3119,7 @@ function CommLogPage({ machines }: any) {
   const inp: React.CSSProperties = { padding: '8px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, background: C.surface, color: C.text, cursor: 'pointer' }
 
   return (
-    <div style={{ padding: '16px 20px' }}>
+    <div style={{ padding: '24px 28px' }}>
       {/* Header */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Comm Log</div>
@@ -4746,6 +4748,7 @@ export default function Dashboard() {
 
 /* ── Mobile responsive (phones, < 768px) ── */
         @media (max-width: 768px) {
+          [style*="padding: 24px 28px"] { padding: 16px 12px !important; }
           [style*="repeat(2,1fr)"], [style*="repeat(2, 1fr)"],
           [style*="repeat(3,1fr)"], [style*="repeat(3, 1fr)"],
           [style*="repeat(4,1fr)"], [style*="repeat(4, 1fr)"],
