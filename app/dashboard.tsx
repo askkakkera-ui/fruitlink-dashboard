@@ -124,7 +124,7 @@ const NAV_ITEMS = [
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
-  { key: 'faultlog', label: 'Fault Log', icon: '⚠', group: 'Equipment Management', superAdmin: true },
+  { key: 'faultlog', label: 'Fault Log', icon: '⚠', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
@@ -4712,9 +4712,9 @@ export default function Dashboard() {
     commlog: (role === 'super_admin' || permissions.can_view_comm_log)
       ? <CommLogPage machines={machines} />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
-    faultlog: role === 'super_admin'
+    faultlog: (role === 'super_admin' || permissions.can_view_comm_log)
       ? <FaultLogPage machines={machines} />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
     ads: <AdsPage machines={machines} permissions={permissions} role={role} operatorId={operatorId} ownerId={ownerId} />,
     loyalty: <LoyaltyPage />,
     settings: <SettingsPage />,
