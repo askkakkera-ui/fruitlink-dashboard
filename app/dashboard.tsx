@@ -1916,6 +1916,15 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           getCoords={(m: any) => { if (m.location_lat != null && m.location_lng != null) return { lat: m.location_lat, lng: m.location_lng }; return null; }}
         />
       )}
+      {/* Command History */}
+      <div style={{ marginTop: 24, background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid ' + C.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>📋 Recent Commands</div>
+          <div style={{ fontSize: 11, color: C.text3 }}>Auto-refreshes every 30s</div>
+        </div>
+        <CommandHistory machines={safeMachines} />
+      </div>
+
       {editM && (
         <div onClick={closeEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw' }}>
@@ -2747,6 +2756,75 @@ function LoyaltyPage() {
 
 
 // ─── Fault Log ────────────────────────────────────────────────────────
+
+// ─── Command History (recent remote commands across all machines) ──────────
+function CommandHistory({ machines }: { machines: any[] }) {
+  const [cmds, setCmds] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const machineMap: Record<string, string> = {}
+  machines.forEach((m: any) => { machineMap[m.id] = m.display_name || m.sn })
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const path = '/rest/v1/machine_commands?select=*&order=created_at.desc&limit=20'
+      const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+      const r = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers })
+      const data = await r.json()
+      setCmds(Array.isArray(data) ? data : [])
+    } catch (e) { console.error('CmdHistory error:', e) }
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const t = setInterval(load, 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const fmtTime = (iso: string) => {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
+  }
+  const statusBadge = (status: string) => {
+    const colors: Record<string, string> = { pending: '#F9A825', sent: '#58A6FF', executed: '#3FB950', failed: '#F85149' }
+    return { background: (colors[status] || '#8B949E') + '22', color: colors[status] || '#8B949E', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, display: 'inline-block' }
+  }
+  const cmdIcon: Record<string, string> = { reboot: '🔄', clear_fault: '🔧', sync_config: '📡', maintenance_on: '🚧', maintenance_off: '✅', run_cleaning: '🧹' }
+
+  if (loading && cmds.length === 0) return <div style={{ textAlign: 'center', padding: 20, color: C.text3, fontSize: 13 }}>Loading commands...</div>
+  if (cmds.length === 0) return <div style={{ textAlign: 'center', padding: 20, color: C.text3, fontSize: 13 }}>No commands sent yet.</div>
+
+  return (
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+        <thead>
+          <tr style={{ background: C.surface2 }}>
+            {['Command', 'Machine', 'Status', 'Created', 'Sent', 'Executed', 'Result', 'By'].map(h =>
+              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 11, whiteSpace: 'nowrap' as const }}>{h}</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {cmds.map((c: any, i: number) => (
+            <tr key={c.id || i} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? C.surface2 : C.surface }}>
+              <td style={{ padding: '8px 10px', fontWeight: 700 }}>{cmdIcon[c.command] || '⚡'} {c.command}</td>
+              <td style={{ padding: '8px 10px' }}>{machineMap[c.machine_id] || '?'}</td>
+              <td style={{ padding: '8px 10px' }}><span style={statusBadge(c.status)}>{c.status}</span></td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.created_at)}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.sent_at)}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.executed_at)}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, fontFamily: 'monospace', color: C.text3 }}>{c.result || '—'}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{c.created_by || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function FaultLogPage({ machines }: { machines: any[] }) {
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
