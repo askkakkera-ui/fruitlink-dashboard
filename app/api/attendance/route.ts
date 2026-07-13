@@ -40,9 +40,14 @@ export async function GET(request: NextRequest) {
       if (to) url += '&check_in_at=lte.' + encodeURIComponent(to);
       if (staffId && staffId !== 'all') url += '&staff_id=eq.' + encodeURIComponent(staffId);
       if (machineId && machineId !== 'all') url += '&machine_id=eq.' + encodeURIComponent(machineId);
-      // scope to owner if operator
-      if (session.role === 'operator' && session.owner_id) {
-        url += '&owner_id=eq.' + encodeURIComponent(session.sub);
+      // Scope attendance to the tenant
+      if (session.role === 'operator') {
+        // Operator sees all staff under them (their id IS the owner_id on staff records)
+        url += '&owner_id=eq.' + encodeURIComponent(String(session.sub));
+      } else if (session.role === 'sub_operator') {
+        // Sub-operator sees same tenant as their parent operator
+        const ownerId = session.owner_id ? String(session.owner_id) : String(session.sub);
+        url += '&owner_id=eq.' + encodeURIComponent(ownerId);
       }
       const res = await fetch(url, { headers: sbHeaders() });
       const rows = await res.json();
