@@ -2988,12 +2988,18 @@ function CommLogPage({ machines }: any) {
   }
 
   const selected = machines?.find((m: any) => m.sn === sn)
-  const lines = log ? log.split('\n').filter((l: string) => l.trim()) : []
+  const lines = log ? log.split('\n').filter((l: string) => l.trim()).reverse() : []
   const filtered = search ? lines.filter((l: string) => l.toLowerCase().includes(search.toLowerCase())) : lines
   const lineCount = lines.length
 
   const typeColor = (line: string) => {
+    if (line.includes('[RX SENSORS')) return '#58A6FF'
+    if (line.includes('[RX STOCK  ')) return '#79C0FF'
+    if (line.includes('[RX STATES ')) return '#79C0FF'
+    if (line.includes('[RX HEALTH ')) return '#58A6FF'
     if (line.includes('[HEARTBEAT ')) return '#58A6FF'
+    if (line.includes('[CHANGE    ')) return '#FFA657'
+    if (line.includes('[READINESS ')) return line.includes('OK') ? '#3FB950' : '#F0883E'
     if (line.includes('[FAULT     ')) return '#F85149'
     if (line.includes('[ORDER     ')) return '#3FB950'
     if (line.includes('[COMMAND   ')) return '#D29922'
@@ -3077,7 +3083,10 @@ function CommLogPage({ machines }: any) {
       {/* Legend */}
       {filtered.length > 0 && (
         <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: C.text3, flexWrap: 'wrap' as const }}>
-          <span><span style={{ color: '#58A6FF' }}>●</span> Heartbeat</span>
+          <span><span style={{ color: '#58A6FF' }}>●</span> Sensors</span>
+          <span><span style={{ color: '#79C0FF' }}>●</span> Stock/States</span>
+          <span><span style={{ color: '#FFA657' }}>●</span> Change</span>
+          <span><span style={{ color: '#F0883E' }}>●</span> Readiness</span>
           <span><span style={{ color: '#F85149' }}>●</span> Fault</span>
           <span><span style={{ color: '#3FB950' }}>●</span> Order</span>
           <span><span style={{ color: '#D29922' }}>●</span> Command</span>
