@@ -478,14 +478,11 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const haveStockSensors = machine && (machine.stock_l1 !== undefined || machine.stock_l2 !== undefined || machine.stock_l3 !== undefined)
   // Fall back to visit-based stock data for NewSaier machines (no hardware scale)
   const visitStock = (stockData || []).find((s: any) => s.machine_id === machine?.id)
-  const ORANGES_PER_LAYER = 50
-  const leftOranges = haveScale
-    ? Math.max(0, Math.round((sw - TARE) / GPO))
-    : haveStockSensors
-      ? stockLayers * ORANGES_PER_LAYER
-      : visitStock?.stock_known
-        ? Math.round((visitStock.cups_remaining || 0) * OPC)
-        : null
+  const leftOranges = visitStock?.stock_known
+    ? visitStock.remaining_oranges ?? Math.round((visitStock.cups_remaining || 0) * OPC)
+    : haveScale
+      ? Math.max(0, Math.round((sw - TARE) / GPO))
+      : null
   const usedToday = cupsToday * OPC
   const sellThrough = leftOranges != null && (usedToday + leftOranges) > 0 ? Math.round(usedToday / (usedToday + leftOranges) * 100) : null
 
