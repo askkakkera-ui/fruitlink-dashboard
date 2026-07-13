@@ -17,16 +17,6 @@ const NOTIFY_METHOD = process.env.NOTIFY_METHOD || 'deep_link';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
 const TELEGRAM_CHAT_IDS = (process.env.TELEGRAM_CHAT_IDS || '').split(',').filter(Boolean);
 
-
-// Haversine distance (meters) between two lat/lng points
-function gpsDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 async function getSession(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   return await verifySession(token);
@@ -234,23 +224,6 @@ export async function POST(request: NextRequest) {
       const rows = await r.json();
       ownerId = Array.isArray(rows) && rows[0] ? String(rows[0].operator_id) : ownerId;
     }
-    // GPS vs machine location validation — warn if >500m from configured location
-    let gps_warning: string | null = null;
-    if (body.lat != null && body.lng != null) {
-      const machineLocRes = await fetch(
-        SB_URL + '/rest/v1/machines?select=display_name,location_lat,location_lng&id=eq.' + encodeURIComponent(machine_id) + '&limit=1',
-        { headers: sbHeaders() }
-      );
-      const machineLocRows = await machineLocRes.json();
-      const ml = Array.isArray(machineLocRows) ? machineLocRows[0] : null;
-      if (ml && ml.location_lat != null && ml.location_lng != null) {
-        const dist = gpsDistanceMeters(parseFloat(body.lat), parseFloat(body.lng), ml.location_lat, ml.location_lng);
-        if (dist > 500) {
-          gps_warning = 'GPS is ' + Math.round(dist) + 'm from ' + (ml.display_name || 'machine') + ' location. Please verify you selected the correct machine.';
-        }
-      }
-    }
-
     const loaded = body.oranges_loaded != null ? parseInt(body.oranges_loaded) : null;
     const damaged = body.oranges_damaged != null ? parseInt(body.oranges_damaged) : null;
     const net = (loaded != null && damaged != null) ? (loaded - damaged) : (loaded != null ? loaded : null);
@@ -289,6 +262,15 @@ export async function POST(request: NextRequest) {
 
     const savedVisit = Array.isArray(data) ? data[0] : data;
 
+    // Update the attendance row with the machine_id from this visit
+    // (staff may have checked in via 'Office' mode then logged a machine visit)
+    if (openAttendanceId && machine_id) {
+      await fetch(
+        SB_URL + '/rest/v1/attendance?id=eq.' + encodeURIComponent(openAttendanceId),
+        { method: 'PATCH', headers: sbHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ machine_id, updated_at: new Date().toISOString() }) }
+      ).catch(() => {});
+    }
+
     let staffName = session.name || '';
     if (!staffName) {
       const sres = await fetch(SB_URL + '/rest/v1/operators?select=name&id=eq.' + encodeURIComponent(staffId) + '&limit=1', { headers: sbHeaders() });
@@ -306,7 +288,7 @@ export async function POST(request: NextRequest) {
       if (notify?.message) await sendTelegram(notify.message);
     } catch { /* never fail the visit on notify prep */ }
 
-    return NextResponse.json({ success: true, visit: savedVisit, notify, gps_warning }, { headers: NO_STORE });
+    return NextResponse.json({ success: true, visit: savedVisit, notify }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
