@@ -411,7 +411,8 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
         if (Array.isArray(row) && row[0] && row[0].id) mid = row[0].id
       } catch {}
       try {
-        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&machine_id=eq.' + mid + '&pay_state=eq.1&created_at=gte.' + since + '&order=created_at.desc&limit=3000'
+        const machineFilter = machineSel === 'all' ? '' : '&machine_id=eq.' + mid
+        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc&limit=3000'
         const d = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h }).then(r => r.json())
         if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) }
       } catch {
@@ -548,7 +549,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machine.display_name} · revenue, last 7 days</div>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machineSel === 'all' ? 'All machines' : machine.display_name} · revenue, last 7 days</div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9, minHeight: 104 }}>
                   {week.map((d, i) => {
                     const h = Math.max(Math.round(d.v / maxV * 88), d.v > 0 ? 6 : 3)
