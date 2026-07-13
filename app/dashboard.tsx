@@ -1923,7 +1923,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           search={search}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
-          stockData={scopedStock}
+          stockData={stockData}
           role={role}
           canEdit={canEdit}
           openEdit={openEdit}
