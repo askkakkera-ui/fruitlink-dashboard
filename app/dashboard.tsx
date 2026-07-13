@@ -472,13 +472,19 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const revToday = dailyRev[todayKey] || 0
   const sw = Number(machine && machine.scale_weight_g)
   const haveScale = Number.isFinite(sw) && sw > TARE
+  // Fallback: use IR stock sensors (L1/L2/L3) when scale is unavailable or un-tared
+  const stockLayers = [machine?.stock_l1, machine?.stock_l2, machine?.stock_l3].filter(v => v === true).length
+  const haveStockSensors = machine && (machine.stock_l1 !== undefined || machine.stock_l2 !== undefined || machine.stock_l3 !== undefined)
   // Fall back to visit-based stock data for NewSaier machines (no hardware scale)
   const visitStock = (stockData || []).find((s: any) => s.machine_id === machine?.id)
+  const ORANGES_PER_LAYER = 50
   const leftOranges = haveScale
     ? Math.max(0, Math.round((sw - TARE) / GPO))
-    : visitStock?.stock_known
-      ? Math.round((visitStock.cups_remaining || 0) * OPC)
-      : null
+    : haveStockSensors
+      ? stockLayers * ORANGES_PER_LAYER
+      : visitStock?.stock_known
+        ? Math.round((visitStock.cups_remaining || 0) * OPC)
+        : null
   const usedToday = cupsToday * OPC
   const sellThrough = leftOranges != null && (usedToday + leftOranges) > 0 ? Math.round(usedToday / (usedToday + leftOranges) * 100) : null
 
@@ -563,7 +569,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
       <div style={card}>
         <div style={{ height: 3, background: runReady ? runCol : C.border2 }} />
         <div style={{ padding: '18px 22px' }}>
-          {!haveScale ? (
+          {!haveScale && !haveStockSensors ? (
             <div style={{ fontSize: 13, color: C.text3 }}>Waiting for a live stock reading from {machine.display_name} to project the runway.</div>
           ) : (<>
             <div style={{ position: 'relative', height: 46, borderRadius: 10, background: '#f1f2f7', border: '1px solid ' + C.border, overflow: 'hidden', margin: '6px 0 4px' }}>
