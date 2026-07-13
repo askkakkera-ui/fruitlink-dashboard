@@ -50,7 +50,13 @@ export default function FieldStaffSection() {
       setLoading(true);
       try {
         const [sRes, mRes] = await Promise.all([
-          fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,phone,role,created_at&role=eq.field_staff&order=created_at.desc')),
+          (() => {
+            const role = typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || '') : '';
+            const opId = typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '';
+            let q = '/rest/v1/operators?select=id,name,email,phone,role,created_at&role=in.(field_staff,sub_operator)&order=created_at.desc';
+            if (role !== 'super_admin' && opId) q += '&owner_id=eq.' + opId;
+            return fetch('/api/sb?path=' + encodeURIComponent(q));
+          })(),
           fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn')),
         ]);
         const s = await sRes.json();
