@@ -665,6 +665,7 @@ const [stockData, setStockData] = useState<any[]>([])
   const [alertsOpen, setAlertsOpen] = useState(false)
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const [machineSel, setMachineSel] = useState('all')
+  const scopedStock = stockData.filter((s: any) => machines.some((m: any) => m.id === s.machine_id))
   const scopedMachines = machineSel === 'all' ? machines : machines.filter((m: any) => m.id === machineSel)
   const online = scopedMachines.filter((m: any) => m.status === 'online').length
   const activeAlerts = alerts.filter((a: any) => !a.resolved_at)
@@ -719,7 +720,7 @@ const stats = [
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
-      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={stockData} />
+      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={scopedStock} />
 
 {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: fleetOpen ? 14 : 0 }}>
@@ -736,7 +737,7 @@ const stats = [
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
-          {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
+          {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={scopedStock.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       ))}
 
@@ -1116,7 +1117,9 @@ function OrdersPage() {
   const [machineSel, setMachineSel] = useState('all')
   const [showAllMachines, setShowAllMachines] = useState(false)
   const [view, setView] = useState<'analytics' | 'orders'>('analytics')
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
+  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom'>('week')
+  const [customFrom, setCustomFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}) })
+  const [customTo, setCustomTo] = useState(() => new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}))
   const [allowedIds, setAllowedIds] = useState<string[]>([])
   const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
   const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
@@ -1167,6 +1170,7 @@ function OrdersPage() {
     const d = new Date(o.created_at)
     if (period === 'today') return istKey(o.created_at) === todayKey
     if (period === 'week') return d >= weekFloor
+    if (period === 'custom') return d >= new Date(customFrom + 'T00:00:00+05:30') && d <= new Date(customTo + 'T23:59:59+05:30')
     return d >= monthFloor
   })
 
@@ -1407,9 +1411,16 @@ const filtered = scopedOrders.filter((o: any) => {
           {/* Period toggle */}
           {view === 'analytics' && (
             <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
-              {[['today', 'Today'], ['week', '7 Days'], ['month', '30 Days']].map(([p, l]) => (
+              {[['today', 'Today'], ['week', '7 Days'], ['month', '30 Days'], ['custom', 'Custom']].map(([p, l]) => (
                 <button key={p} onClick={() => setPeriod(p as any)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: period === p ? C.orange : 'transparent', color: period === p ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
               ))}
+              {period === 'custom' && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
+                  <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid ' + C.border, color: C.text, background: C.surface }} />
+                  <span style={{ fontSize: 11, color: C.text3 }}>to</span>
+                  <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid ' + C.border, color: C.text, background: C.surface }} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1435,7 +1446,7 @@ const filtered = scopedOrders.filter((o: any) => {
           {/* KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
             {[
-              { label: 'Total Revenue', value: fmtAmt(totalRevenue), sub: period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : 'last 30 days', color: C.green, icon: '₹', pct: 75 },
+              { label: 'Total Revenue', value: fmtAmt(totalRevenue), sub: period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : period === 'custom' ? customFrom + ' to ' + customTo : 'last 30 days', color: C.green, icon: '₹', pct: 75 },
               { label: 'Paid Orders', value: paidOrders.length.toString(), sub: periodOrders.length + ' placed · ' + convRate.toFixed(0) + '% paid', color: C.blue, icon: '✅', pct: convRate },
               { label: 'Avg Order Value', value: fmtAmt(avgOrder), sub: 'per transaction', color: C.orange, icon: '📈', pct: 60 },
               { label: 'Cups Served', value: totalCups.toString(), sub: 'juice cups', color: C.amber, icon: '🥤', pct: 80 },
@@ -1912,7 +1923,7 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           search={search}
           expandedId={expandedId}
           setExpandedId={setExpandedId}
-          stockData={stockData}
+          stockData={scopedStock}
           role={role}
           canEdit={canEdit}
           openEdit={openEdit}
@@ -2871,7 +2882,9 @@ function FaultLogPage({ machines }: { machines: any[] }) {
       else if (dateRange === '7d') cutoff.setDate(cutoff.getDate() - 7)
       else if (dateRange === '30d') cutoff.setDate(cutoff.getDate() - 30)
       else cutoff.setFullYear(cutoff.getFullYear() - 1)
-      const path = '/rest/v1/fault_events?select=*&order=opened_at.desc&limit=200&opened_at=gte.' + cutoff.toISOString()
+      const machineIds = machines.map((m: any) => m.id).filter(Boolean)
+      const midFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : ''
+      const path = '/rest/v1/fault_events?select=*&order=opened_at.desc&limit=200&opened_at=gte.' + cutoff.toISOString() + midFilter
       const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
       const r = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers })
       const data = await r.json()
