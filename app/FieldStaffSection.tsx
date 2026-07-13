@@ -49,14 +49,12 @@ export default function FieldStaffSection() {
     (async () => {
       setLoading(true);
       try {
+        const role = document.cookie.match(/fl_role=([^;]+)/)?.[1] || '';
+        const opId = document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '';
+        let staffQuery = '/rest/v1/operators?select=id,name,email,phone,role,created_at&role=in.(field_staff,sub_operator)&order=created_at.desc';
+        if (role !== 'super_admin' && opId) staffQuery += '&owner_id=eq.' + opId;
         const [sRes, mRes] = await Promise.all([
-          (() => {
-            const role = typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || '') : '';
-            const opId = typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '';
-            let q = '/rest/v1/operators?select=id,name,email,phone,role,created_at&role=in.(field_staff,sub_operator)&order=created_at.desc';
-            if (role !== 'super_admin' && opId) q += '&owner_id=eq.' + opId;
-            return fetch('/api/sb?path=' + encodeURIComponent(q));
-          })(),
+          fetch('/api/sb?path=' + encodeURIComponent(staffQuery)),
           fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn')),
         ]);
         const s = await sRes.json();
