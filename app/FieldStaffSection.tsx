@@ -50,14 +50,22 @@ export default function FieldStaffSection() {
     (async () => {
       setLoading(true);
       try {
-        const [tRes, mRes] = await Promise.all([
-          fetch('/api/my-team'),
-          fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn')),
-        ]);
-        const tData = await tRes.json();
+        const role = document.cookie.match(/fl_role=([^;]+)/)?.[1] || '';
+        let staffList: any[] = [];
+        const mRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn'));
+        if (role === 'super_admin') {
+          // Super admin: all field staff + sub-operators across all tenants
+          const sRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,phone,role,created_at&role=in.(field_staff,sub_operator)&order=created_at.desc'));
+          const sData = await sRes.json();
+          staffList = Array.isArray(sData) ? sData : [];
+        } else {
+          // Operator/sub-operator: their own team
+          const tRes = await fetch('/api/my-team');
+          const tData = await tRes.json();
+          staffList = Array.isArray(tData.team) ? tData.team : [];
+        }
         const m = await mRes.json();
-        const team = Array.isArray(tData.team) ? tData.team : [];
-        setStaff(team.map((t: any) => ({ id: t.id, name: t.name, email: t.email, phone: t.phone, role: t.role, created_at: t.created_at })));
+        setStaff(staffList.map((t: any) => ({ id: t.id, name: t.name, email: t.email, phone: t.phone, role: t.role, created_at: t.created_at })));
         setMachines(Array.isArray(m) ? m : []);
       } catch { setStaff([]); }
       setLoading(false);
