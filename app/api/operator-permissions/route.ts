@@ -15,6 +15,7 @@ const PERMISSION_KEYS = [
   'can_view_warehouse', 'can_view_reports', 'can_view_field_staff', 'can_view_attendance',
   'can_view_notify_config', 'can_view_comm_log', 'can_edit_machine_config',
   'can_manage_field_staff', 'can_manage_locations', 'can_edit_office_location', 'can_export_data',
+  'can_manage_ads', 'can_view_ad_manager',
 ];
 
 async function getSession(req: NextRequest) {
