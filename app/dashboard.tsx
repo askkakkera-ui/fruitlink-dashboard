@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import WarehouseSection from './WarehouseSection'
 import NotifyConfigSection from './NotifyConfigSection'
+import MyStaffSection from './MyStaffSection'
 import ReportsSection from './ReportsSection'
 import FieldStaffSection from './FieldStaffSection'
 import AttendanceSection from './AttendanceSection'
@@ -121,6 +122,7 @@ const NAV_ITEMS = [
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
   { key: 'myteam', label: 'My Team', icon: '👥', group: 'Operator Management', operatorOnly: true },
+  { key: 'mystaff', label: 'My Staff', icon: '🧑‍💼', group: 'Operator Management', superAdminOnly: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
@@ -239,7 +241,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', faultlog: 'Fault Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', faultlog: 'Fault Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team', mystaff: 'My Staff' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -4729,6 +4731,9 @@ export default function Dashboard() {
       ? <NotifyConfigSection />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
     reports: <ReportsSection />,
+    mystaff: role === 'super_admin'
+      ? <MyStaffSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     fieldstaff: (role === 'super_admin' || permissions.can_view_field_staff)
       ? <FieldStaffSection />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
