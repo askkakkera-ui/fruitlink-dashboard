@@ -118,6 +118,7 @@ export default function VisitPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [note, setNote] = useState('');
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const [loaded, setLoaded] = useState('');
   const [damaged, setDamaged] = useState('');
   const [cups, setCups] = useState('');
@@ -360,45 +361,11 @@ export default function VisitPage() {
     setBusy(false);
   }
 
-  async function getFreshGps(): Promise<Gps | null> {
-    return new Promise((resolve) => {
-      if (!('geolocation' in navigator)) { resolve(gpsRef.current); return; }
-      let best: { lat: number; lng: number; accuracy: number } | null = null;
-      let done = false;
-      const finish = async () => {
-        if (done) return; done = true;
-        navigator.geolocation.clearWatch(wId);
-        clearTimeout(t);
-        if (!best) { resolve(gpsRef.current); return; }
-        let addr = best.lat.toFixed(4) + 'N ' + best.lng.toFixed(4) + 'E';
-        try {
-          const r = await fetch('https://api.fruitlinktech.in/rest/app/geocode?lat=' + best.lat + '&lng=' + best.lng, { cache: 'no-store' });
-          const d = await r.json();
-          if (d && d.addr) addr = d.addr;
-        } catch {}
-        const fix: Gps = { lat: best.lat, lng: best.lng, accuracy: best.accuracy, addr };
-        gpsRef.current = fix;
-        resolve(fix);
-      };
-      const t = setTimeout(finish, 8000);
-      const wId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const acc = pos.coords.accuracy;
-          if (!best || acc < best.accuracy) best = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: acc };
-          if (acc <= 30) finish();
-        },
-        () => finish(),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    });
-  }
-
   async function checkOut() {
     if (!attendance) return;
     setBusy(true); setErr('');
     try {
-      // Capture a FRESH GPS fix at check-out time (not the stale check-in fix)
-      const fix = await getFreshGps();
+      const fix = gpsRef.current;
       const r = await fetch('/api/attendance?id=' + attendance.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, address: fix ? fix.addr : null }),
@@ -435,7 +402,7 @@ export default function VisitPage() {
       const fix = gpsRef.current;
       const payload: any = {
         machine_id: machineId, visit_type: visitType, location_id: loc ? loc.id : null,
-        note: note.trim() || null, consumables: consumablesObj(), photo_url,
+        note: (noteRef.current?.value || note).trim() || null, consumables: consumablesObj(), photo_url,
         lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, address: fix ? fix.addr : null,
         gps_accuracy_m: fix ? fix.accuracy : null,
       };
@@ -457,7 +424,7 @@ export default function VisitPage() {
       }
       setVisitCount((n) => n + 1);
       setMsg('✓ Visit saved');
-      setNote(''); setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
+      setNote(''); if (noteRef.current) noteRef.current.value = ''; setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
       clearPhoto(); setMachineId('');
       setStep(6);
     } catch { setErr('Network problem. Try again.'); }
@@ -579,7 +546,7 @@ export default function VisitPage() {
               }}>{r}</button>
           ))}
         </div>
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="or type a note" style={{ ...inputStyle, fontSize: 14 }} />
+        <input defaultValue={reason} onBlur={(e) => setReason(e.target.value)} placeholder="or type a note" style={{ ...inputStyle, fontSize: 14 }} />
       </div>
     ) : null;
 
@@ -752,7 +719,7 @@ export default function VisitPage() {
                   </div>
                 </div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: C.text2 }}>Note (optional)</label>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...inputStyle, marginTop: 5, marginBottom: 14, resize: 'vertical' as const }} />
+                <textarea ref={noteRef} defaultValue={note} onBlur={(e) => setNote(e.target.value)} rows={3} style={{ ...inputStyle, marginTop: 5, marginBottom: 14, resize: 'vertical' as const }} />
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
                   <Btn onClick={submitVisit} disabled={busy}>{busy ? 'Saving…' : uploadFailed ? '🔄 Retry upload & save' : 'Submit visit'}</Btn>
                   <Btn kind="ghost" onClick={() => setStep(4)}>← Back</Btn>
