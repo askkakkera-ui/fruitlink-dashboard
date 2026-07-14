@@ -53,7 +53,7 @@ export default function FieldStaffSection() {
         const role = document.cookie.match(/fl_role=([^;]+)/)?.[1] || '';
         let staffList: any[] = [];
         const mRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn'));
-        if (role === 'super_admin') {
+        if (role === 'super_admin' || role === 'staff') {
           // Super admin: all field staff + sub-operators across all tenants
           const sRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,phone,role,created_at&role=in.(field_staff,sub_operator)&order=created_at.desc'));
           const sData = await sRes.json();
