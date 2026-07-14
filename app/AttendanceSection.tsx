@@ -248,6 +248,7 @@ export default function AttendanceSection() {
                   <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: C.text, fontSize: 13 }}>
                       {r.staff_name || '—'}
+                      {r.staff_employee_id && <span style={{ fontSize: 10, color: C.text3, fontWeight: 700, marginLeft: 6, background: C.surface2, padding: '1px 6px', borderRadius: 5 }}>{r.staff_employee_id}</span>}
                       {r.staff_designation && <div style={{ fontSize: 11, color: C.text3, fontWeight: 400 }}>{r.staff_designation}</div>}
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 12 }}>
