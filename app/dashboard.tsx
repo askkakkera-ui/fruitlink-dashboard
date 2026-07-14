@@ -125,7 +125,7 @@ const NAV_ITEMS = [
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
   { key: 'faultlog', label: 'Fault Log', icon: '⚠', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
-  { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
+  { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing', permission: 'can_view_ad_manager' },
   { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
 ]
@@ -3297,6 +3297,7 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
         { key: 'can_view_attendance', label: 'Attendance', hint: 'Staff check-in / check-out records' },
         { key: 'can_view_notify_config', label: 'Notification Settings', hint: 'WhatsApp & Telegram recipients' },
         { key: 'can_view_comm_log', label: 'Comm Log', hint: 'Raw machine messages' },
+        { key: 'can_view_ad_manager', label: 'Ad Manager', hint: 'View & manage ad campaigns' },
       ]
     },
     {
