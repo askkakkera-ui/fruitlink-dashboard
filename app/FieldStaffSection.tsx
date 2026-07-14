@@ -43,7 +43,7 @@ export default function FieldStaffSection() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [visitsByStaff, setVisitsByStaff] = useState<Record<string, Visit[]>>({});
   const [visitLoading, setVisitLoading] = useState<Record<string, boolean>>({});
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<Visit | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -148,7 +148,7 @@ export default function FieldStaffSection() {
                           {visits.map(v => (
                             <div key={v.id} style={{ border: '1px solid ' + C.border, borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
                               {v.photo_url ? (
-                                <div onClick={() => setLightbox(v.photo_url!)} style={{ cursor: 'pointer', height: 150, background: C.surface2, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div onClick={() => setLightbox(v)} style={{ cursor: 'pointer', height: 150, background: C.surface2, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={v.photo_url} alt="Visit" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 </div>
@@ -192,12 +192,30 @@ export default function FieldStaffSection() {
         </div>
       )}
 
-      {/* Lightbox for enlarged photo */}
+      {/* Lightbox for enlarged photo with details */}
       {lightbox && (
         <div onClick={() => setLightbox(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, cursor: 'zoom-out' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="Visit" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }} />
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 16, cursor: 'zoom-out' }}>
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: 'min(92vw, 480px)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: C.surface, borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}>
+            {lightbox.photo_url && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={lightbox.photo_url} alt="Visit" style={{ width: '100%', maxHeight: '60vh', objectFit: 'contain', background: '#000' }} />
+            )}
+            <div style={{ padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', background: VISIT_COLOR[lightbox.visit_type || ''] || C.text3, padding: '3px 10px', borderRadius: 6 }}>
+                  {VISIT_LABEL[lightbox.visit_type || ''] || (lightbox.visit_type || 'Visit')}
+                </span>
+                <button onClick={() => setLightbox(null)} style={{ background: C.surface2, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13, fontWeight: 600 }}>Close ✕</button>
+              </div>
+              <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.7 }}>
+                <div>🕐 {new Date(lightbox.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                {typeof lightbox.oranges_loaded === 'number' && lightbox.oranges_loaded > 0 && <div>🍊 Loaded: {lightbox.oranges_loaded}{typeof lightbox.oranges_damaged === 'number' && lightbox.oranges_damaged > 0 ? ' · Damaged: ' + lightbox.oranges_damaged : ''}</div>}
+                {lightbox.address && <div>📍 {lightbox.address}</div>}
+                {(lightbox.lat && lightbox.lng) && <div style={{ fontSize: 11, color: C.text3 }}>GPS: {Number(lightbox.lat).toFixed(5)}, {Number(lightbox.lng).toFixed(5)}</div>}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
