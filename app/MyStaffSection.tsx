@@ -15,7 +15,7 @@ const C = {
 
 const SUPER_ADMIN_ID = '0c1bd083-682a-4913-ac37-08c85ef94b41';
 
-type Staff = { id: string; name: string; email: string; phone?: string; role: string; designation?: string; created_at: string };
+type Staff = { id: string; name: string; email: string; phone?: string; role: string; designation?: string; employee_id?: string; staff_type?: string; created_at: string };
 
 export default function MyStaffSection() {
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -29,6 +29,8 @@ export default function MyStaffSection() {
   const [fEmail, setFEmail] = useState('');
   const [fPhone, setFPhone] = useState('');
   const [fDesignation, setFDesignation] = useState('');
+  const [fEmployeeId, setFEmployeeId] = useState('');
+  const [fStaffType, setFStaffType] = useState('office');
   const [fPassword, setFPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [formMsg, setFormMsg] = useState('');
@@ -36,7 +38,7 @@ export default function MyStaffSection() {
   async function load() {
     setLoading(true); setErr('');
     try {
-      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,phone,role,designation,created_at&role=eq.staff&order=created_at.desc'));
+      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,phone,role,designation,employee_id,staff_type,created_at&role=eq.staff&owner_id=eq.' + SUPER_ADMIN_ID + '&order=created_at.desc'));
       const d = await r.json();
       setStaff(Array.isArray(d) ? d : []);
     } catch { setErr('Could not load staff'); }
@@ -46,14 +48,14 @@ export default function MyStaffSection() {
 
   function openAdd() {
     setEditing(null);
-    setFName(''); setFEmail(''); setFPhone(''); setFDesignation(''); setFPassword('');
+    setFName(''); setFEmail(''); setFPhone(''); setFDesignation(''); setFEmployeeId(''); setFStaffType('office'); setFPassword('');
     setFormMsg(''); setShowAdd(true);
   }
 
   function openEdit(s: Staff) {
     setEditing(s);
     setFName(s.name || ''); setFEmail(s.email || ''); setFPhone(s.phone || '');
-    setFDesignation(s.designation || ''); setFPassword('');
+    setFDesignation(s.designation || ''); setFEmployeeId(s.employee_id || ''); setFStaffType(s.staff_type || 'office'); setFPassword('');
     setFormMsg(''); setShowAdd(true);
   }
 
@@ -64,7 +66,7 @@ export default function MyStaffSection() {
     try {
       if (editing) {
         // Update existing
-        const body: any = { name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, designation: fDesignation.trim() || null };
+        const body: any = { name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, designation: fDesignation.trim() || null, employee_id: fEmployeeId.trim() || null, staff_type: fStaffType };
         const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + editing.id), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
           body: JSON.stringify(body),
@@ -77,7 +79,7 @@ export default function MyStaffSection() {
         const { hash } = await hashRes.json();
         const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, password_hash: hash, role: 'staff', designation: fDesignation.trim() || null, owner_id: SUPER_ADMIN_ID, state: 'Telangana', country: 'India' }),
+          body: JSON.stringify({ name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, password_hash: hash, role: 'staff', designation: fDesignation.trim() || null, employee_id: fEmployeeId.trim() || null, staff_type: fStaffType, owner_id: SUPER_ADMIN_ID, state: 'Telangana', country: 'India' }),
         });
         if (!r.ok) { const t = await r.text().catch(() => ''); setFormMsg('Error: ' + (t || r.status)); setSaving(false); return; }
       }
@@ -104,8 +106,8 @@ export default function MyStaffSection() {
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>My Staff</div>
-          <div style={{ fontSize: 13, color: C.text2, marginTop: 4 }}>Fruitlink's internal team — office employees, technicians, and managers with their own designations.</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>Fruitlink Team</div>
+          <div style={{ fontSize: 13, color: C.text2, marginTop: 4 }}>Fruitlink's own team — office, field, mechanics, and supply staff. Separate from tenant operators and their field staff.</div>
         </div>
         <button onClick={openAdd} style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>+ Add Staff</button>
       </div>
@@ -128,11 +130,14 @@ export default function MyStaffSection() {
                 {(s.name || s.email || '?').slice(0, 2).toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{s.name || '—'}</div>
-                <div style={{ fontSize: 13, color: C.text3 }}>{s.email}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {s.name || '—'}
+                  {s.employee_id && <span style={{ fontSize: 11, fontWeight: 700, color: C.text3, background: C.surface2, padding: '2px 8px', borderRadius: 6, border: '1px solid ' + C.border }}>{s.employee_id}</span>}
+                </div>
+                <div style={{ fontSize: 13, color: C.text3 }}>{s.email}{s.designation ? ' · ' + s.designation : ''}</div>
               </div>
-              {s.designation && (
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.purple, background: C.purpleBg, padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{s.designation}</span>
+              {s.staff_type && (
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', color: C.purple, background: C.purpleBg, padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{s.staff_type}</span>
               )}
               <button onClick={() => openEdit(s)} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Edit</button>
               <button onClick={() => remove(s)} style={{ background: C.redBg, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.red, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Del</button>
@@ -164,6 +169,22 @@ export default function MyStaffSection() {
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Designation</label>
                 <input value={fDesignation} onChange={e => setFDesignation(e.target.value)} placeholder="e.g. Office Manager, Technician, Accountant" style={inp} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Employee ID</label>
+                  <input value={fEmployeeId} onChange={e => setFEmployeeId(e.target.value)} placeholder="FLK-001" style={inp} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Type</label>
+                  <select value={fStaffType} onChange={e => setFStaffType(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                    <option value="office">Office</option>
+                    <option value="field">Field</option>
+                    <option value="mechanic">Mechanic</option>
+                    <option value="supply">Supply</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
               </div>
               {!editing && (
                 <div>
