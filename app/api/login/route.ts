@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
             can_export_data: p.can_export_data ?? false,
             can_view_ad_manager: p.can_view_ad_manager ?? false,
             can_manage_ads: p.can_manage_ads ?? false,
+            can_manage_warehouse: p.can_manage_warehouse ?? false,
           };
         }
       } catch { /* permissions default to empty = conservative access */ }
