@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
       check_in_lat: body.lat != null ? parseFloat(body.lat) : null,
       check_in_lng: body.lng != null ? parseFloat(body.lng) : null,
       check_in_address: body.address ? String(body.address).slice(0, 500) : null,
+      check_in_photo: body.photo_url ? String(body.photo_url) : null,
       // Geofence is evidence, not a gate: we record what we saw and move on.
       gps_accuracy_m: (body.gps_accuracy_m != null && !isNaN(parseInt(body.gps_accuracy_m))) ? parseInt(body.gps_accuracy_m) : null,
       distance_meters: (body.distance_meters != null && !isNaN(parseInt(body.distance_meters))) ? parseInt(body.distance_meters) : null,
@@ -171,6 +172,7 @@ export async function PATCH(request: NextRequest) {
       check_out_lat: body.lat != null ? parseFloat(body.lat) : null,
       check_out_lng: body.lng != null ? parseFloat(body.lng) : null,
       check_out_address: body.address ? String(body.address).slice(0, 500) : null,
+      check_out_photo: body.photo_url ? String(body.photo_url) : null,
       updated_at: new Date().toISOString(),
     };
     const res = await fetch(SB_URL + '/rest/v1/attendance?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) });
