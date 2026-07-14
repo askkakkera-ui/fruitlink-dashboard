@@ -56,7 +56,7 @@ export default function AttendanceSection() {
       if (machineFilter !== 'all') url += '&machine_id=' + machineFilter;
       const [rRes, sRes, mRes] = await Promise.all([
         fetch(url),
-        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email&role=in.(field_staff,sub_operator)&order=name.asc')),
+        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,designation&role=in.(field_staff,sub_operator,staff)&order=name.asc')),
         fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name&order=display_name.asc')),
       ]);
       const r = await rRes.json(); setRecords(Array.isArray(r) ? r : []);
