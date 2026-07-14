@@ -23,6 +23,7 @@ export default function MyStaffSection() {
   const [err, setErr] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
+  const [permsFor, setPermsFor] = useState<Staff | null>(null);
 
   // Form state
   const [fName, setFName] = useState('');
@@ -139,6 +140,7 @@ export default function MyStaffSection() {
               {s.staff_type && (
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', color: C.purple, background: C.purpleBg, padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{s.staff_type}</span>
               )}
+              <button onClick={() => setPermsFor(s)} style={{ background: C.purpleBg, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>🔑 Perms</button>
               <button onClick={() => openEdit(s)} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Edit</button>
               <button onClick={() => remove(s)} style={{ background: C.redBg, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.red, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Del</button>
             </div>
@@ -204,6 +206,86 @@ export default function MyStaffSection() {
         </div>,
         document.body
       )}
+
+      {permsFor && <StaffPermsModal staff={permsFor} onClose={() => setPermsFor(null)} />}
     </div>
+  );
+}
+
+// Permissions modal for a Fruitlink staff member — grants dashboard section access
+function StaffPermsModal({ staff, onClose }: { staff: Staff; onClose: () => void }) {
+  const VIEW_PERMS: [string, string][] = [
+    ['can_view_console', 'Console'], ['can_view_orders', 'Orders'], ['can_view_alerts', 'Alerts'],
+    ['can_view_fleet_map', 'Fleet Map'], ['can_view_warehouse', 'Warehouse'], ['can_view_reports', 'Reports'],
+    ['can_view_field_staff', 'Field Staff'], ['can_view_attendance', 'Attendance'], ['can_view_comm_log', 'Comm Log & Fault Log'],
+    ['can_view_notify_config', 'Alert Notifications'], ['can_view_ad_manager', 'Ad Manager'],
+  ];
+  const CHANGE_PERMS: [string, string][] = [
+    ['can_edit_machine_config', 'Edit machine config'], ['can_manage_field_staff', 'Manage field staff'],
+    ['can_manage_locations', 'Manage locations'], ['can_export_data', 'Export data'], ['can_manage_ads', 'Manage ads'],
+  ];
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/operator-permissions?operator_id=' + staff.id);
+        const d = await r.json();
+        if (d && typeof d === 'object') setPerms(d);
+      } catch {}
+      setLoading(false);
+    })();
+  }, [staff.id]);
+
+  const toggle = (k: string) => setPerms(p => ({ ...p, [k]: !p[k] }));
+
+  async function save() {
+    setSaving(true); setMsg('');
+    try {
+      const r = await fetch('/api/operator-permissions', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator_id: staff.id, permissions: perms }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) { setMsg('Error: ' + (d.error || r.status)); setSaving(false); return; }
+      setMsg('✓ Saved'); setTimeout(onClose, 700);
+    } catch (e: any) { setMsg('Error: ' + e.message); }
+    setSaving(false);
+  }
+
+  const Row = ({ k, label }: { k: string; label: string }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0' }}>
+      <span style={{ fontSize: 14, color: C.text2 }}>{label}</span>
+      <button onClick={() => toggle(k)} style={{ width: 42, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', background: perms[k] ? C.green : C.border2, position: 'relative', transition: 'background .15s' }}>
+        <span style={{ position: 'absolute', top: 2, left: perms[k] ? 20 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+      </button>
+    </div>
+  );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(31,37,51,0.5)', zIndex: 99999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 16px', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, borderRadius: 16, padding: 24, width: 460, maxWidth: '100%', boxShadow: '0 20px 60px #00000030', marginTop: 'auto', marginBottom: 'auto' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{staff.name || staff.email}</div>
+        <div style={{ fontSize: 13, color: C.text3, marginBottom: 18 }}>Grant dashboard access. They'll see only what you enable.</div>
+        {loading ? <div style={{ padding: 30, textAlign: 'center', color: C.text3 }}>Loading…</div> : (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 800, color: C.blue, textTransform: 'uppercase' as const, letterSpacing: '0.04em', marginBottom: 4 }}>👁 Can View</div>
+            {VIEW_PERMS.map(([k, l]) => <Row key={k} k={k} label={l} />)}
+            <div style={{ fontSize: 12, fontWeight: 800, color: C.orange, textTransform: 'uppercase' as const, letterSpacing: '0.04em', margin: '16px 0 4px' }}>⚡ Can Change</div>
+            {CHANGE_PERMS.map(([k, l]) => <Row key={k} k={k} label={l} />)}
+          </>
+        )}
+        {msg && <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: msg.startsWith('✓') ? C.greenBg : C.redBg, color: msg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving…' : 'Save Permissions'}</button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
