@@ -222,7 +222,7 @@ function StaffPermsModal({ staff, onClose }: { staff: Staff; onClose: () => void
   ];
   const CHANGE_PERMS: [string, string][] = [
     ['can_edit_machine_config', 'Edit machine config'], ['can_manage_field_staff', 'Manage field staff'],
-    ['can_manage_locations', 'Manage locations'], ['can_export_data', 'Export data'], ['can_manage_ads', 'Manage ads'],
+    ['can_manage_locations', 'Manage locations'], ['can_manage_warehouse', 'Manage warehouse (edit/receive/dispatch)'], ['can_export_data', 'Export data'], ['can_manage_ads', 'Manage ads'], ['can_manage_warehouse', 'Manage warehouse (edit stock)'],
   ];
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
