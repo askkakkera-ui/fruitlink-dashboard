@@ -126,11 +126,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(Array.isArray(data) ? data : [], { headers: NO_STORE });
     }
 
-    // DEBUG: return session info
-    if (request.nextUrl.searchParams.get('debug') === '1') {
-      return NextResponse.json({ sub: session.sub, role: session.role, owner_id: session.owner_id, tenant: tenantOf(session) }, { headers: NO_STORE });
-    }
-
     // Reports: super_admin gets ALL visits in a date range, with staff names resolved
     if (request.nextUrl.searchParams.get('report') === '1' && (session.role === 'super_admin' || session.role === 'operator' || session.role === 'sub_operator')) {
       let vurl = SB_URL + '/rest/v1/visits?select=*&order=created_at.desc&limit=1000';
