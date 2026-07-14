@@ -55,12 +55,12 @@ export async function GET(request: NextRequest) {
       const machineIds = Array.from(new Set(rows.map((r: any) => r.machine_id).filter(Boolean)));
       let names: Record<string, string> = {};
       let mnames: Record<string, string> = {};
-      let staffMeta: Record<string, { role: string; designation: string; owner_id?: string }> = {};
+      let staffMeta: Record<string, { role: string; designation: string; employee_id?: string; staff_type?: string; owner_id?: string }> = {};
       let ownerNames: Record<string, string> = {};
       if (staffIds.length) {
         const inList = '(' + staffIds.map(encodeURIComponent).join(',') + ')';
-        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,designation,owner_id&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
-        (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); staffMeta[o.id] = { role: o.role, designation: o.designation, owner_id: o.owner_id }; });
+        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,designation,employee_id,staff_type,owner_id&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
+        (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); staffMeta[o.id] = { role: o.role, designation: o.designation, employee_id: o.employee_id, staff_type: o.staff_type, owner_id: o.owner_id }; });
         // Resolve the entity/team name for each person (their owner's company name)
         const ownerIds = Array.from(new Set((Array.isArray(nr) ? nr : []).map((o: any) => o.owner_id).filter(Boolean)));
         if (ownerIds.length) {
@@ -79,6 +79,8 @@ export async function GET(request: NextRequest) {
         staff_name: names[r.staff_id] || '—',
         staff_role: staffMeta[r.staff_id]?.role || '',
         staff_designation: staffMeta[r.staff_id]?.designation || '',
+        staff_employee_id: staffMeta[r.staff_id]?.employee_id || '',
+        staff_type: staffMeta[r.staff_id]?.staff_type || '',
         team_name: (staffMeta[r.staff_id]?.role === 'staff') ? 'Fruitlink' : (staffMeta[r.staff_id]?.owner_id ? (ownerNames[staffMeta[r.staff_id]!.owner_id!] || 'Operator') : '—'),
         machine_name: r.machine_id ? (mnames[r.machine_id] || '—') : 'Office',
       }));
