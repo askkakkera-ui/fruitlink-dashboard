@@ -111,7 +111,8 @@ export async function GET(request: NextRequest) {
       }
     }
     if (request.nextUrl.searchParams.get('machines') === '1') {
-      if (session.role === 'super_admin') {
+      if (session.role === 'super_admin' || session.role === 'staff') {
+        // Super admin + Fruitlink staff service the whole fleet
         const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_id,location_lat,location_lng&order=display_name.asc', { headers: sbHeaders() });
         const all = await res.json();
         return NextResponse.json(Array.isArray(all) ? all : [], { headers: NO_STORE });
