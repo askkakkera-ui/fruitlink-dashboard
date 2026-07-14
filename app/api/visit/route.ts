@@ -127,13 +127,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Reports: super_admin gets ALL visits in a date range, with staff names resolved
-    if (request.nextUrl.searchParams.get('report') === '1' && (session.role === 'super_admin' || session.role === 'operator' || session.role === 'sub_operator')) {
+    if (request.nextUrl.searchParams.get('report') === '1' && (session.role === 'super_admin' || session.role === 'operator' || session.role === 'sub_operator' || session.role === 'staff')) {
       let vurl = SB_URL + '/rest/v1/visits?select=*&order=created_at.desc&limit=1000';
-      // Scope to operator's tenant (same logic as the machines path which works correctly)
+      // Scope to operator's tenant; Fruitlink staff + super_admin see all visits fleet-wide
       if (session.role === 'operator' || session.role === 'sub_operator') {
         const tenant = tenantOf(session);
         vurl += '&owner_id=eq.' + encodeURIComponent(tenant);
       }
+      // super_admin and staff: no filter — full fleet
       const from = request.nextUrl.searchParams.get('from');
       const to = request.nextUrl.searchParams.get('to');
       if (from) vurl += '&created_at=gte.' + encodeURIComponent(from);
