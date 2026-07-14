@@ -24,7 +24,7 @@ type Movement = {
 };
 
 export default function WarehouseSection({ role = 'operator' }: { role?: string }) {
-  const isSuper = role === 'super_admin';
+  const isSuper = role === 'super_admin' || role === 'staff';  // Fruitlink staff manage Fruitlink's warehouse
   const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'sale' | 'damage' | 'transfer' | 'incoming' | 'log'>('onhand');
   const [items, setItems] = useState<Item[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
