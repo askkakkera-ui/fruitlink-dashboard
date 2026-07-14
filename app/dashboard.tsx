@@ -140,11 +140,15 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
     if (item.superAdminOnly && role !== 'super_admin') return
     // operatorOnly = only true operators (they manage their own team)
     if (item.operatorOnly && role !== 'operator') return
-    // permission key = check operator permissions passed as prop
-    if (item.permission && (role === 'operator' || role === 'sub_operator')) {
+    // Fruitlink staff: purely permission-driven. Hide anything without an explicit granted permission.
+    if (role === 'staff') {
+      if (!item.permission || !permissions[item.permission]) return
+    }
+    // permission key = check operator/sub-operator/staff permissions passed as prop
+    if (item.permission && (role === 'operator' || role === 'sub_operator' || role === 'staff')) {
       if (!permissions[item.permission]) return
     }
-    // legacy superAdmin flag = hide from operators unless they have explicit permission
+    // legacy superAdmin flag = hide from non-super-admins unless they have explicit permission
     if (item.superAdmin && role !== 'super_admin') {
       if (!item.permission) return
     }
@@ -4650,14 +4654,16 @@ export default function Dashboard() {
     setLoading(true)
     const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     let machineIds: string[] = []
+    // Fruitlink internal staff service the whole fleet — treat like super_admin for data scope
+    const seesAllMachines = role === 'super_admin' || role === 'staff';
     const effectiveOpId = role === 'sub_operator' ? (ownerId || operatorId) : operatorId;
-    if (role !== 'super_admin' && effectiveOpId) {
+    if (!seesAllMachines && effectiveOpId) {
       const moRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + effectiveOpId + '&select=machine_id'), { headers })
       const moData = await moRes.json()
       machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
     }
-    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&id=eq.none' : '')
-    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
+    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (!seesAllMachines ? '&id=eq.none' : '')
+    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (!seesAllMachines ? '&machine_id=eq.none' : '')
 
     const [mRes, aRes] = await Promise.all([
       fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
