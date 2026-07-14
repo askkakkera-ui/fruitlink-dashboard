@@ -97,7 +97,7 @@ export default function MyStaffSection() {
     } catch { alert('Could not remove'); }
   }
 
-  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, color: C.text, background: C.surface, outline: 'none', boxSizing: 'border-box' };
+  const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, color: C.text, background: C.surface, outline: 'none', boxSizing: 'border-box' };
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -143,30 +143,30 @@ export default function MyStaffSection() {
       {/* Add / Edit modal */}
       {showAdd && (
         <div onClick={() => setShowAdd(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, borderRadius: 18, padding: 26, width: 460, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px #00000030' }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>{editing ? 'Edit Staff' : 'Add Staff'}</div>
-            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>{editing ? 'Update details' : 'Create a new internal team member'}</div>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, borderRadius: 16, padding: 22, width: 440, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 20px 60px #00000030' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 3 }}>{editing ? 'Edit Staff' : 'Add Staff'}</div>
+            <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>{editing ? 'Update details' : 'Create a new internal team member'}</div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Name *</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Name *</label>
                 <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Full name" style={inp} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Email *</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Email *</label>
                 <input value={fEmail} onChange={e => setFEmail(e.target.value)} placeholder="email@fruitlinktech.in" style={inp} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Phone</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Phone</label>
                 <input value={fPhone} onChange={e => setFPhone(e.target.value)} placeholder="+91…" style={inp} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Designation</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Designation</label>
                 <input value={fDesignation} onChange={e => setFDesignation(e.target.value)} placeholder="e.g. Office Manager, Technician, Accountant" style={inp} />
               </div>
               {!editing && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Password *</label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Password *</label>
                   <input type="password" value={fPassword} onChange={e => setFPassword(e.target.value)} placeholder="Login password" style={inp} />
                 </div>
               )}
@@ -174,7 +174,7 @@ export default function MyStaffSection() {
 
             {formMsg && <div style={{ marginTop: 14, padding: '8px 12px', borderRadius: 8, background: formMsg.startsWith('✓') ? C.greenBg : C.redBg, color: formMsg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{formMsg}</div>}
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 22 }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
               <button onClick={() => setShowAdd(false)} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
               <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
