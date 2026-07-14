@@ -31,12 +31,23 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-    if (session.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    const isSuperAdmin = session.role === 'super_admin' || session.role === 'staff';
+    const isOperator = session.role === 'operator' || session.role === 'sub_operator';
+    if (!isSuperAdmin && !isOperator) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+
+    // Operator's own tenant id (sub_operator uses parent's owner_id)
+    const myOwnerId = isSuperAdmin ? null : (session.role === 'sub_operator' && session.owner_id ? String(session.owner_id) : String(session.sub));
 
     const params = request.nextUrl.searchParams;
 
     // Tenants list
     if (params.get('tenants') === '1') {
+      // Operators see only themselves as a tenant
+      if (isOperator) {
+        const opRes = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,max_notify_numbers,max_telegram_ids&id=eq.' + encodeURIComponent(myOwnerId!), { headers: sbH() });
+        const opData = await opRes.json();
+        return NextResponse.json(Array.isArray(opData) ? opData : [], { headers: NO_STORE });
+      }
       // One query: operators + their machine ownership status
       const [opsRes, moRes] = await Promise.all([
         fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,max_notify_numbers,max_telegram_ids&order=name.asc', { headers: sbH() }),
@@ -74,7 +85,12 @@ export async function GET(request: NextRequest) {
       else if (a.owner_id) byOwnerDefault[a.owner_id] = a;
     });
 
-    const out = (Array.isArray(machines) ? machines : []).map((m: any) => {
+    // Operators only see their own machines
+    const visibleMachines = isSuperAdmin
+      ? (Array.isArray(machines) ? machines : [])
+      : (Array.isArray(machines) ? machines : []).filter((m: any) => machineOwnerMap[m.id] === myOwnerId);
+
+    const out = visibleMachines.map((m: any) => {
       const owner = machineOwnerMap[m.id] || null;
       const arr = byMachine[m.id] || (owner ? byOwnerDefault[owner] : null);
       return {
@@ -98,12 +114,16 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-    if (session.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    const isSuperAdminP = session.role === 'super_admin' || session.role === 'staff';
+    const isOperatorP = session.role === 'operator' || session.role === 'sub_operator';
+    if (!isSuperAdminP && !isOperatorP) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+    const myOwnerIdP = isSuperAdminP ? null : (session.role === 'sub_operator' && session.owner_id ? String(session.owner_id) : String(session.sub));
 
     const body = await request.json().catch(() => ({}));
 
-    // Update tenant limit
+    // Update tenant limit — super admin only
     if (body.set_limit?.owner_id) {
+      if (session.role !== 'super_admin') return NextResponse.json({ error: 'Only super admin can change limits' }, { status: 403, headers: NO_STORE });
       const field = body.set_limit.field === 'telegram' ? 'max_telegram_ids' : 'max_notify_numbers';
       const max = parseInt(body.set_limit.max);
       if (isNaN(max) || max < 0 || max > 100) return NextResponse.json({ error: 'Invalid limit' }, { status: 400, headers: NO_STORE });
@@ -123,6 +143,8 @@ export async function PUT(request: NextRequest) {
     const moRows = await moRes.json();
     const owner = Array.isArray(moRows) && moRows[0] ? String(moRows[0].operator_id) : null;
     if (!owner) return NextResponse.json({ error: 'Machine has no owner' }, { status: 400, headers: NO_STORE });
+    // Operators can only edit their OWN machines
+    if (!isSuperAdminP && owner !== myOwnerIdP) return NextResponse.json({ error: 'Forbidden — not your machine' }, { status: 403, headers: NO_STORE });
 
     // Validate and deduplicate numbers
     const numbers: string[] = [];

@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch permissions for operators (not super_admin or field_staff)
     let permissions: Record<string, boolean> = {};
-    if (role === 'operator' || role === 'sub_operator') {
+    if (role === 'operator' || role === 'sub_operator' || role === 'staff') {
       try {
         const permRes = await fetch(SUPABASE_URL + '/rest/v1/operator_permissions?operator_id=eq.' + encodeURIComponent(operator.id) + '&limit=1', { headers });
         const permData = await permRes.json();
@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
             can_manage_locations: p.can_manage_locations ?? false,
             can_edit_office_location: p.can_edit_office_location ?? false,
             can_export_data: p.can_export_data ?? false,
+            can_view_ad_manager: p.can_view_ad_manager ?? false,
+            can_manage_ads: p.can_manage_ads ?? false,
+            can_manage_warehouse: p.can_manage_warehouse ?? false,
           };
         }
       } catch { /* permissions default to empty = conservative access */ }

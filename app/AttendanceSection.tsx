@@ -56,7 +56,7 @@ export default function AttendanceSection() {
       if (machineFilter !== 'all') url += '&machine_id=' + machineFilter;
       const [rRes, sRes, mRes] = await Promise.all([
         fetch(url),
-        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email&role=eq.field_staff&order=name.asc')),
+        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,designation&role=in.(field_staff,sub_operator,staff)&order=name.asc')),
         fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name&order=display_name.asc')),
       ]);
       const r = await rRes.json(); setRecords(Array.isArray(r) ? r : []);
@@ -232,21 +232,30 @@ export default function AttendanceSection() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: C.surface2, borderBottom: '1px solid ' + C.border }}>
-                {['Staff', 'Machine', 'Date', 'Check In', 'Check Out', 'Duration', 'Check-in GPS', 'Check-out GPS', 'Status'].map(h => (
+                {['Staff', 'Team', 'Machine', 'Date', 'Check In', 'Check Out', 'Duration', 'Check-in GPS', 'Check-out GPS', 'Status'].map(h => (
                   <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: C.text2, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: C.text3 }}>Loading…</td></tr>
+                <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: C.text3 }}>Loading…</td></tr>
               ) : records.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: C.text3 }}>No attendance records for this period.</td></tr>
+                <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: C.text3 }}>No attendance records for this period.</td></tr>
               ) : records.map((r, i) => {
                 const done = !!r.check_out_at;
                 return (
                   <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? '#fff' : C.surface2 }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, color: C.text, fontSize: 13 }}>{r.staff_name || '—'}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: C.text, fontSize: 13 }}>
+                      {r.staff_name || '—'}
+                      {r.staff_employee_id && <span style={{ fontSize: 10, color: C.text3, fontWeight: 700, marginLeft: 6, background: C.surface2, padding: '1px 6px', borderRadius: 5 }}>{r.staff_employee_id}</span>}
+                      {r.staff_designation && <div style={{ fontSize: 11, color: C.text3, fontWeight: 400 }}>{r.staff_designation}</div>}
+                    </td>
+                    <td style={{ padding: '12px 14px', fontSize: 12 }}>
+                      <span style={{ fontWeight: 700, padding: '3px 10px', borderRadius: 20, fontSize: 11, background: r.team_name === 'Fruitlink' ? '#f5f3ff' : C.blueBg, color: r.team_name === 'Fruitlink' ? '#7c3aed' : C.blue }}>
+                        {r.team_name || '—'}
+                      </span>
+                    </td>
                     <td style={{ padding: '12px 14px', color: C.text, fontSize: 13 }}>{r.machine_name || 'Office'}</td>
                     <td style={{ padding: '12px 14px', color: C.text, fontSize: 13, whiteSpace: 'nowrap' }}>{r.check_in_at ? new Date(r.check_in_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
                     <td style={{ padding: '12px 14px', color: C.text, fontSize: 13, whiteSpace: 'nowrap' }}>{fmtDate(r.check_in_at)}</td>

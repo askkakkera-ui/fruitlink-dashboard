@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import WarehouseSection from './WarehouseSection'
 import NotifyConfigSection from './NotifyConfigSection'
+import MyStaffSection from './MyStaffSection'
 import ReportsSection from './ReportsSection'
 import FieldStaffSection from './FieldStaffSection'
 import AttendanceSection from './AttendanceSection'
@@ -111,21 +112,23 @@ function SectionLabel({ children }: any) {
 
 // ─── Sidebar ─────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { key: 'console', label: 'Console', icon: '⊞', badge: 'LIVE', group: '' },
-  { key: 'machines', label: 'Machine List', icon: '▣', group: 'Equipment Management' },
-  { key: 'map', label: 'Fleet Map', icon: '◎', group: 'Equipment Management' },
-  { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
-  { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
-  { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management' },
+  { key: 'console', label: 'Console', icon: '⊞', badge: 'LIVE', group: '', permission: 'can_view_console' },
+  { key: 'machines', label: 'Machine List', icon: '▣', group: 'Equipment Management', permission: 'can_view_console' },
+  { key: 'map', label: 'Fleet Map', icon: '◎', group: 'Equipment Management', permission: 'can_view_fleet_map' },
+  { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true, permission: 'can_view_alerts' },
+  { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management', permission: 'can_view_orders' },
+  { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management', permission: 'can_view_warehouse' },
   { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', permission: 'can_view_notify_config', superAdmin: true },
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
   { key: 'myteam', label: 'My Team', icon: '👥', group: 'Operator Management', operatorOnly: true },
+  { key: 'mystaff', label: 'Fruitlink Team', icon: '🏢', group: 'Fruitlink Internal', superAdminOnly: true },
   { key: 'fieldstaff', label: 'Field Staff', icon: '👷', group: 'Operator Management', permission: 'can_view_field_staff', superAdmin: true },
   { key: 'attendance', label: 'Attendance', icon: '🗓', group: 'Operator Management', permission: 'can_view_attendance', superAdmin: true },
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
-  { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing' },
-  { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
+  { key: 'faultlog', label: 'Fault Log', icon: '⚠', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
+  { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing', permission: 'can_view_ad_manager' },
+  { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing', permission: 'can_view_console' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
 ]
 
@@ -137,11 +140,13 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
     if (item.superAdminOnly && role !== 'super_admin') return
     // operatorOnly = only true operators (they manage their own team)
     if (item.operatorOnly && role !== 'operator') return
-    // permission key = check operator permissions passed as prop
-    if (item.permission && (role === 'operator' || role === 'sub_operator')) {
+    // Fruitlink staff with no permission key on an item = hide it (purely permission-driven).
+    if (role === 'staff' && !item.permission) return
+    // permission key = check operator/sub-operator/staff permissions
+    if (item.permission && (role === 'operator' || role === 'sub_operator' || role === 'staff')) {
       if (!permissions[item.permission]) return
     }
-    // legacy superAdmin flag = hide from operators unless they have explicit permission
+    // legacy superAdmin flag = hide from non-super-admins unless they have explicit permission
     if (item.superAdmin && role !== 'super_admin') {
       if (!item.permission) return
     }
@@ -180,7 +185,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
 
       {/* Nav */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 8px' }}>
-        {(() => { const order = ['__top', 'Equipment Management', 'Order Management', 'Operator Management', 'Marketing', 'System']; return Object.entries(groups).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])); })().map(([group, items]) => (
+        {(() => { const order = ['__top', 'Equipment Management', 'Order Management', 'Operator Management', 'Fruitlink Internal', 'Marketing', 'System']; return Object.entries(groups).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])); })().map(([group, items]) => (
           <div key={group}>
             {group !== '__top' && <SectionLabel>{group}</SectionLabel>}
             {items.map(item => {
@@ -219,7 +224,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
           }}>{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
-            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : role === 'sub_operator' ? 'Sub-Operator' : role === 'field_staff' ? 'Field Staff' : 'Operator'}</div>
+            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : role === 'sub_operator' ? 'Sub-Operator' : role === 'field_staff' ? 'Field Staff' : role === 'staff' ? 'Fruitlink Staff' : 'Operator'}</div>
           </div>
           <button onClick={onLogout} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textSide3, fontSize: 16, padding: 2 }} title="Logout">⏻</button>
         </div>
@@ -238,7 +243,7 @@ function TopBar({ active }: { active: string }) {
     const t = setInterval(tick, 30000)
     return () => clearInterval(t)
   }, [])
-  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team' }
+  const labels: Record<string, string> = { console: 'Console', machines: 'Machine List', alerts: 'Alerts', operators: 'Operators', settings: 'Settings', map: 'Fleet Map', orders: 'Orders List', warehouse: 'Warehouse', notifyconfig: 'WhatsApp Alerts', reports: 'Reports', ads: 'Ad Manager', loyalty: 'Loyalty', commlog: 'Comm Log', faultlog: 'Fault Log', fieldstaff: 'Field Staff', attendance: 'Attendance', myteam: 'My Team', mystaff: 'Fruitlink Team' }
   const shadow = '0 1px 3px rgba(0,0,0,0.35)'
   return (
     <div style={{
@@ -376,7 +381,18 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const visible = (machines || []).filter((m: any) => m && m.sn)
   const machine = (machineSel && machineSel !== 'all'
     ? visible.find((m: any) => m.id === machineSel)
-    : visible.find((m: any) => m.status === 'online') || visible[0]) || visible[0] || null
+    : (() => {
+        // When "All machines": pick the online machine with lowest stock (most urgent)
+        const onlineWithStock = visible.filter((m: any) => m.status === 'online' && (stockData || []).find((s: any) => s.machine_id === m.id && s.stock_known))
+        if (onlineWithStock.length > 0) {
+          return onlineWithStock.sort((a: any, b: any) => {
+            const sa = (stockData || []).find((s: any) => s.machine_id === a.id)
+            const sb = (stockData || []).find((s: any) => s.machine_id === b.id)
+            return (sa?.stock_pct ?? 999) - (sb?.stock_pct ?? 999)
+          })[0]
+        }
+        return visible.find((m: any) => m.status === 'online') || visible[0]
+      })()) || visible[0] || null
   // Per-machine fruit/stock tuning from Settings → Fruit & Stock (falls back to defaults)
   const tuning = (() => {
     try {
@@ -410,7 +426,8 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
         if (Array.isArray(row) && row[0] && row[0].id) mid = row[0].id
       } catch {}
       try {
-        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&machine_id=eq.' + mid + '&pay_state=eq.1&created_at=gte.' + since + '&order=created_at.desc&limit=3000'
+        const machineFilter = machineSel === 'all' ? '' : '&machine_id=eq.' + mid
+        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc&limit=3000'
         const d = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h }).then(r => r.json())
         if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) }
       } catch {
@@ -471,12 +488,15 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const revToday = dailyRev[todayKey] || 0
   const sw = Number(machine && machine.scale_weight_g)
   const haveScale = Number.isFinite(sw) && sw > TARE
+  // Fallback: use IR stock sensors (L1/L2/L3) when scale is unavailable or un-tared
+  const stockLayers = [machine?.stock_l1, machine?.stock_l2, machine?.stock_l3].filter(v => v === true).length
+  const haveStockSensors = machine && (machine.stock_l1 !== undefined || machine.stock_l2 !== undefined || machine.stock_l3 !== undefined)
   // Fall back to visit-based stock data for NewSaier machines (no hardware scale)
   const visitStock = (stockData || []).find((s: any) => s.machine_id === machine?.id)
-  const leftOranges = haveScale
-    ? Math.max(0, Math.round((sw - TARE) / GPO))
-    : visitStock?.stock_known
-      ? Math.round((visitStock.cups_remaining || 0) * OPC)
+  const leftOranges = visitStock?.stock_known
+    ? visitStock.remaining_oranges ?? Math.round((visitStock.cups_remaining || 0) * OPC)
+    : haveScale
+      ? Math.max(0, Math.round((sw - TARE) / GPO))
       : null
   const usedToday = cupsToday * OPC
   const sellThrough = leftOranges != null && (usedToday + leftOranges) > 0 ? Math.round(usedToday / (usedToday + leftOranges) * 100) : null
@@ -541,7 +561,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machine.display_name} · revenue, last 7 days</div>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machineSel === 'all' ? 'All machines' : machine.display_name} · revenue, last 7 days</div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9, minHeight: 104 }}>
                   {week.map((d, i) => {
                     const h = Math.max(Math.round(d.v / maxV * 88), d.v > 0 ? 6 : 3)
@@ -562,7 +582,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
       <div style={card}>
         <div style={{ height: 3, background: runReady ? runCol : C.border2 }} />
         <div style={{ padding: '18px 22px' }}>
-          {!haveScale ? (
+          {!haveScale && !haveStockSensors ? (
             <div style={{ fontSize: 13, color: C.text3 }}>Waiting for a live stock reading from {machine.display_name} to project the runway.</div>
           ) : (<>
             <div style={{ position: 'relative', height: 46, borderRadius: 10, background: '#f1f2f7', border: '1px solid ' + C.border, overflow: 'hidden', margin: '6px 0 4px' }}>
@@ -657,6 +677,7 @@ const [stockData, setStockData] = useState<any[]>([])
   const [alertsOpen, setAlertsOpen] = useState(false)
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const [machineSel, setMachineSel] = useState('all')
+  const scopedStock = stockData.filter((s: any) => machines.some((m: any) => m.id === s.machine_id))
   const scopedMachines = machineSel === 'all' ? machines : machines.filter((m: any) => m.id === machineSel)
   const online = scopedMachines.filter((m: any) => m.status === 'online').length
   const activeAlerts = alerts.filter((a: any) => !a.resolved_at)
@@ -711,7 +732,7 @@ const stats = [
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
-      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={stockData} />
+      <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={scopedStock} />
 
 {/* Machine Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: fleetOpen ? 14 : 0 }}>
@@ -728,7 +749,7 @@ const stats = [
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
-          {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={stockData.find((s: any) => s.machine_id === m.id)} />)}
+          {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={scopedStock.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       ))}
 
@@ -1036,12 +1057,12 @@ function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                 </div>
                 {/* Alert rows */}
                 {isOpen && (
-                  <div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
                       <thead>
                         <tr style={{ background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
                           {['Severity', 'Alert', 'Time', 'Status'].map((h, i) => (
-                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
+                            <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: '0.07em', width: ['12%','52%','18%','18%'][i] }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1108,14 +1129,16 @@ function OrdersPage() {
   const [machineSel, setMachineSel] = useState('all')
   const [showAllMachines, setShowAllMachines] = useState(false)
   const [view, setView] = useState<'analytics' | 'orders'>('analytics')
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week')
+  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom'>('week')
+  const [customFrom, setCustomFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}) })
+  const [customTo, setCustomTo] = useState(() => new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}))
   const [allowedIds, setAllowedIds] = useState<string[]>([])
   const [exFrom, setExFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
   const [exTo, setExTo] = useState(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })
   const [exporting, setExporting] = useState('')
 
   const [uRole] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_role=([^;]+)/)?.[1] || 'operator') : 'operator')
-  const [uOpId] = useState(() => typeof document !== 'undefined' ? (document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || '') : '')
+  const [uOpId] = useState(() => { if (typeof document === 'undefined') return ''; const role = document.cookie.match(/fl_role=([^;]+)/)?.[1] || ''; const opId = document.cookie.match(/fl_operator_id=([^;]+)/)?.[1] || ''; const ownerId = document.cookie.match(/fl_owner_id=([^;]+)/)?.[1] || ''; return role === 'sub_operator' ? (ownerId || opId) : opId; })
 
   useEffect(() => {
     const h = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
@@ -1133,7 +1156,8 @@ function OrdersPage() {
       }
       const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
       setAllowedIds(ids)
-      const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=500' + f), { headers: h }).then(r => r.json())
+      const thirtyDaysAgo = new Date(Date.now() - 30*86400000).toISOString();
+      const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=2000&created_at=gte.' + thirtyDaysAgo + f), { headers: h }).then(r => r.json())
       setOrders(Array.isArray(os) ? os : [])
       setLoading(false)
     }
@@ -1158,6 +1182,7 @@ function OrdersPage() {
     const d = new Date(o.created_at)
     if (period === 'today') return istKey(o.created_at) === todayKey
     if (period === 'week') return d >= weekFloor
+    if (period === 'custom') return d >= new Date(customFrom + 'T00:00:00+05:30') && d <= new Date(customTo + 'T23:59:59+05:30')
     return d >= monthFloor
   })
 
@@ -1189,7 +1214,7 @@ function OrdersPage() {
   // Tab filter for order list
 const filtered = scopedOrders.filter((o: any) => {
     if (filter === 'paid') return o.pay_state === 1
-    if (filter === 'pending') return o.pay_state === 0
+    if (filter === 'failed') return o.pay_state === 1 && o.delivery_state === 2
     if (filter === 'delivered') return o.delivery_state === 1
     if (filter === 'refunded') return (o.refund_state || 0) >= 1
     return o.pay_state !== 0
@@ -1197,7 +1222,7 @@ const filtered = scopedOrders.filter((o: any) => {
 
   const PAY_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Paid', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
   const DEL_STATE: any = { 0: { label: 'Pending', color: C.amber, bg: C.amberBg }, 1: { label: 'Delivered', color: C.green, bg: C.greenBg }, 2: { label: 'Failed', color: C.red, bg: C.redBg } }
-  const REFUND_STATE: any = { 1: { label: 'Refunded', color: C.green, bg: C.greenBg }, 2: { label: 'Refund Failed', color: C.red, bg: C.redBg } }
+  const REFUND_STATE: any = { 0: { label: '—', color: C.text3, bg: 'transparent' }, 1: { label: 'Refunded', color: C.green, bg: C.greenBg }, 2: { label: 'Manual', color: C.amber, bg: C.amberBg }, 3: { label: 'Processing', color: C.amber, bg: C.amberBg } }
   const isRefundView = filter === 'refunded'
   // ─── Export: CSV (all rows) + PDF (summary). Pulls fresh from DB for the chosen range ───
   const _esc = (v: any) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
@@ -1377,7 +1402,7 @@ const filtered = scopedOrders.filter((o: any) => {
   }
 
   return (
-    <div style={{ padding: '22px 28px' }}>
+    <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Revenue & Orders</div>
@@ -1398,9 +1423,16 @@ const filtered = scopedOrders.filter((o: any) => {
           {/* Period toggle */}
           {view === 'analytics' && (
             <div style={{ display: 'flex', background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: 3 }}>
-              {[['today', 'Today'], ['week', '7 Days'], ['month', '30 Days']].map(([p, l]) => (
+              {[['today', 'Today'], ['week', '7 Days'], ['month', '30 Days'], ['custom', 'Custom']].map(([p, l]) => (
                 <button key={p} onClick={() => setPeriod(p as any)} style={{ padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: period === p ? C.orange : 'transparent', color: period === p ? '#fff' : C.text2, transition: 'all .15s' }}>{l}</button>
               ))}
+              {period === 'custom' && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
+                  <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid ' + C.border, color: C.text, background: C.surface }} />
+                  <span style={{ fontSize: 11, color: C.text3 }}>to</span>
+                  <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid ' + C.border, color: C.text, background: C.surface }} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1426,7 +1458,7 @@ const filtered = scopedOrders.filter((o: any) => {
           {/* KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
             {[
-              { label: 'Total Revenue', value: fmtAmt(totalRevenue), sub: period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : 'last 30 days', color: C.green, icon: '₹', pct: 75 },
+              { label: 'Total Revenue', value: fmtAmt(totalRevenue), sub: period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : period === 'custom' ? customFrom + ' to ' + customTo : 'last 30 days', color: C.green, icon: '₹', pct: 75 },
               { label: 'Paid Orders', value: paidOrders.length.toString(), sub: periodOrders.length + ' placed · ' + convRate.toFixed(0) + '% paid', color: C.blue, icon: '✅', pct: convRate },
               { label: 'Avg Order Value', value: fmtAmt(avgOrder), sub: 'per transaction', color: C.orange, icon: '📈', pct: 60 },
               { label: 'Cups Served', value: totalCups.toString(), sub: 'juice cups', color: C.amber, icon: '🥤', pct: 80 },
@@ -1439,7 +1471,7 @@ const filtered = scopedOrders.filter((o: any) => {
             <div style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>Paid orders only</div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 160 }}>
               {dailyData.map((d, i) => {
-                const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 4 : 2)
+                const h = Math.max((d.revenue / maxRev) * 140, d.revenue > 0 ? 8 : 0)
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     {d.revenue > 0 && (
@@ -1496,7 +1528,7 @@ const filtered = scopedOrders.filter((o: any) => {
         <div>
           {/* Order list filter tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: C.surface2, borderRadius: 10, padding: 4, width: 'fit-content', border: '1px solid ' + C.border }}>
-            {[['all','All Orders'], ['paid','Paid'], ['pending','Pending'], ['delivered','Delivered'], ['refunded','Refunded']].map(([f, label]) => (
+            {[['all','All Orders'], ['paid','Paid'], ['failed','Failed'], ['delivered','Delivered'], ['refunded','Refunded']].map(([f, label]) => (
               <button key={f} onClick={() => setFilter(f)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === f ? C.orange : 'transparent', color: filter === f ? '#fff' : C.text2, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>{label}</button>
             ))}
           </div>
@@ -1510,7 +1542,8 @@ const filtered = scopedOrders.filter((o: any) => {
             </div>
           ) : (
             <div style={{ background: C.surface, borderRadius: 16, border: '1px solid ' + C.border, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 700 }}>
                 <thead>
                   <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
                     {(isRefundView ? ['Order Code', 'Machine', 'Refunded', 'Status', 'Cups', 'Time'] : ['Order Code', 'Machine', 'Amount', 'Payment', 'Delivery', 'Cups', 'Time']).map(h => (
@@ -1534,7 +1567,7 @@ const filtered = scopedOrders.filter((o: any) => {
                           <>
                             <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: o.refund_state === 1 ? C.green : C.red, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
                             <td style={{ padding: '12px 16px' }}>
-                              {(() => { const rs = REFUND_STATE[o.refund_state] || REFUND_STATE[2]; return <Pill color={rs.color} bg={rs.bg}>{rs.label}</Pill> })()}
+                              {(() => { const rs = REFUND_STATE[o.refund_state] || REFUND_STATE[0]; return <Pill color={rs.color} bg={rs.bg}>{rs.label}</Pill> })()}
                               {o.refund_note && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.refund_note}</div>}
                             </td>
                           </>
@@ -1558,6 +1591,7 @@ const filtered = scopedOrders.filter((o: any) => {
                   })}
                 </tbody>
               </table>
+              </div>
               <div style={{ padding: '10px 16px', borderTop: '1px solid ' + C.border, background: C.surface2, fontSize: 11, color: C.text3 }}>
                 Showing {filtered.length} of {orders.length} orders
               </div>
@@ -1571,7 +1605,7 @@ const filtered = scopedOrders.filter((o: any) => {
 
 
 // ─── Machine Grouped List ────────────────────────────────────────
-function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords }: any) {
+function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
   const online = m.status === 'online'
   const isExpanded = expandedId === m.id
   const temp = m.inner_temp_c
@@ -1604,6 +1638,14 @@ function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
+                {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
+                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                    {[['reboot','🔄 Reboot'],['reset_mcu','⚡ Reset MCU'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
+                      <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
+                    )}
+                  </div>}
+                </div>}
                 {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
               </div>
             </div>
@@ -1638,7 +1680,7 @@ function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit
   )
 }
 
-function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords }: any) {
+function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
   const [collapsedOps, setCollapsedOps] = useState<Record<string, boolean>>({})
 
   const filtered = (machines || []).filter((m: any) => {
@@ -1752,6 +1794,14 @@ function MachineGroupedList({ machines, search, expandedId, setExpandedId, stock
                                   </div>
                                   <div style={{ display: 'flex', gap: 6 }}>
                                     {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
+                {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
+                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                    {[['reboot','🔄 Reboot'],['reset_mcu','⚡ Reset MCU'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
+                      <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
+                    )}
+                  </div>}
+                </div>}
                                     {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
                                   </div>
                                 </div>
@@ -1840,6 +1890,24 @@ function MachinesPage({ machines, loading, fetchData }: any) {
       if (typeof fetchData === 'function') fetchData()
     } catch (e: any) { setEErr('Save failed: ' + (e?.message || 'error')); setESaving(false) }
   }
+  const [cmdMenu, setCmdMenu] = useState<string | null>(null)
+  const [cmdSending, setCmdSending] = useState(false)
+  const sendCommand = async (machineId: string, sn: string, command: string, params: any = {}) => {
+    const name = safeMachines.find((m: any) => m.id === machineId)?.display_name || sn
+    if (!confirm('Send ' + command.toUpperCase() + ' to ' + name + '?')) return
+    setCmdSending(true)
+    try {
+      const r = await fetch('https://api.fruitlinktech.in/api/device/commands/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' },
+        body: JSON.stringify({ machine_id: machineId, command, params, created_by: 'dashboard' })
+      })
+      const data = await r.json()
+      if (data.code === 1) { alert(command + ' command sent to ' + name + '. It will execute on the next heartbeat (~5 min).'); setCmdMenu(null) }
+      else alert('Failed: ' + (data.msg || 'unknown'))
+    } catch (e: any) { alert('Error: ' + e.message) }
+    setCmdSending(false)
+  }
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -1873,10 +1941,23 @@ function MachinesPage({ machines, loading, fetchData }: any) {
           role={role}
           canEdit={canEdit}
           openEdit={openEdit}
+          sendCommand={sendCommand}
+          cmdMenu={cmdMenu}
+          setCmdMenu={setCmdMenu}
+          cmdSending={cmdSending}
           fmtTime={fmtTime}
           getCoords={(m: any) => { if (m.location_lat != null && m.location_lng != null) return { lat: m.location_lat, lng: m.location_lng }; return null; }}
         />
       )}
+      {/* Command History */}
+      <div style={{ marginTop: 24, background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid ' + C.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>📋 Recent Commands</div>
+          <div style={{ fontSize: 11, color: C.text3 }}>Auto-refreshes every 30s</div>
+        </div>
+        <CommandHistory machines={safeMachines} />
+      </div>
+
       {editM && (
         <div onClick={closeEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 24, width: 420, maxWidth: '90vw' }}>
@@ -2041,10 +2122,142 @@ function FleetMapPage({ machines }: { machines: any[] }) {
 //      ads: <AdsPage machines={machines} />
 //  in the pages map keeps working with no edit.
 // ═══════════════════════════════════════════════════════════════════════
-function AdsPage({ machines }: { machines: any[] }) {
+// ─────────────────────────────────────────────────────────────────────────────
+//  BottomTilesPanel — per-machine idle-screen bottom tiles (left 60% / right 40%)
+//  These are the two fixed signage images below the top ad zone. They are NOT
+//  ad campaigns: they live in machines.state.screen_config.bottom_left_url /
+//  bottom_right_url and are read by the machine app's BottomTilesLoader.
+//  Uploading reuses the same /api/upload presigned-PUT flow as ad media.
+// ─────────────────────────────────────────────────────────────────────────────
+function BottomTilesPanel({ machines }: { machines: any[] }) {
+  const parseSC = (m: any) => {
+    try { const st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}); return st.screen_config || {} } catch { return {} }
+  }
+  const [sel, setSel] = useState<string>(machines[0]?.sn || '')
+  const [left, setLeft] = useState('')
+  const [right, setRight] = useState('')
+  const [busy, setBusy] = useState<'' | 'left' | 'right' | 'save'>('')
+  const [savedAt, setSavedAt] = useState<number>(0)
+  const [dirty, setDirty] = useState(false)
+
+  const machine = machines.find(m => m.sn === sel)
+
+  // Load the selected machine's current tile URLs whenever the selection changes.
+  useEffect(() => {
+    if (!machine) return
+    const sc = parseSC(machine)
+    setLeft(sc.bottom_left_url || '')
+    setRight(sc.bottom_right_url || '')
+    setDirty(false)
+  }, [sel])
+
+  const upload = async (which: 'left' | 'right', file: File) => {
+    const MAX_MB = 100
+    if (file.size > MAX_MB * 1024 * 1024) { alert('That file is ' + (file.size / 1048576).toFixed(1) + ' MB. Keep tile images under ' + MAX_MB + ' MB.'); return }
+    setBusy(which)
+    try {
+      const presignRes = await fetch('/api/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream', operator_id: getCookie('fl_operator_id') || 'shared' }),
+      })
+      const presign = await presignRes.json()
+      if (!presign.uploadUrl) { alert('Upload failed: ' + (presign.error || 'no upload url')); setBusy(''); return }
+      const put = await fetch(presign.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
+      if (!put.ok) { alert('Upload to storage failed (' + put.status + ')'); setBusy(''); return }
+      if (which === 'left') setLeft(presign.publicUrl); else setRight(presign.publicUrl)
+      setDirty(true)
+    } catch (e: any) { alert('Upload failed: ' + (e?.message || e)) }
+    setBusy('')
+  }
+
+  const save = async () => {
+    if (!machine) return
+    setBusy('save')
+    try {
+      const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
+      // Read the freshest row so we never clobber other screen_config keys.
+      const rows = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=state&sn=eq.' + machine.sn), { headers }).then(r => r.json())
+      let st: any = {}
+      try { const raw = rows?.[0]?.state; st = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}) } catch { st = {} }
+      st.screen_config = st.screen_config || {}
+      st.screen_config.bottom_left_url = left || ''
+      st.screen_config.bottom_right_url = right || ''
+      await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?sn=eq.' + machine.sn),
+        { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ state: JSON.stringify(st) }) })
+      // reflect locally so a re-select shows the saved values
+      if (machine) machine.state = JSON.stringify(st)
+      setDirty(false); setSavedAt(Date.now())
+    } catch (e: any) { alert('Save failed: ' + (e?.message || e)) }
+    setBusy('')
+  }
+
+  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }
+  const inp = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: C.surface2, boxSizing: 'border-box' as const }
+
+  const tile = (which: 'left' | 'right', url: string, setUrl: (s: string) => void, label: string, pct: string) => (
+    <div style={{ flex: which === 'left' ? 3 : 2, minWidth: 0 }}>
+      <label style={lbl}>{label} <span style={{ color: C.text3, fontWeight: 600 }}>· {pct}</span></label>
+      <div style={{ width: '100%', aspectRatio: which === 'left' ? '16/10' : '10/10', borderRadius: 10, border: '1px dashed ' + C.border, background: url ? '#000' : C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 8 }}>
+        {url
+          ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          : <span style={{ color: C.text3, fontSize: 12 }}>No image set</span>}
+      </div>
+      <input id={'tile-file-' + which} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) upload(which, f); (e.target as HTMLInputElement).value = '' }} />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <button type="button" disabled={busy === which} onClick={() => document.getElementById('tile-file-' + which)?.click()}
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid ' + C.orange, background: busy === which ? C.surface2 : C.orangeBg, color: C.orange, fontSize: 12.5, fontWeight: 700, cursor: busy === which ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+          {busy === which ? 'Uploading...' : '⬆ Upload image'}
+        </button>
+        {url && <button type="button" onClick={() => { setUrl(''); setDirty(true) }}
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Clear</button>}
+      </div>
+      <input style={inp} value={url} onChange={e => { setUrl(e.target.value); setDirty(true) }} placeholder="Upload above, or paste an image URL" />
+    </div>
+  )
+
+  if (machines.length === 0) return null
+
+  return (
+    <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 20, marginBottom: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, flexWrap: 'wrap' as const, gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Bottom Tiles <span style={{ fontSize: 12, fontWeight: 600, color: C.text3 }}>· idle-screen signage</span></div>
+          <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>The two fixed images below the ad zone. Left is wide (60%), right is square (40%). Set per machine.</div>
+        </div>
+        <select value={sel} onChange={e => setSel(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface2, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          {machines.map((m: any) => <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginTop: 14 }}>
+        {tile('left', left, setLeft, 'Left tile', '60% · wide')}
+        {tile('right', right, setRight, 'Right tile', '40% · square')}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+        <button type="button" disabled={!dirty || busy === 'save'} onClick={save}
+          style={{ padding: '9px 20px', borderRadius: 10, border: 'none', background: (!dirty || busy === 'save') ? C.surface2 : C.orange, color: (!dirty || busy === 'save') ? C.text3 : '#fff', fontSize: 13, fontWeight: 700, cursor: (!dirty || busy === 'save') ? 'default' : 'pointer' }}>
+          {busy === 'save' ? 'Saving...' : 'Save tiles'}
+        </button>
+        {dirty && <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>Unsaved changes</span>}
+        {!dirty && savedAt > 0 && <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>✓ Saved — appears on the machine at its next config sync</span>}
+      </div>
+    </div>
+  )
+}
+
+function AdsPage({ machines, permissions = {}, role: roleProp = '', operatorId = '', ownerId = '' }: { machines: any[]; permissions?: Record<string, boolean>; role?: string; operatorId?: string; ownerId?: string }) {
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const SCREENS = ['idle', 'ordering', 'dispensing', 'thanks']
-  const role = getCookie('fl_role') || 'operator'
+  const role = roleProp || getCookie('fl_role') || 'operator'
+  // Who may manage ads: super_admin always; operator/sub_operator only with the
+  // can_manage_ads permission. Others get a read-only view.
+  const canManageAds = role === 'super_admin' || permissions.can_manage_ads === true
+  // The operator that owns campaigns created here: self for operator,
+  // parent for sub_operator, '' for super_admin (server stamps nothing extra).
+  const myAdOwnerId = role === 'sub_operator' ? (ownerId || '') : (operatorId || '')
 
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [perf, setPerf] = useState<Record<string, any>>({})
@@ -2088,6 +2301,7 @@ function AdsPage({ machines }: { machines: any[] }) {
   const snName = (sn: string) => machines.find(m => m.sn === sn)?.display_name || sn
 
   const save = async (c: any) => {
+    if (!canManageAds) { alert('You have view-only access to ads. Ask Fruitlink to enable ad management.'); return }
     setSaving(true)
     try {
       const isOwn = (c.advertiser || '').trim().toLowerCase() === 'fruitlink'
@@ -2099,6 +2313,9 @@ function AdsPage({ machines }: { machines: any[] }) {
         start_hour: c.start_hour, end_hour: c.end_hour, weight: c.weight,
         status: c.status, rate_cpm: isOwn ? null : (c.rate_cpm ? Number(c.rate_cpm) : null),
       }
+      // Stamp ownership for operator-created campaigns (super_admin leaves as-is /
+      // may target any machine). The server re-validates and overrides this anyway.
+      if (role !== 'super_admin' && myAdOwnerId) body.operator_id = myAdOwnerId
       if (c.id) {
         await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/ad_campaign?id=eq.' + c.id),
           { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(body) })
@@ -2141,7 +2358,7 @@ function AdsPage({ machines }: { machines: any[] }) {
   }
 
   return (
-    <div style={{ padding: '22px 28px' }}>
+    <div style={{ padding: '24px 28px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
@@ -2152,8 +2369,12 @@ function AdsPage({ machines }: { machines: any[] }) {
           {pendingCount > 0 && (
             <Pill color={C.amber} bg={C.amberBg}><Dot color={C.amber} pulse size={5} /> {pendingCount} pending approval</Pill>
           )}
-          <button onClick={() => setEditing({ _new: true, name: '', advertiser: 'Fruitlink', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: machines.map((m: any) => m.sn), days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
-            style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Campaign</button>
+          {canManageAds ? (
+            <button onClick={() => setEditing({ _new: true, name: '', advertiser: role === 'super_admin' ? 'Fruitlink' : '', media_type: 'image', media_url: '', media_name: '', duration_s: 15, screen: 'idle', machine_sns: machines.map((m: any) => m.sn), days: [0, 1, 2, 3, 4], start_hour: 9, end_hour: 18, weight: 1, status: 'active', rate_cpm: '' })}
+              style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New Campaign</button>
+          ) : (
+            <Pill color={C.text3} bg={C.surface2}>View only — ask Fruitlink for ad access</Pill>
+          )}
         </div>
       </div>
 
@@ -2164,6 +2385,10 @@ function AdsPage({ machines }: { machines: any[] }) {
         <StatCard label="Ad Revenue" value={fmtINR(totalRev)} sub="third-party brands" color={C.green} icon="₹" pct={60} />
         <StatCard label="Pending Approval" value={pendingCount} sub={pendingCount ? 'needs review' : 'all clear'} color={pendingCount ? C.amber : C.green} icon="⏳" pct={pendingCount ? 100 : 0} />
       </div>
+
+      {/* Bottom tiles (per-machine idle-screen signage) — super_admin only for now,
+          pending verification of server-side write-scoping in /api/sb. */}
+      {role === 'super_admin' && <BottomTilesPanel machines={machines} />}
 
       {/* Machine filter */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' as const }}>
@@ -2458,7 +2683,7 @@ function LoyaltyPage() {
   const eligible = customers.filter((c: any) => c.points >= config.redeem_threshold).length
 
   return (
-    <div style={{ padding: '22px 28px' }}>
+    <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Loyalty Programme</div>
@@ -2562,6 +2787,275 @@ function LoyaltyPage() {
   )
 }
 
+
+// ─── Fault Log ────────────────────────────────────────────────────────
+
+// ─── Command History (recent remote commands across all machines) ──────────
+function CommandHistory({ machines }: { machines: any[] }) {
+  const [cmds, setCmds] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const machineMap: Record<string, string> = {}
+  machines.forEach((m: any) => { machineMap[m.id] = m.display_name || m.sn })
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const path = '/rest/v1/machine_commands?select=*&order=created_at.desc&limit=20'
+      const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+      const r = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers })
+      const data = await r.json()
+      setCmds(Array.isArray(data) ? data : [])
+    } catch (e) { console.error('CmdHistory error:', e) }
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const t = setInterval(load, 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const fmtTime = (iso: string) => {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
+  }
+  const statusBadge = (status: string) => {
+    const colors: Record<string, string> = { pending: '#F9A825', sent: '#58A6FF', executed: '#3FB950', failed: '#F85149' }
+    return { background: (colors[status] || '#8B949E') + '22', color: colors[status] || '#8B949E', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, display: 'inline-block' }
+  }
+  const cmdIcon: Record<string, string> = { reboot: '🔄', clear_fault: '🔧', sync_config: '📡', maintenance_on: '🚧', maintenance_off: '✅', run_cleaning: '🧹' }
+
+  if (loading && cmds.length === 0) return <div style={{ textAlign: 'center', padding: 20, color: C.text3, fontSize: 13 }}>Loading commands...</div>
+  if (cmds.length === 0) return <div style={{ textAlign: 'center', padding: 20, color: C.text3, fontSize: 13 }}>No commands sent yet.</div>
+
+  return (
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+        <thead>
+          <tr style={{ background: C.surface2 }}>
+            {['Command', 'Machine', 'Status', 'Created', 'Sent', 'Executed', 'Result', 'By'].map(h =>
+              <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text2, fontSize: 11, whiteSpace: 'nowrap' as const }}>{h}</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {cmds.map((c: any, i: number) => (
+            <tr key={c.id || i} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? C.surface2 : C.surface }}>
+              <td style={{ padding: '8px 10px', fontWeight: 700 }}>{cmdIcon[c.command] || '⚡'} {c.command}</td>
+              <td style={{ padding: '8px 10px' }}>{machineMap[c.machine_id] || '?'}</td>
+              <td style={{ padding: '8px 10px' }}><span style={statusBadge(c.status)}>{c.status}</span></td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.created_at)}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.sent_at)}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.executed_at)}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, fontFamily: 'monospace', color: C.text3 }}>{c.result || '—'}</td>
+              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{c.created_by || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function FaultLogPage({ machines }: { machines: any[] }) {
+  const [events, setEvents] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [machineFilter, setMachineFilter] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('')
+  const [dateRange, setDateRange] = useState('7d')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 50
+  const [autoRefresh, setAutoRefresh] = useState(true)
+
+  const machineMap: Record<string, string> = {}
+  const machineSnMap: Record<string, string> = {}
+  machines.forEach(m => { machineMap[m.id] = m.display_name || m.sn; machineSnMap[m.id] = m.sn })
+
+  const resolveFault = async (machineId: string, faultCode: string) => {
+    const sn = machineSnMap[machineId]
+    if (!sn) { alert('Machine SN not found'); return }
+    if (!confirm('Resolve fault ' + faultCode + ' on ' + (machineMap[machineId] || sn) + '?')) return
+    try {
+      const r = await fetch('https://api.fruitlinktech.in/api/device/fault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' },
+        body: JSON.stringify({ sn, event: 'clear', fault_code: faultCode, resolution: 'manual_dashboard' })
+      })
+      const data = await r.json()
+      if (data.code === 1) { loadEvents() } else { alert('Failed: ' + (data.msg || 'unknown error')) }
+    } catch (e: any) { alert('Error: ' + e.message) }
+  }
+
+  const loadEvents = async () => {
+    setLoading(true)
+    setPage(0)
+    try {
+      const cutoff = new Date()
+      if (dateRange === '24h') cutoff.setHours(cutoff.getHours() - 24)
+      else if (dateRange === '7d') cutoff.setDate(cutoff.getDate() - 7)
+      else if (dateRange === '30d') cutoff.setDate(cutoff.getDate() - 30)
+      else cutoff.setFullYear(cutoff.getFullYear() - 1)
+      const machineIds = machines.map((m: any) => m.id).filter(Boolean)
+      const midFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : ''
+      const path = '/rest/v1/fault_events?select=*&order=opened_at.desc&limit=200&opened_at=gte.' + cutoff.toISOString() + midFilter
+      const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+      const r = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers })
+      const data = await r.json()
+      setEvents(Array.isArray(data) ? data : [])
+    } catch (e) { console.error('FaultLog load error:', e) }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadEvents() }, [dateRange])
+  useEffect(() => {
+    if (!autoRefresh) return
+    const timer = setInterval(() => { loadEvents() }, 60000)
+    return () => clearInterval(timer)
+  }, [autoRefresh, dateRange])
+
+  const filtered = events.filter(e => {
+    if (machineFilter && e.machine_id !== machineFilter) return false
+    if (severityFilter && e.severity !== severityFilter) return false
+    return true
+  })
+
+  const active = filtered.filter(e => !e.cleared_at)
+  const resolved = filtered.filter(e => e.cleared_at)
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  const fmtTime = (iso: string) => {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ', ' +
+      d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  }
+  const fmtDur = (s: number | null) => {
+    if (!s && s !== 0) return '—'
+    if (s < 60) return s + 's'
+    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's'
+    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+  }
+  const sevColor = (sev: string) => sev === 'critical' ? '#E53935' : sev === 'warning' ? '#F9A825' : C.text2
+
+  const inp: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, cursor: 'pointer' }
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 16, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Fault Log</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>Machine faults — every open, clear, and duration</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+          <select value={machineFilter} onChange={e => setMachineFilter(e.target.value)} style={inp}>
+            <option value="">All machines</option>
+            {machines.map(m => <option key={m.id} value={m.id}>{m.display_name || m.sn}</option>)}
+          </select>
+          <select value={severityFilter} onChange={e => setSeverityFilter(e.target.value)} style={inp}>
+            <option value="">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="warning">Warning</option>
+          </select>
+          <select value={dateRange} onChange={e => setDateRange(e.target.value)} style={inp}>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="all">All time</option>
+          </select>
+          <button onClick={loadEvents} style={{ ...inp, background: C.orange, color: '#fff', border: 'none', fontWeight: 700 }}>↻ Refresh</button>
+          <button onClick={() => setAutoRefresh(!autoRefresh)} style={{ ...inp, background: autoRefresh ? C.green : C.surface2, color: autoRefresh ? '#fff' : C.text3, border: autoRefresh ? 'none' : '1px solid ' + C.border, fontWeight: 700 }}>{autoRefresh ? '⏸ Live' : '▶ Auto'}</button>
+        </div>
+      </div>
+
+      {active.length > 0 && (
+        <div style={{ background: '#FBEAE9', border: '1px solid #E53935', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, color: '#E53935', marginBottom: 8 }}>🔴 {active.length} Active Fault{active.length > 1 ? 's' : ''}</div>
+          {active.map((e, i) => (
+            <div key={e.id || i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', flexWrap: 'wrap' as const, borderTop: i ? '1px solid #F5C6C6' : 'none' }}>
+              <span style={{ fontWeight: 700, color: '#E53935', minWidth: 60, fontFamily: 'monospace', fontSize: 13 }}>{e.fault_code}</span>
+              <span style={{ fontWeight: 700, color: C.text, flex: 1 }}>{machineMap[e.machine_id] || '?'}</span>
+              <span style={{ color: C.text2, fontSize: 13 }}>{e.fault_name || '—'}</span>
+              <span style={{ color: C.text3, fontSize: 12 }}>since {fmtTime(e.opened_at)}</span>
+              {e.order_code && <span style={{ color: C.orange, fontSize: 12, fontFamily: 'monospace' }}>order {e.order_code}</span>}
+              <button onClick={() => resolveFault(e.machine_id, e.fault_code)} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: '#E53935', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Resolve</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>Loading fault events...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>No fault events found for this period.</div>
+      ) : (
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 800 }}>
+            <thead>
+              <tr style={{ background: C.surface2 }}>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Machine</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Code</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Fault</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Severity</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Opened</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Cleared</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Duration</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Resolution</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Order</th>
+                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paged.map((e, i) => (
+                <tr key={e.id || i} style={{ background: !e.cleared_at ? '#FFF4E5' : i % 2 ? C.surface2 : C.surface, borderBottom: '1px solid ' + C.border }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 700, fontSize: 12 }}>{machineMap[e.machine_id] || '?'}</td>
+                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 700, color: C.orange, fontSize: 12 }}>{e.fault_code}</td>
+                  <td style={{ padding: '10px 12px' }}>{e.fault_name || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}><span style={{ fontWeight: 700, color: sevColor(e.severity), fontSize: 12, textTransform: 'uppercase' as const }}>{e.severity}</span></td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{fmtTime(e.opened_at)}</td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.cleared_at ? fmtTime(e.cleared_at) : <span style={{ color: '#E53935', fontWeight: 700 }}>ACTIVE</span>}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{e.cleared_at ? fmtDur(e.duration_s) : '—'}</td>
+                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.resolution || '—'}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.text3 }}>{e.order_code || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>{!e.cleared_at && <button onClick={() => resolveFault(e.machine_id, e.fault_code)} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: C.orange, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Resolve</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button disabled={page === 0} onClick={() => setPage(page - 1)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: page === 0 ? C.surface2 : C.surface, color: page === 0 ? C.text3 : C.text, fontWeight: 700, cursor: page === 0 ? 'default' : 'pointer', fontSize: 13 }}>← Prev</button>
+          <span style={{ fontSize: 13, color: C.text2 }}>Page {page + 1} of {totalPages} ({filtered.length} events)</span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid ' + C.border, background: page >= totalPages - 1 ? C.surface2 : C.surface, color: page >= totalPages - 1 ? C.text3 : C.text, fontWeight: 700, cursor: page >= totalPages - 1 ? 'default' : 'pointer', fontSize: 13 }}>Next →</button>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' as const }}>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 16, flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Summary</div>
+          <div style={{ fontSize: 12, color: C.text2 }}>Total events: <strong style={{ color: C.text }}>{filtered.length}</strong></div>
+          <div style={{ fontSize: 12, color: C.text2 }}>Active now: <strong style={{ color: active.length > 0 ? '#E53935' : C.green }}>{active.length}</strong></div>
+          <div style={{ fontSize: 12, color: C.text2 }}>Resolved: <strong style={{ color: C.text }}>{resolved.length}</strong></div>
+        </div>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 16, flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>By Fault Code</div>
+          {Object.entries(filtered.reduce((acc: Record<string, number>, e) => { acc[e.fault_code] = (acc[e.fault_code] || 0) + 1; return acc }, {})).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 5).map(([code, count]) => (
+            <div key={code} style={{ fontSize: 12, color: C.text2, display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: 'monospace', color: C.orange }}>{code}</span>
+              <strong style={{ color: C.text }}>{count as number}×</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Comm Log (super admin only) ─────────────────────────────────
 function CommLogPage({ machines }: any) {
   const [sn, setSn] = useState('')
@@ -2569,6 +3063,8 @@ function CommLogPage({ machines }: any) {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [fetchedAt, setFetchedAt] = useState('')
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!sn && machines && machines.length > 0) setSn(machines[0].sn)
@@ -2576,83 +3072,138 @@ function CommLogPage({ machines }: any) {
 
   const loadLog = async (forSn: string) => {
     if (!forSn) return
-    setLoading(true); setErr(''); setLog('')
+    setLoading(true); setErr('')
     try {
-      const res = await fetch('/api/sb?path=' + encodeURIComponent('/storage/v1/object/commlogs/' + forSn + '.txt'))
-      if (res.status === 403) { setErr('Access restricted to Super Admins.'); setLoading(false); return }
-      if (res.status === 404 || res.status === 400) { setErr('No comm log found for this machine yet. (The machine app has not uploaded one.)'); setLoading(false); return }
-      if (!res.ok) { setErr('Could not load log (status ' + res.status + ').'); setLoading(false); return }
-      const text = await res.text()
-      if (!text || text.trim() === '' || text.trim().startsWith('{"error"')) {
-        setErr('No comm log found for this machine yet.')
-      } else {
-        setLog(text)
-        setFetchedAt(new Date().toLocaleString('en-IN', { hour12: true }))
-      }
-    } catch (e: any) {
-      setErr('Error: ' + e.message)
-    }
+      const r = await fetch('https://api.fruitlinktech.in/api/device/commlog?sn=' + encodeURIComponent(forSn), {
+        headers: { 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' }
+      })
+      const text = await r.text()
+      if (!r.ok) { setErr('Error loading log (HTTP ' + r.status + ')'); setLog(''); }
+      else if (!text || text.includes('No log entries yet')) { setErr(text || 'No log entries yet.'); setLog(''); }
+      else { setLog(text); setFetchedAt(new Date().toLocaleString('en-IN', { hour12: true })); setErr(''); }
+    } catch (e: any) { setErr('Network error: ' + e.message); setLog(''); }
     setLoading(false)
   }
 
   useEffect(() => { if (sn) loadLog(sn) }, [sn])
+  useEffect(() => {
+    if (!autoRefresh || !sn) return
+    const t = setInterval(() => loadLog(sn), 30000)
+    return () => clearInterval(t)
+  }, [autoRefresh, sn])
 
   const download = () => {
     const blob = new Blob([log], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = (sn || 'machine') + '_commlog.txt'
-    a.click()
-    URL.revokeObjectURL(url)
+    a.click(); URL.revokeObjectURL(url)
   }
 
   const selected = machines?.find((m: any) => m.sn === sn)
-  const lineCount = log ? log.split('\n').length : 0
+  const lines = log ? log.split('\n').filter((l: string) => l.trim()).reverse() : []
+  const filtered = search ? lines.filter((l: string) => l.toLowerCase().includes(search.toLowerCase())) : lines
+  const lineCount = lines.length
+
+  const typeColor = (line: string) => {
+    if (line.includes('[RX SENSORS')) return '#58A6FF'
+    if (line.includes('[RX STOCK  ')) return '#79C0FF'
+    if (line.includes('[RX STATES ')) return '#79C0FF'
+    if (line.includes('[RX HEALTH ')) return '#58A6FF'
+    if (line.includes('[HEARTBEAT ')) return '#58A6FF'
+    if (line.includes('[CHANGE    ')) return '#FFA657'
+    if (line.includes('[READINESS ')) return line.includes('OK') ? '#3FB950' : '#F0883E'
+    if (line.includes('[FAULT     ')) return '#F85149'
+    if (line.includes('[ORDER     ')) return '#3FB950'
+    if (line.includes('[COMMAND   ')) return '#D29922'
+    if (line.includes('[CMD_CREATE')) return '#D29922'
+    return '#8B949E'
+  }
+
+  const inp: React.CSSProperties = { padding: '8px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, background: C.surface, color: C.text, cursor: 'pointer' }
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Comm Log</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>Serial communication log pulled from the machine{selected ? ' — ' + (selected.display_name || selected.sn) : ''}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={sn} onChange={e => setSn(e.target.value)}
-            style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, background: C.surface, color: C.text, cursor: 'pointer', minWidth: 180 }}>
-            {(!machines || machines.length === 0) && <option value="">No machines</option>}
-            {machines && machines.map((m: any) => (
-              <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>
-            ))}
-          </select>
-          <button onClick={() => loadLog(sn)} disabled={loading || !sn}
-            style={{ padding: '9px 16px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 13, opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Loading…' : '↻ Refresh'}
-          </button>
-          <button onClick={download} disabled={!log}
-            style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface2, color: log ? C.text2 : C.text3, fontWeight: 600, cursor: log ? 'pointer' : 'not-allowed', fontSize: 13 }}>
-            ⬇ Download
-          </button>
+      {/* Header */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Comm Log</div>
+        <div style={{ fontSize: 13, color: C.text2 }}>
+          Server-side communication log{selected ? ' — ' + (selected.display_name || selected.sn) : ''}
         </div>
       </div>
 
+      {/* Controls — wraps on mobile */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 12 }}>
+        <select value={sn} onChange={e => setSn(e.target.value)} style={{ ...inp, minWidth: 160, flex: '1 1 160px' }}>
+          {(!machines || machines.length === 0) && <option value="">No machines</option>}
+          {machines && machines.map((m: any) => (
+            <option key={m.sn} value={m.sn}>{m.display_name || m.sn}</option>
+          ))}
+        </select>
+        <input type="text" placeholder="🔍 Filter logs..." value={search} onChange={e => setSearch(e.target.value)}
+          style={{ ...inp, flex: '1 1 140px', minWidth: 120 }} />
+        <button onClick={() => loadLog(sn)} disabled={loading || !sn}
+          style={{ ...inp, background: C.orange, color: '#fff', border: 'none', fontWeight: 700, opacity: loading ? 0.7 : 1 }}>
+          {loading ? '...' : '↻ Refresh'}
+        </button>
+        <button onClick={() => setAutoRefresh(!autoRefresh)}
+          style={{ ...inp, background: autoRefresh ? C.green : C.surface2, color: autoRefresh ? '#fff' : C.text3, border: autoRefresh ? 'none' : '1px solid ' + C.border, fontWeight: 700 }}>
+          {autoRefresh ? '⏸ Live' : '▶ Auto'}
+        </button>
+        <button onClick={download} disabled={!log}
+          style={{ ...inp, background: C.surface2, color: log ? C.text2 : C.text3, fontWeight: 600 }}>
+          ⬇ Save
+        </button>
+      </div>
+
+      {/* Stats bar */}
       {sn && (
-        <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 12, color: C.text3, flexWrap: 'wrap' }}>
-          <span><b style={{ color: C.text2 }}>SN:</b> <span style={{ fontFamily: 'monospace' }}>{sn}</span></span>
-          {log && <span><b style={{ color: C.text2 }}>Lines:</b> {lineCount.toLocaleString('en-IN')}</span>}
-          {fetchedAt && <span><b style={{ color: C.text2 }}>Fetched:</b> {fetchedAt}</span>}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 12, color: C.text3, flexWrap: 'wrap' as const }}>
+          <span><b style={{ color: C.text2 }}>SN:</b> <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{sn}</span></span>
+          {lineCount > 0 && <span><b style={{ color: C.text2 }}>Lines:</b> {lineCount.toLocaleString('en-IN')}</span>}
+          {search && filtered.length !== lineCount && <span><b style={{ color: C.orange }}>Showing:</b> {filtered.length} of {lineCount}</span>}
+          {fetchedAt && <span><b style={{ color: C.text2 }}>Updated:</b> {fetchedAt}</span>}
+          {autoRefresh && <span style={{ color: C.green, fontWeight: 700 }}>● Live (30s)</span>}
         </div>
       )}
 
+      {/* Log viewer */}
       {err ? (
-        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 14 }}>{err}</div>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 20px', textAlign: 'center', color: C.text3, fontSize: 14 }}>{err}</div>
       ) : loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading comm log…</div>
-      ) : log ? (
+        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading comm log...</div>
+      ) : filtered.length > 0 ? (
         <div style={{ background: '#0d1117', borderRadius: 14, border: '1px solid ' + C.border2, overflow: 'hidden' }}>
-          <pre style={{ margin: 0, padding: '18px 20px', maxHeight: '70vh', overflow: 'auto', fontSize: 12.5, lineHeight: 1.55, color: '#c9d1d9', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', whiteSpace: 'pre', WebkitOverflowScrolling: 'touch' }}>{log}</pre>
+          <div style={{ maxHeight: '65vh', overflow: 'auto', padding: '12px 16px', WebkitOverflowScrolling: 'touch' as any }}>
+            {filtered.map((line: string, i: number) => (
+              <div key={i} style={{
+                fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+                fontSize: 12, lineHeight: 1.6, color: typeColor(line),
+                borderBottom: '1px solid #21262d', padding: '3px 0',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all' as const
+              }}>
+                {line}
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
-        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 14 }}>Select a machine to view its comm log.</div>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, padding: '40px 20px', textAlign: 'center', color: C.text3, fontSize: 14 }}>
+          Select a machine to view its comm log.
+        </div>
+      )}
+
+      {/* Legend */}
+      {filtered.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: C.text3, flexWrap: 'wrap' as const }}>
+          <span><span style={{ color: '#58A6FF' }}>●</span> Sensors</span>
+          <span><span style={{ color: '#79C0FF' }}>●</span> Stock/States</span>
+          <span><span style={{ color: '#FFA657' }}>●</span> Change</span>
+          <span><span style={{ color: '#F0883E' }}>●</span> Readiness</span>
+          <span><span style={{ color: '#F85149' }}>●</span> Fault</span>
+          <span><span style={{ color: '#3FB950' }}>●</span> Order</span>
+          <span><span style={{ color: '#D29922' }}>●</span> Command</span>
+        </div>
       )}
     </div>
   )
@@ -2750,6 +3301,7 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
         { key: 'can_view_attendance', label: 'Attendance', hint: 'Staff check-in / check-out records' },
         { key: 'can_view_notify_config', label: 'Notification Settings', hint: 'WhatsApp & Telegram recipients' },
         { key: 'can_view_comm_log', label: 'Comm Log', hint: 'Raw machine messages' },
+        { key: 'can_view_ad_manager', label: 'Ad Manager', hint: 'View & manage ad campaigns' },
       ]
     },
     {
@@ -2760,8 +3312,11 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
         { key: 'can_edit_machine_config', label: 'Edit machine config', hint: 'Change pricing & machine settings' },
         { key: 'can_manage_field_staff', label: 'Add & edit field staff', hint: 'Create, edit and assign staff' },
         { key: 'can_manage_locations', label: 'Add & edit locations', hint: 'Create, rename, delete locations' },
+        { key: 'can_manage_warehouse', label: 'Manage warehouse', hint: 'Receive, dispatch, sale, transfer stock' },
         { key: 'can_edit_office_location', label: 'Edit office location', hint: 'Move the office GPS pin' },
         { key: 'can_export_data', label: 'Export data', hint: 'Download CSV / PDF reports' },
+        { key: 'can_manage_warehouse', label: 'Manage warehouse', hint: 'Receive, dispatch, sell, edit stock' },
+        { key: 'can_manage_ads', label: 'Manage ads', hint: 'Create & edit ad campaigns on their own machines' },
       ]
     }
   ]
@@ -3571,6 +4126,7 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
   }
   const [phone, setPhone] = useState('')
   const [emails, setEmails] = useState('')
+  const [telegramIds, setTelegramIds] = useState('')
   const [alerts, setAlerts] = useState<Record<string, boolean>>(DEFAULT_ALERTS)
   const [channels, setChannels] = useState<Record<string, boolean>>({ telegram: true, whatsapp: true, email: true })
   const [primaryId, setPrimaryId] = useState<string>('')
@@ -3583,6 +4139,7 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
           let st: any = {}; try { st = typeof d[0].state === 'string' ? JSON.parse(d[0].state || '{}') : (d[0].state || {}) } catch (e) {}
           const n = (st.machine_config && st.machine_config.notifications) || {}
           if (n.phone) setPhone(n.phone)
+          if (n.telegram_chat_ids) setTelegramIds(Array.isArray(n.telegram_chat_ids) ? n.telegram_chat_ids.join(', ') : String(n.telegram_chat_ids))
           if (n.emails) setEmails(Array.isArray(n.emails) ? n.emails.join(', ') : String(n.emails)); else if (n.email) setEmails(String(n.email))
           if (n.alerts) setAlerts({ ...DEFAULT_ALERTS, ...n.alerts })
           if (n.channels) setChannels({ telegram: true, whatsapp: true, email: true, ...n.channels })
@@ -3596,7 +4153,7 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
       const cur = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + primaryId + '&select=state'), { headers }).then(r => r.json()).then(d => Array.isArray(d) && d[0] ? d[0] : {})
       let st: any = {}; try { st = typeof cur.state === 'string' ? JSON.parse(cur.state || '{}') : (cur.state || {}) } catch (e) {}
       const mc = st.machine_config || {}
-      mc.notifications = { phone, emails: emails.split(',').map(s => s.trim()).filter(Boolean), alerts, channels }
+      mc.notifications = { phone, emails: emails.split(',').map(s => s.trim()).filter(Boolean), telegram_chat_ids: telegramIds.split(',').map(s => s.trim()).filter(Boolean), alerts, channels }
       st.machine_config = mc
       await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?id=eq.' + primaryId), { method: 'PATCH', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify({ state: JSON.stringify(st) }) })
       showSaved()
@@ -3623,6 +4180,12 @@ function NotificationsSection({ role, operatorId, SB_URL, SB_KEY, showSaved, sho
         <input value={emails} disabled={!canEdit} onChange={e => setEmails(e.target.value)} placeholder="ops@fruitlinktech.in, owner@fruitlinktech.in"
           style={{ width: '100%', maxWidth: 420, padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: canEdit ? C.surface : C.surface2, cursor: canEdit ? 'text' : 'not-allowed', boxSizing: 'border-box' as const }} />
         <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Comma-separated. Sent via Resend. Leave blank to use the default address.</div>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>Telegram Chat IDs</label>
+        <input value={telegramIds} disabled={!canEdit} onChange={e => setTelegramIds(e.target.value)} placeholder="8562917946, 8977110142"
+          style={{ width: '100%', maxWidth: 420, padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: canEdit ? C.surface : C.surface2, cursor: canEdit ? 'text' : 'not-allowed', boxSizing: 'border-box' as const }} />
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Comma-separated Telegram user/group IDs. Message @userinfobot on Telegram to get your ID.</div>
       </div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Channels</div>
@@ -4074,7 +4637,20 @@ export default function Dashboard() {
   const [operatorId, setOperatorId] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
-  const [ready, setReady] = useState(false)          
+  const [ready, setReady] = useState(false)
+  // Attendance gate — Fruitlink staff must check in before using the dashboard
+  const [attendanceOpen, setAttendanceOpen] = useState<any>(null)   // open row or null
+  const [attnChecked, setAttnChecked] = useState(false)             // have we checked status yet
+  const [attnBusy, setAttnBusy] = useState(false)
+  const [attnPhoto, setAttnPhoto] = useState<Blob | null>(null)
+  const [attnPhotoPreview, setAttnPhotoPreview] = useState('')
+  const [attnErr, setAttnErr] = useState('')
+  const attnFileRef = useRef<HTMLInputElement>(null)
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [outPhoto, setOutPhoto] = useState<Blob | null>(null)
+  const [outPreview, setOutPreview] = useState('')
+  const outFileRef = useRef<HTMLInputElement>(null)
+  const isStaff = (getCookie('fl_role') || '') === 'staff'
   useEffect(() => {
     setRole(getCookie('fl_role') || 'operator')
     setName(getCookie('fl_operator_name') || 'Admin')
@@ -4084,25 +4660,55 @@ export default function Dashboard() {
       const raw = getCookie('fl_permissions')
       if (raw) setPermissions(JSON.parse(decodeURIComponent(raw)))
     } catch { setPermissions({}) }
-    setReady(true)                                    
+    setReady(true)
+    // Staff attendance gate: check if they're currently checked in
+    const rr = getCookie('fl_role') || ''
+    if (rr === 'staff') {
+      fetch('/api/attendance?current=1', { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .then(row => { setAttendanceOpen(row); setAttnChecked(true) })
+        .catch(() => setAttnChecked(true))
+    } else {
+      setAttnChecked(true)
+    }
+    // Refresh permissions live from the server so super-admin changes apply without re-login
+    const r = getCookie('fl_role') || ''
+    if (r === 'operator' || r === 'sub_operator' || r === 'staff') {
+      fetch('/api/operator-permissions?my=1', { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .then(fresh => {
+          if (fresh && typeof fresh === 'object' && !fresh.error) {
+            const clean: Record<string, boolean> = {}
+            Object.entries(fresh).forEach(([k, v]) => { if (k.startsWith('can_')) clean[k] = v === true })
+            setPermissions(clean)
+          }
+        })
+        .catch(() => {})
+    }
   }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     let machineIds: string[] = []
+    // Fruitlink internal staff service the whole fleet — treat like super_admin for data scope
+    const seesAllMachines = role === 'super_admin' || role === 'staff';
     const effectiveOpId = role === 'sub_operator' ? (ownerId || operatorId) : operatorId;
-    if (role !== 'super_admin' && effectiveOpId) {
+    if (!seesAllMachines && effectiveOpId) {
       const moRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + effectiveOpId + '&select=machine_id'), { headers })
       const moData = await moRes.json()
       machineIds = Array.isArray(moData) ? moData.map((r: any) => r.machine_id) : []
     }
-    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&id=eq.none' : '')
-    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (role !== 'super_admin' ? '&machine_id=eq.none' : '')
+    const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (!seesAllMachines ? '&id=eq.none' : '')
+    const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (!seesAllMachines ? '&machine_id=eq.none' : '')
 
+    // Staff use /api/sb for machines (allows fleet-wide read); others use /api/machines
+    const machinesFetch = role === 'staff'
+      ? fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=*&order=created_at.asc' + idFilter), { headers })
+      : fetch('/api/machines?select=*&order=created_at.asc' + idFilter);
     const [mRes, aRes] = await Promise.all([
-      fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
-      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500' + alertFilter), { headers }),
+      machinesFetch,
+      fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500&resolved_at=is.null' + alertFilter), { headers }),
     ])
     const [mDataRaw, aData] = await Promise.all([mRes.json(), aRes.json()])
 
@@ -4144,6 +4750,95 @@ export default function Dashboard() {
     window.location.href = '/login'
   }
 
+  // Staff attendance check-in / check-out (GPS-stamped)
+  const getGeo = (): Promise<{ lat: number; lng: number } | null> => new Promise((resolve) => {
+    if (!('geolocation' in navigator)) return resolve(null)
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    )
+  })
+  async function processAttnPhoto(file: File, geo: { lat: number; lng: number } | null) {
+    setAttnErr('')
+    const readFile = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f) })
+    const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src })
+    const img = await loadImg(await readFile(file))
+    const MAX = 960; let w = img.width, h = img.height
+    if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX } else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX }
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0, w, h)
+    // Stamp time + GPS
+    const now = new Date(); const lines = ['Fruitlink Attendance', name + '  ' + now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })]
+    if (geo) lines.push('GPS ' + geo.lat.toFixed(5) + ', ' + geo.lng.toFixed(5))
+    const pad = Math.round(w * 0.02), fs = Math.max(12, Math.round(w * 0.028)), lineH = fs + 6
+    ctx.font = fs + 'px sans-serif'; const boxH = lineH * lines.length + pad
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, h - boxH, w, boxH)
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'top'
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, h - boxH + pad / 2 + i * lineH))
+    setAttnPhotoPreview(canvas.toDataURL('image/jpeg', 0.5))
+    await new Promise<void>((res) => canvas.toBlob((b) => { if (b) setAttnPhoto(b); res() }, 'image/jpeg', 0.5))
+  }
+
+  async function uploadAttnPhoto(blob: Blob): Promise<string> {
+    const presign = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: 'attendance.jpg', contentType: 'image/jpeg', operator_id: 'visits' }) })
+    const p = await presign.json()
+    if (!p.uploadUrl || !p.publicUrl) throw new Error(p.error || 'upload not configured')
+    const put = await fetch(p.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: blob })
+    if (!put.ok) throw new Error('upload rejected')
+    return p.publicUrl
+  }
+
+  const staffCheckIn = async () => {
+    if (!attnPhoto) { setAttnErr('Please take a photo first.'); return }
+    setAttnBusy(true); setAttnErr('')
+    try {
+      const geo = await getGeo()
+      let photo_url = ''
+      try { photo_url = await uploadAttnPhoto(attnPhoto) } catch { setAttnErr('Photo upload failed. Try again.'); setAttnBusy(false); return }
+      const res = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: geo?.lat ?? null, lng: geo?.lng ?? null, visit_mode: 'office', photo_url }) })
+      const d = await res.json()
+      if (res.ok) {
+        const cur = await fetch('/api/attendance?current=1', { cache: 'no-store' }).then(r => r.json()).catch(() => null)
+        setAttendanceOpen(cur || { id: d.id })
+        setAttnPhoto(null); setAttnPhotoPreview('')
+      } else { setAttnErr('Check-in failed. Try again.') }
+    } catch { setAttnErr('Something went wrong. Try again.') }
+    setAttnBusy(false)
+  }
+  async function processOutPhoto(file: File, geo: { lat: number; lng: number } | null) {
+    const readFile = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f) })
+    const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src })
+    const img = await loadImg(await readFile(file))
+    const MAX = 960; let w = img.width, h = img.height
+    if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX } else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX }
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0, w, h)
+    const now = new Date(); const lines = ['Fruitlink Check-out', name + '  ' + now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })]
+    if (geo) lines.push('GPS ' + geo.lat.toFixed(5) + ', ' + geo.lng.toFixed(5))
+    const pad = Math.round(w * 0.02), fs = Math.max(12, Math.round(w * 0.028)), lineH = fs + 6
+    ctx.font = fs + 'px sans-serif'; const boxH = lineH * lines.length + pad
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, h - boxH, w, boxH)
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'top'
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, h - boxH + pad / 2 + i * lineH))
+    setOutPreview(canvas.toDataURL('image/jpeg', 0.5))
+    await new Promise<void>((res) => canvas.toBlob((b) => { if (b) setOutPhoto(b); res() }, 'image/jpeg', 0.5))
+  }
+
+  const staffCheckOut = async () => {
+    if (!attendanceOpen) return
+    if (!outPhoto) { setAttnErr('Please take a photo to check out.'); return }
+    setAttnBusy(true); setAttnErr('')
+    try {
+      const geo = await getGeo()
+      let photo_url = ''
+      try { photo_url = await uploadAttnPhoto(outPhoto) } catch { setAttnErr('Photo upload failed.'); setAttnBusy(false); return }
+      await fetch('/api/attendance?id=' + attendanceOpen.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: geo?.lat ?? null, lng: geo?.lng ?? null, photo_url }) })
+      setAttendanceOpen(null); setShowCheckout(false); setOutPhoto(null); setOutPreview('')
+    } catch { setAttnErr('Check-out failed.') }
+    setAttnBusy(false)
+  }
+
   const activeAlertCount = alerts.filter(a => !a.resolved_at).length
 
   const pages: Record<string, React.ReactElement> = {
@@ -4155,28 +4850,102 @@ export default function Dashboard() {
     myteam: role === 'operator'
       ? <ErrorBoundary><MyTeamPage /></ErrorBoundary>
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Only operators can manage a team.</div>,
-    commlog: role === 'super_admin'
+    commlog: (role === 'super_admin' || permissions.can_view_comm_log)
       ? <CommLogPage machines={machines} />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    ads: <AdsPage machines={machines} />,
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
+    faultlog: (role === 'super_admin' || permissions.can_view_comm_log)
+      ? <FaultLogPage machines={machines} />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
+    ads: <AdsPage machines={machines} permissions={permissions} role={role} operatorId={operatorId} ownerId={ownerId} />,
     loyalty: <LoyaltyPage />,
     settings: <SettingsPage />,
     machines: <ErrorBoundary><MachinesPage machines={machines} loading={loading} fetchData={fetchData} /></ErrorBoundary>,
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
-    warehouse: <WarehouseSection role={role} />,
-    notifyconfig: <NotifyConfigSection />,
+    warehouse: <WarehouseSection role={role} permissions={permissions} />,
+    notifyconfig: (role === 'super_admin' || permissions.can_view_notify_config)
+      ? <NotifyConfigSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
     reports: <ReportsSection />,
-    fieldstaff: role === 'super_admin'
+    mystaff: role === 'super_admin'
+      ? <MyStaffSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    fieldstaff: (role === 'super_admin' || permissions.can_view_field_staff)
       ? <FieldStaffSection />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
-    attendance: role === 'super_admin'
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
+    attendance: (role === 'super_admin' || permissions.can_view_attendance)
       ? <AttendanceSection />
-      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
+  }
+
+  // ── STAFF ATTENDANCE GATE ──
+  // Fruitlink staff must check in before accessing any dashboard tab.
+  if (isStaff && attnChecked && !attendanceOpen) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#312e81 0%,#4338ca 100%)', padding: 20 }}>
+        <div style={{ background: '#fff', borderRadius: 20, padding: '40px 32px', width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: 30 }}>🕐</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Good day, {name}!</div>
+          <div style={{ fontSize: 14, color: C.text3, marginBottom: 22, lineHeight: 1.6 }}>Take a photo to check in and start your work session.</div>
+
+          <input ref={attnFileRef} type="file" accept="image/*" capture="user" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const g = await getGeo(); await processAttnPhoto(f, g) } }} />
+
+          {attnPhotoPreview ? (
+            <div style={{ marginBottom: 18 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={attnPhotoPreview} alt="Check-in" style={{ width: '100%', borderRadius: 12, maxHeight: 240, objectFit: 'cover' }} />
+              <button onClick={() => { setAttnPhoto(null); setAttnPhotoPreview(''); if (attnFileRef.current) attnFileRef.current.value = '' }} style={{ marginTop: 8, background: 'none', border: 'none', color: C.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>↺ Retake photo</button>
+            </div>
+          ) : (
+            <button onClick={() => attnFileRef.current?.click()} style={{ width: '100%', padding: '28px 14px', borderRadius: 12, border: '2px dashed ' + C.border2, background: C.surface2, color: C.text2, fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 18, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 30 }}>📷</span>
+              Take Photo
+            </button>
+          )}
+
+          {attnErr && <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: '#fdeaec', color: '#dc2626', fontSize: 13, fontWeight: 600 }}>{attnErr}</div>}
+
+          <button onClick={staffCheckIn} disabled={attnBusy || !attnPhoto} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: (attnBusy || !attnPhoto) ? '#c7cdd6' : C.orange, color: '#fff', fontWeight: 800, fontSize: 16, cursor: (attnBusy || !attnPhoto) ? 'default' : 'pointer' }}>
+            {attnBusy ? 'Checking in…' : '✓ Check In'}
+          </button>
+          <button onClick={handleLogout} style={{ width: '100%', marginTop: 12, padding: '10px', borderRadius: 10, border: '1px solid ' + C.border, background: '#fff', color: C.text3, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Log out</button>
+          <div style={{ fontSize: 11, color: C.text3, marginTop: 18 }}>Your photo, time & location are recorded at check-in.</div>
+        </div>
+      </div>
+    )
+  }
+  // While we're still checking attendance status for staff, show a brief loader
+  if (isStaff && !attnChecked) {
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, color: C.text3, fontSize: 15 }}>Loading…</div>
   }
 
   return (
     <>
+      {isStaff && showCheckout && (
+        <div onClick={() => !attnBusy && setShowCheckout(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, padding: 26, width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 6 }}>Check Out</div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>Take a photo to end your work session.</div>
+            <input ref={outFileRef} type="file" accept="image/*" capture="user" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const g = await getGeo(); await processOutPhoto(f, g) } }} />
+            {outPreview ? (
+              <div style={{ marginBottom: 16 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={outPreview} alt="Check-out" style={{ width: '100%', borderRadius: 12, maxHeight: 220, objectFit: 'cover' }} />
+                <button onClick={() => { setOutPhoto(null); setOutPreview(''); if (outFileRef.current) outFileRef.current.value = '' }} style={{ marginTop: 8, background: 'none', border: 'none', color: C.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>↺ Retake</button>
+              </div>
+            ) : (
+              <button onClick={() => outFileRef.current?.click()} style={{ width: '100%', padding: '24px 14px', borderRadius: 12, border: '2px dashed ' + C.border2, background: C.surface2, color: C.text2, fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 28 }}>📷</span> Take Photo
+              </button>
+            )}
+            {attnErr && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: '#fdeaec', color: '#dc2626', fontSize: 13, fontWeight: 600 }}>{attnErr}</div>}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { setShowCheckout(false); setOutPhoto(null); setOutPreview('') }} disabled={attnBusy} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid ' + C.border, background: '#fff', color: C.text2, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={staffCheckOut} disabled={attnBusy || !outPhoto} style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: (attnBusy || !outPhoto) ? '#c7cdd6' : '#dc2626', color: '#fff', fontWeight: 800, fontSize: 14, cursor: (attnBusy || !outPhoto) ? 'default' : 'pointer' }}>{attnBusy ? 'Checking out…' : 'Check Out'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -4189,6 +4958,7 @@ export default function Dashboard() {
 
 /* ── Mobile responsive (phones, < 768px) ── */
         @media (max-width: 768px) {
+          [style*="padding: 24px 28px"] { padding: 16px 12px !important; }
           [style*="repeat(2,1fr)"], [style*="repeat(2, 1fr)"],
           [style*="repeat(3,1fr)"], [style*="repeat(3, 1fr)"],
           [style*="repeat(4,1fr)"], [style*="repeat(4, 1fr)"],
@@ -4220,11 +4990,16 @@ export default function Dashboard() {
           <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1050 }} />
         )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', position: isMobile ? 'sticky' : 'relative', top: 0, zIndex: 900, flexShrink: 0 }}>
             {isMobile && (
-              <button onClick={() => setMenuOpen(true)} style={{ background: C.topbar, color: '#fff', border: 'none', height: 52, width: 50, fontSize: 22, cursor: 'pointer', flexShrink: 0 }}>☰</button>
+              <button onClick={() => setMenuOpen(true)} aria-label="Open menu" style={{ background: C.topbar, color: '#fff', border: 'none', height: 52, width: 52, fontSize: 24, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitTapHighlightColor: 'transparent' }}>☰</button>
             )}
-            <div style={{ flex: 1 }}><TopBar active={active} /></div>
+            <div style={{ flex: 1, minWidth: 0 }}><TopBar active={active} /></div>
+            {isStaff && attendanceOpen && (
+              <button onClick={() => { setShowCheckout(true); setAttnErr('') }} title="Check out — ends your work session" style={{ background: '#dc2626', color: '#fff', border: 'none', height: 52, padding: isMobile ? '0 12px' : '0 18px', fontSize: isMobile ? 12 : 13, fontWeight: 800, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                {isMobile ? '⏻ Out' : '⏻ Check Out'}
+              </button>
+            )}
           </div>
           <PullToRefresh onRefresh={fetchData} isMobile={isMobile}>
             {pages[active] || <ComingSoon label={active} />}

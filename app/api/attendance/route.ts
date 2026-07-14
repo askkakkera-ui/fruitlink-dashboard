@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // Report: super_admin/operator gets attendance in date range
     if (params.get('report') === '1') {
-      if (session.role !== 'super_admin' && session.role !== 'operator' && session.role !== 'sub_operator') {
+      if (session.role !== 'super_admin' && session.role !== 'operator' && session.role !== 'sub_operator' && session.role !== 'staff') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       }
       let url = SB_URL + '/rest/v1/attendance?select=*&order=check_in_at.desc&limit=500';
@@ -41,7 +41,10 @@ export async function GET(request: NextRequest) {
       if (staffId && staffId !== 'all') url += '&staff_id=eq.' + encodeURIComponent(staffId);
       if (machineId && machineId !== 'all') url += '&machine_id=eq.' + encodeURIComponent(machineId);
       // scope to owner if operator
-      if (session.role === 'operator' && session.owner_id) {
+      if (session.role === 'staff') {
+        // Internal staff see only their own attendance
+        url += '&staff_id=eq.' + encodeURIComponent(String(session.sub));
+      } else if (session.role === 'operator' && session.owner_id) {
         url += '&owner_id=eq.' + encodeURIComponent(session.sub);
       }
       const res = await fetch(url, { headers: sbHeaders() });
@@ -52,10 +55,19 @@ export async function GET(request: NextRequest) {
       const machineIds = Array.from(new Set(rows.map((r: any) => r.machine_id).filter(Boolean)));
       let names: Record<string, string> = {};
       let mnames: Record<string, string> = {};
+      let staffMeta: Record<string, { role: string; designation: string; employee_id?: string; staff_type?: string; owner_id?: string }> = {};
+      let ownerNames: Record<string, string> = {};
       if (staffIds.length) {
         const inList = '(' + staffIds.map(encodeURIComponent).join(',') + ')';
-        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
-        (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); });
+        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,designation,employee_id,staff_type,owner_id&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
+        (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); staffMeta[o.id] = { role: o.role, designation: o.designation, employee_id: o.employee_id, staff_type: o.staff_type, owner_id: o.owner_id }; });
+        // Resolve the entity/team name for each person (their owner's company name)
+        const ownerIds = Array.from(new Set((Array.isArray(nr) ? nr : []).map((o: any) => o.owner_id).filter(Boolean)));
+        if (ownerIds.length) {
+          const oInList = '(' + ownerIds.map(encodeURIComponent).join(',') + ')';
+          const or = await fetch(SB_URL + '/rest/v1/operators?select=id,name,role&id=in.' + oInList, { headers: sbHeaders() }).then(r => r.json());
+          (Array.isArray(or) ? or : []).forEach((o: any) => { ownerNames[o.id] = o.name || String(o.id).slice(0, 6); });
+        }
       }
       if (machineIds.length) {
         const inList = '(' + machineIds.map(encodeURIComponent).join(',') + ')';
@@ -65,6 +77,11 @@ export async function GET(request: NextRequest) {
       const withNames = rows.map((r: any) => ({
         ...r,
         staff_name: names[r.staff_id] || '—',
+        staff_role: staffMeta[r.staff_id]?.role || '',
+        staff_designation: staffMeta[r.staff_id]?.designation || '',
+        staff_employee_id: staffMeta[r.staff_id]?.employee_id || '',
+        staff_type: staffMeta[r.staff_id]?.staff_type || '',
+        team_name: (staffMeta[r.staff_id]?.role === 'staff') ? 'Fruitlink' : (staffMeta[r.staff_id]?.owner_id ? (ownerNames[staffMeta[r.staff_id]!.owner_id!] || 'Operator') : '—'),
         machine_name: r.machine_id ? (mnames[r.machine_id] || '—') : 'Office',
       }));
       return NextResponse.json(withNames, { headers: NO_STORE });
@@ -84,7 +101,7 @@ export async function POST(request: NextRequest) {
     // which the UI rendered as "Check in failed" with no hint why. Attendance is
     // a record, not a privilege — anyone who can reach the visit page may check in.
     if (session.role !== 'field_staff' && session.role !== 'super_admin'
-        && session.role !== 'operator' && session.role !== 'sub_operator') {
+        && session.role !== 'operator' && session.role !== 'sub_operator' && session.role !== 'staff') {
       return NextResponse.json({ error: 'Your role cannot check in (' + session.role + ')' }, { status: 403, headers: NO_STORE });
     }
     const body = await request.json().catch(() => ({}));
@@ -109,6 +126,7 @@ export async function POST(request: NextRequest) {
       check_in_lat: body.lat != null ? parseFloat(body.lat) : null,
       check_in_lng: body.lng != null ? parseFloat(body.lng) : null,
       check_in_address: body.address ? String(body.address).slice(0, 500) : null,
+      check_in_photo: body.photo_url ? String(body.photo_url) : null,
       // Geofence is evidence, not a gate: we record what we saw and move on.
       gps_accuracy_m: (body.gps_accuracy_m != null && !isNaN(parseInt(body.gps_accuracy_m))) ? parseInt(body.gps_accuracy_m) : null,
       distance_meters: (body.distance_meters != null && !isNaN(parseInt(body.distance_meters))) ? parseInt(body.distance_meters) : null,
@@ -154,6 +172,7 @@ export async function PATCH(request: NextRequest) {
       check_out_lat: body.lat != null ? parseFloat(body.lat) : null,
       check_out_lng: body.lng != null ? parseFloat(body.lng) : null,
       check_out_address: body.address ? String(body.address).slice(0, 500) : null,
+      check_out_photo: body.photo_url ? String(body.photo_url) : null,
       updated_at: new Date().toISOString(),
     };
     const res = await fetch(SB_URL + '/rest/v1/attendance?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify(update) });

@@ -23,8 +23,10 @@ type Movement = {
   machine_id?: string; note?: string; created_at: string; created_by_name?: string;
 };
 
-export default function WarehouseSection({ role = 'operator' }: { role?: string }) {
-  const isSuper = role === 'super_admin';
+export default function WarehouseSection({ role = 'operator', permissions = {} }: { role?: string; permissions?: Record<string, boolean> }) {
+  const isSuper = role === 'super_admin' || role === 'staff';  // Fruitlink staff see Fruitlink's warehouse
+  // Who may WRITE: super_admin & operators always; staff only with can_manage_warehouse.
+  const canManage = role === 'super_admin' || permissions.can_manage_warehouse === true;
   const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'sale' | 'damage' | 'transfer' | 'incoming' | 'log'>('onhand');
   const [items, setItems] = useState<Item[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -147,9 +149,16 @@ export default function WarehouseSection({ role = 'operator' }: { role?: string 
 
   return (
     <div style={{ padding: 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
+      {!canManage && (
+        <div style={{ padding: '10px 14px', background: '#fff8e6', border: '1px solid #ffe08a', borderRadius: 10, fontSize: 13, color: '#8a6d00', marginBottom: 16 }}>
+          👁 View-only access. You can see stock levels and history. Ask a super admin to grant "Manage warehouse" to record movements.
+        </div>
+      )}
       {/* tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-        {((isSuper
+        {((!canManage
+          ? [['onhand', 'On hand'], ['log', 'Movement log']]
+          : isSuper
           ? [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['transfer', 'Transfer'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]
           : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['incoming', 'Incoming' + (pending.length ? ' (' + pending.length + ')' : '')], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][]).map(([k, l]) => (
           <button key={k} onClick={() => { setTab(k as any); setErr(''); setMsg(''); }}

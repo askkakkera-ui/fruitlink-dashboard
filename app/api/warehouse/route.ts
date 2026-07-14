@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     const role = session.role;
-    if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator') {
+    if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator' && role !== 'staff') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
     const sp = request.nextUrl.searchParams;
@@ -51,14 +51,15 @@ export async function GET(request: NextRequest) {
     if (role === 'super_admin') scopeOwner = String(sp.get('owner') || ownerForOperator(session));
     else if (role === 'operator') scopeOwner = ownerForOperator(session);
     else if (role === 'sub_operator') scopeOwner = String(session.owner_id || '');
+    else if (role === 'staff') scopeOwner = String(session.owner_id || '');  // Fruitlink staff see Fruitlink's warehouse (owner_id = super_admin id)
     const ownerFilter = scopeOwner ? 'owner_id=eq.' + encodeURIComponent(scopeOwner) : '';
     // Machines this caller may dispatch to (same rule the POST guard enforces).
     if (sp.get('dispatchable') === '1') {
-      const wantMode = role === 'super_admin' ? 'fruitlink_service' : 'self_service';
+      const wantMode = (role === 'super_admin' || role === 'staff') ? 'fruitlink_service' : 'self_service';
       const sr = await fetch(SB_URL + '/rest/v1/service_arrangement?select=machine_id,mode&mode=eq.' + wantMode, { headers: sbHeaders() });
       const srows = await sr.json();
       let ids: string[] = (Array.isArray(srows) ? srows : []).map((r: any) => r.machine_id).filter(Boolean);
-      if (role !== 'super_admin') {
+      if (role !== 'super_admin' && role !== 'staff') {
         const gr = await fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(String(session.sub || '')), { headers: sbHeaders() });
         const grows = await gr.json();
         const mine = new Set((Array.isArray(grows) ? grows : []).map((r: any) => String(r.machine_id)));
@@ -133,9 +134,18 @@ export async function POST(request: NextRequest) {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     const role = session.role;
-    if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator') {
+    if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator' && role !== 'staff') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
+    // Fruitlink staff need the explicit can_manage_warehouse permission to WRITE.
+    // (Viewing is separate — can_view_warehouse. Super admin & operators always may write.)
+    if (role === 'staff') {
+      const perms = session.permissions || {};
+      if (perms.can_manage_warehouse !== true) {
+        return NextResponse.json({ error: 'Forbidden: warehouse editing not permitted' }, { status: 403, headers: NO_STORE });
+      }
+    }
+
     const body = await request.json().catch(() => ({}));
     const item_id = String(body.item_id || '');
     const movement_type = String(body.movement_type || '');
@@ -146,7 +156,9 @@ export async function POST(request: NextRequest) {
     const irows = await ir.json();
     if (!Array.isArray(irows) || !irows[0]) return NextResponse.json({ error: 'item not found' }, { status: 404, headers: NO_STORE });
     const item = irows[0];
-    const ownerId = role === 'sub_operator' ? String(session.owner_id || '') : ownerForOperator(session);
+
+    const ownerId = (role === 'sub_operator' || role === 'staff') ? String(session.owner_id || '') : ownerForOperator(session);
+
     let qty_base: number;
     const packs = body.packs != null && body.packs !== '' ? Number(body.packs) : null;
     if (body.qty_base != null && body.qty_base !== '') {

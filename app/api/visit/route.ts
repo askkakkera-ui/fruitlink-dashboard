@@ -111,7 +111,8 @@ export async function GET(request: NextRequest) {
       }
     }
     if (request.nextUrl.searchParams.get('machines') === '1') {
-      if (session.role === 'super_admin') {
+      if (session.role === 'super_admin' || session.role === 'staff') {
+        // Super admin + Fruitlink staff service the whole fleet
         const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_id,location_lat,location_lng&order=display_name.asc', { headers: sbHeaders() });
         const all = await res.json();
         return NextResponse.json(Array.isArray(all) ? all : [], { headers: NO_STORE });
@@ -127,8 +128,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Reports: super_admin gets ALL visits in a date range, with staff names resolved
-    if (request.nextUrl.searchParams.get('report') === '1' && session.role === 'super_admin') {
+    if (request.nextUrl.searchParams.get('report') === '1' && (session.role === 'super_admin' || session.role === 'operator' || session.role === 'sub_operator' || session.role === 'staff')) {
       let vurl = SB_URL + '/rest/v1/visits?select=*&order=created_at.desc&limit=1000';
+      // Scope to operator's tenant; Fruitlink staff + super_admin see all visits fleet-wide
+      if (session.role === 'operator' || session.role === 'sub_operator') {
+        const tenant = tenantOf(session);
+        vurl += '&owner_id=eq.' + encodeURIComponent(tenant);
+      }
+      // super_admin and staff: no filter — full fleet
       const from = request.nextUrl.searchParams.get('from');
       const to = request.nextUrl.searchParams.get('to');
       if (from) vurl += '&created_at=gte.' + encodeURIComponent(from);
@@ -261,6 +268,15 @@ export async function POST(request: NextRequest) {
     if (!res.ok) return NextResponse.json({ error: 'insert failed', detail: data }, { status: 500, headers: NO_STORE });
 
     const savedVisit = Array.isArray(data) ? data[0] : data;
+
+    // Update the attendance row with the machine_id from this visit
+    // (staff may have checked in via 'Office' mode then logged a machine visit)
+    if (openAttendanceId && machine_id) {
+      await fetch(
+        SB_URL + '/rest/v1/attendance?id=eq.' + encodeURIComponent(openAttendanceId),
+        { method: 'PATCH', headers: sbHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ machine_id, updated_at: new Date().toISOString() }) }
+      ).catch(() => {});
+    }
 
     let staffName = session.name || '';
     if (!staffName) {
