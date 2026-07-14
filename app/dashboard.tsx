@@ -224,7 +224,7 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
           }}>{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Admin'}</div>
-            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : role === 'sub_operator' ? 'Sub-Operator' : role === 'field_staff' ? 'Field Staff' : 'Operator'}</div>
+            <div style={{ fontSize: 11.5, color: C.orange, marginTop: 1 }}>{role === 'super_admin' ? 'Super Admin' : role === 'sub_operator' ? 'Sub-Operator' : role === 'field_staff' ? 'Field Staff' : role === 'staff' ? 'Fruitlink Staff' : 'Operator'}</div>
           </div>
           <button onClick={onLogout} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textSide3, fontSize: 16, padding: 2 }} title="Logout">⏻</button>
         </div>
@@ -4663,8 +4663,12 @@ export default function Dashboard() {
     const idFilter = machineIds.length > 0 ? '&id=in.(' + machineIds.join(',') + ')' : (!seesAllMachines ? '&id=eq.none' : '')
     const alertFilter = machineIds.length > 0 ? '&machine_id=in.(' + machineIds.join(',') + ')' : (!seesAllMachines ? '&machine_id=eq.none' : '')
 
+    // Staff use /api/sb for machines (allows fleet-wide read); others use /api/machines
+    const machinesFetch = role === 'staff'
+      ? fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=*&order=created_at.asc' + idFilter), { headers })
+      : fetch('/api/machines?select=*&order=created_at.asc' + idFilter);
     const [mRes, aRes] = await Promise.all([
-      fetch('/api/machines?select=*&order=created_at.asc' + idFilter),
+      machinesFetch,
       fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/alerts?select=*&order=created_at.desc&limit=500&resolved_at=is.null' + alertFilter), { headers }),
     ])
     const [mDataRaw, aData] = await Promise.all([mRes.json(), aRes.json()])
