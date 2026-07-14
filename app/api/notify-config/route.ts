@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-    const isSuperAdmin = session.role === 'super_admin';
+    const isSuperAdmin = session.role === 'super_admin' || session.role === 'staff';
     const isOperator = session.role === 'operator' || session.role === 'sub_operator';
     if (!isSuperAdmin && !isOperator) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
 
@@ -114,7 +114,7 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-    const isSuperAdminP = session.role === 'super_admin';
+    const isSuperAdminP = session.role === 'super_admin' || session.role === 'staff';
     const isOperatorP = session.role === 'operator' || session.role === 'sub_operator';
     if (!isSuperAdminP && !isOperatorP) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     const myOwnerIdP = isSuperAdminP ? null : (session.role === 'sub_operator' && session.owner_id ? String(session.owner_id) : String(session.sub));
@@ -123,7 +123,7 @@ export async function PUT(request: NextRequest) {
 
     // Update tenant limit — super admin only
     if (body.set_limit?.owner_id) {
-      if (!isSuperAdminP) return NextResponse.json({ error: 'Only super admin can change limits' }, { status: 403, headers: NO_STORE });
+      if (session.role !== 'super_admin') return NextResponse.json({ error: 'Only super admin can change limits' }, { status: 403, headers: NO_STORE });
       const field = body.set_limit.field === 'telegram' ? 'max_telegram_ids' : 'max_notify_numbers';
       const max = parseInt(body.set_limit.max);
       if (isNaN(max) || max < 0 || max > 100) return NextResponse.json({ error: 'Invalid limit' }, { status: 400, headers: NO_STORE });
