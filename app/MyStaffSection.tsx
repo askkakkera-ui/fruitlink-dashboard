@@ -1,0 +1,186 @@
+'use client';
+import { useState, useEffect } from 'react';
+
+// My Staff — super_admin manages internal employees (role='staff') with designations.
+// These are Fruitlink's own team (office, technicians, managers) — NOT tenant field staff.
+// They get office attendance but don't manage machines or log machine visits.
+
+const C = {
+  bg: '#f4f5f9', surface: '#ffffff', surface2: '#f7f8fb', border: '#e8eaf0', border2: '#dcdfe9',
+  text: '#1f2533', text2: '#374151', text3: '#4b5563',
+  green: '#198754', greenBg: '#e7f8ef', red: '#DC3545', redBg: '#fdeaec',
+  orange: '#FE6505', blue: '#0D6EFD', purple: '#7C3AED', purpleBg: '#EDE9FE',
+};
+
+const SUPER_ADMIN_ID = '0c1bd083-682a-4913-ac37-08c85ef94b41';
+
+type Staff = { id: string; name: string; email: string; phone?: string; role: string; designation?: string; created_at: string };
+
+export default function MyStaffSection() {
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<Staff | null>(null);
+
+  // Form state
+  const [fName, setFName] = useState('');
+  const [fEmail, setFEmail] = useState('');
+  const [fPhone, setFPhone] = useState('');
+  const [fDesignation, setFDesignation] = useState('');
+  const [fPassword, setFPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formMsg, setFormMsg] = useState('');
+
+  async function load() {
+    setLoading(true); setErr('');
+    try {
+      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,phone,role,designation,created_at&role=eq.staff&order=created_at.desc'));
+      const d = await r.json();
+      setStaff(Array.isArray(d) ? d : []);
+    } catch { setErr('Could not load staff'); }
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, []);
+
+  function openAdd() {
+    setEditing(null);
+    setFName(''); setFEmail(''); setFPhone(''); setFDesignation(''); setFPassword('');
+    setFormMsg(''); setShowAdd(true);
+  }
+
+  function openEdit(s: Staff) {
+    setEditing(s);
+    setFName(s.name || ''); setFEmail(s.email || ''); setFPhone(s.phone || '');
+    setFDesignation(s.designation || ''); setFPassword('');
+    setFormMsg(''); setShowAdd(true);
+  }
+
+  async function save() {
+    if (!fName.trim() || !fEmail.trim()) { setFormMsg('Name and email are required'); return; }
+    if (!editing && !fPassword.trim()) { setFormMsg('Password is required for a new staff member'); return; }
+    setSaving(true); setFormMsg('');
+    try {
+      if (editing) {
+        // Update existing
+        const body: any = { name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, designation: fDesignation.trim() || null };
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + editing.id), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); setFormMsg('Error: ' + (e.error || r.status)); setSaving(false); return; }
+      } else {
+        // Create new: hash password, then insert into operators with role='staff'
+        const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: fPassword }) });
+        if (!hashRes.ok) { setFormMsg('Error: could not hash password'); setSaving(false); return; }
+        const { hash } = await hashRes.json();
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, password_hash: hash, role: 'staff', designation: fDesignation.trim() || null, owner_id: SUPER_ADMIN_ID, state: 'Telangana', country: 'India' }),
+        });
+        if (!r.ok) { const t = await r.text().catch(() => ''); setFormMsg('Error: ' + (t || r.status)); setSaving(false); return; }
+      }
+      setFormMsg('✓ Saved');
+      setTimeout(() => { setShowAdd(false); load(); }, 700);
+    } catch (e: any) { setFormMsg('Error: ' + e.message); }
+    setSaving(false);
+  }
+
+  async function remove(s: Staff) {
+    if (!confirm('Remove ' + (s.name || s.email) + ' from staff?')) return;
+    try {
+      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + s.id), {
+        method: 'DELETE', headers: { 'Prefer': 'return=minimal' },
+      });
+      if (r.ok) load();
+      else alert('Could not remove');
+    } catch { alert('Could not remove'); }
+  }
+
+  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, color: C.text, background: C.surface, outline: 'none', boxSizing: 'border-box' };
+
+  return (
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>My Staff</div>
+          <div style={{ fontSize: 13, color: C.text2, marginTop: 4 }}>Fruitlink's internal team — office employees, technicians, and managers with their own designations.</div>
+        </div>
+        <button onClick={openAdd} style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>+ Add Staff</button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: C.text3 }}>Loading…</div>
+      ) : err ? (
+        <div style={{ padding: 16, background: C.redBg, color: C.red, borderRadius: 10, fontSize: 13 }}>{err}</div>
+      ) : staff.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 24px', color: C.text3 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🧑‍💼</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.text2, marginBottom: 6 }}>No staff yet</div>
+          <div style={{ fontSize: 13, maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>Add your internal team members. They can check in and out for attendance without managing machines.</div>
+        </div>
+      ) : (
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden', marginTop: 16 }}>
+          {staff.map((s, i) => (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < staff.length - 1 ? '1px solid ' + C.border : 'none' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.purpleBg, color: C.purple, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
+                {(s.name || s.email || '?').slice(0, 2).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{s.name || '—'}</div>
+                <div style={{ fontSize: 13, color: C.text3 }}>{s.email}</div>
+              </div>
+              {s.designation && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.purple, background: C.purpleBg, padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{s.designation}</span>
+              )}
+              <button onClick={() => openEdit(s)} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Edit</button>
+              <button onClick={() => remove(s)} style={{ background: C.redBg, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.red, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Del</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit modal */}
+      {showAdd && (
+        <div onClick={() => setShowAdd(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, borderRadius: 18, padding: 26, width: 460, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px #00000030' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>{editing ? 'Edit Staff' : 'Add Staff'}</div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>{editing ? 'Update details' : 'Create a new internal team member'}</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Name *</label>
+                <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Full name" style={inp} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Email *</label>
+                <input value={fEmail} onChange={e => setFEmail(e.target.value)} placeholder="email@fruitlinktech.in" style={inp} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Phone</label>
+                <input value={fPhone} onChange={e => setFPhone(e.target.value)} placeholder="+91…" style={inp} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Designation</label>
+                <input value={fDesignation} onChange={e => setFDesignation(e.target.value)} placeholder="e.g. Office Manager, Technician, Accountant" style={inp} />
+              </div>
+              {!editing && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6 }}>Password *</label>
+                  <input type="password" value={fPassword} onChange={e => setFPassword(e.target.value)} placeholder="Login password" style={inp} />
+                </div>
+              )}
+            </div>
+
+            {formMsg && <div style={{ marginTop: 14, padding: '8px 12px', borderRadius: 8, background: formMsg.startsWith('✓') ? C.greenBg : C.redBg, color: formMsg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{formMsg}</div>}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 22 }}>
+              <button onClick={() => setShowAdd(false)} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+              <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
