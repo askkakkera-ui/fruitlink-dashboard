@@ -4647,7 +4647,21 @@ export default function Dashboard() {
       const raw = getCookie('fl_permissions')
       if (raw) setPermissions(JSON.parse(decodeURIComponent(raw)))
     } catch { setPermissions({}) }
-    setReady(true)                                    
+    setReady(true)
+    // Refresh permissions live from the server so super-admin changes apply without re-login
+    const r = getCookie('fl_role') || ''
+    if (r === 'operator' || r === 'sub_operator' || r === 'staff') {
+      fetch('/api/operator-permissions?my=1', { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .then(fresh => {
+          if (fresh && typeof fresh === 'object' && !fresh.error) {
+            const clean: Record<string, boolean> = {}
+            Object.entries(fresh).forEach(([k, v]) => { if (k.startsWith('can_')) clean[k] = v === true })
+            setPermissions(clean)
+          }
+        })
+        .catch(() => {})
+    }
   }, [])
 
   const fetchData = useCallback(async () => {
