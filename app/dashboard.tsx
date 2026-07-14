@@ -2938,8 +2938,8 @@ function FaultLogPage({ machines }: { machines: any[] }) {
   const inp: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, color: C.text, background: C.surface2, cursor: 'pointer' }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' as const, gap: 12, marginBottom: 16 }}>
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 16, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Fault Log</div>
           <div style={{ fontSize: 13, color: C.text2 }}>Machine faults — every open, clear, and duration</div>
@@ -4724,7 +4724,9 @@ export default function Dashboard() {
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
     warehouse: <WarehouseSection role={role} />,
-    notifyconfig: <NotifyConfigSection />,
+    notifyconfig: (role === 'super_admin' || permissions.can_view_notify_config)
+      ? <NotifyConfigSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
     reports: <ReportsSection />,
     fieldstaff: (role === 'super_admin' || permissions.can_view_field_staff)
       ? <FieldStaffSection />
