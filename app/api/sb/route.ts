@@ -77,7 +77,7 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
   // They service/inspect the whole fleet. Page-level permissions gate WHICH sections
   // they can open; here we grant read on the data those sections need.
   if (role === 'staff') {
-    const STAFF_READABLE = ['machines', 'orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'machine_commands', 'ad_machine_state', 'machine_config', 'operators', 'visits', 'attendance', 'ads', 'loyalty', 'role_permissions'];
+    const STAFF_READABLE = ['machines', 'orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'machine_commands', 'ad_machine_state', 'machine_config', 'operators', 'visits', 'attendance', 'ads', 'ad_campaign', 'ad_campaign_performance', 'ad_impression', 'loyalty', 'role_permissions'];
     if (!STAFF_READABLE.includes(table)) return { block: true };
     // operators table: staff see the fleet's operators list (read-only, for names)
     return { path: rawPath };
