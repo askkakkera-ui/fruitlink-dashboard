@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 // Field Staff — view field_staff members and their visit activity (photos, GPS, oranges).
 // Data: operators (role=field_staff) + their visits. Super-admin only.
@@ -192,8 +193,8 @@ export default function FieldStaffSection() {
         </div>
       )}
 
-      {/* Lightbox for enlarged photo with details */}
-      {lightbox && (
+      {/* Lightbox rendered via portal to escape overflow:auto container */}
+      {lightbox && typeof document !== 'undefined' && createPortal(
         <div onClick={() => setLightbox(null)}
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 16, cursor: 'zoom-out' }}>
           <div onClick={e => e.stopPropagation()} style={{ maxWidth: 'min(92vw, 480px)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: C.surface, borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}>
@@ -216,7 +217,8 @@ export default function FieldStaffSection() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
