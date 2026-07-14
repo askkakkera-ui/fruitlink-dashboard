@@ -10,7 +10,7 @@ const SUPER_ADMIN_WRITE_TABLES = ['operators', 'machines', 'machine_operators'];
 
 // ── Read scoping model ────────────────────────────────────────────────
 // Tables that are scoped to an operator's own machines (by machine_id column).
-const MACHINE_SCOPED_TABLES = ['orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'ad_machine_state', 'machine_commands'];
+const MACHINE_SCOPED_TABLES = ['orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'serial_logs', 'ad_machine_state'];
 // Tables scoped to the operator's own machine rows (by the machines.id column).
 const MACHINE_ID_TABLES = ['machines'];
 // Tables an operator may read fully (non-sensitive shared/reference data).
@@ -72,6 +72,16 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
 
   // super_admin: unrestricted read.
   if (role === 'super_admin') return { path: rawPath };
+
+  // Fruitlink internal staff (mechanics, office): fleet-wide READ on operational tables.
+  // They service/inspect the whole fleet. Page-level permissions gate WHICH sections
+  // they can open; here we grant read on the data those sections need.
+  if (role === 'staff') {
+    const STAFF_READABLE = ['machines', 'orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'machine_commands', 'ad_machine_state', 'machine_config', 'operators', 'visits', 'attendance', 'ads', 'loyalty', 'role_permissions'];
+    if (!STAFF_READABLE.includes(table)) return { block: true };
+    // operators table: staff see the fleet's operators list (read-only, for names)
+    return { path: rawPath };
+  }
 
   // field_staff (future): only visit-related tables; everything financial blocked.
   if (role === 'field_staff') {
