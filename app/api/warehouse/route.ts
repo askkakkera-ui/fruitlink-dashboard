@@ -138,6 +138,14 @@ export async function POST(request: NextRequest) {
     if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator' && role !== 'staff') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
+    // Fruitlink staff need the explicit can_manage_warehouse permission to WRITE.
+    // (Viewing is separate — can_view_warehouse. Super admin & operators always may write.)
+    if (role === 'staff') {
+      const perms = session.permissions || {};
+      if (perms.can_manage_warehouse !== true) {
+        return NextResponse.json({ error: 'Forbidden: warehouse editing not permitted' }, { status: 403, headers: NO_STORE });
+      }
+    }
 
     const body = await request.json().catch(() => ({}));
     const item_id = String(body.item_id || '');
