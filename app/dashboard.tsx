@@ -112,12 +112,12 @@ function SectionLabel({ children }: any) {
 
 // ─── Sidebar ─────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { key: 'console', label: 'Console', icon: '⊞', badge: 'LIVE', group: '' },
-  { key: 'machines', label: 'Machine List', icon: '▣', group: 'Equipment Management' },
-  { key: 'map', label: 'Fleet Map', icon: '◎', group: 'Equipment Management' },
-  { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true },
-  { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management' },
-  { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management' },
+  { key: 'console', label: 'Console', icon: '⊞', badge: 'LIVE', group: '', permission: 'can_view_console' },
+  { key: 'machines', label: 'Machine List', icon: '▣', group: 'Equipment Management', permission: 'can_view_console' },
+  { key: 'map', label: 'Fleet Map', icon: '◎', group: 'Equipment Management', permission: 'can_view_fleet_map' },
+  { key: 'alerts', label: 'Alerts', icon: '◉', group: 'Equipment Management', alertDot: true, permission: 'can_view_alerts' },
+  { key: 'orders', label: 'Orders List', icon: '▤', group: 'Order Management', permission: 'can_view_orders' },
+  { key: 'warehouse', label: 'Warehouse', icon: '📦', group: 'Order Management', permission: 'can_view_warehouse' },
   { key: 'notifyconfig', label: 'Alert Notifications', icon: '🔔', group: 'System', permission: 'can_view_notify_config', superAdmin: true },
   { key: 'reports', label: 'Reports', icon: '📄', group: 'System', permission: 'can_view_reports', superAdmin: true },
   { key: 'operators', label: 'Operators', icon: '⬡', group: 'Operator Management', superAdminOnly: true },
@@ -128,7 +128,7 @@ const NAV_ITEMS = [
   { key: 'commlog', label: 'Comm Log', icon: '🖧', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
   { key: 'faultlog', label: 'Fault Log', icon: '⚠', group: 'Equipment Management', permission: 'can_view_comm_log', superAdmin: true },
   { key: 'ads', label: 'Ad Manager', icon: '🎬', group: 'Marketing', permission: 'can_view_ad_manager' },
-  { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing' },
+  { key: 'loyalty', label: 'Loyalty', icon: '⭐', group: 'Marketing', permission: 'can_view_console' },
   { key: 'settings', label: 'Settings', icon: '◈', group: 'System' },
 ]
 
@@ -140,11 +140,9 @@ function Sidebar({ active, setActive, role, name, alertCount, onLogout, permissi
     if (item.superAdminOnly && role !== 'super_admin') return
     // operatorOnly = only true operators (they manage their own team)
     if (item.operatorOnly && role !== 'operator') return
-    // Fruitlink staff: purely permission-driven. Hide anything without an explicit granted permission.
-    if (role === 'staff') {
-      if (!item.permission || !permissions[item.permission]) return
-    }
-    // permission key = check operator/sub-operator/staff permissions passed as prop
+    // Fruitlink staff with no permission key on an item = hide it (purely permission-driven).
+    if (role === 'staff' && !item.permission) return
+    // permission key = check operator/sub-operator/staff permissions
     if (item.permission && (role === 'operator' || role === 'sub_operator' || role === 'staff')) {
       if (!permissions[item.permission]) return
     }
