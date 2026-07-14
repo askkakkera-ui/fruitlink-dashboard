@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 // My Staff — super_admin manages internal employees (role='staff') with designations.
 // These are Fruitlink's own team (office, technicians, managers) — NOT tenant field staff.
@@ -141,9 +142,9 @@ export default function MyStaffSection() {
       )}
 
       {/* Add / Edit modal */}
-      {showAdd && (
-        <div onClick={() => setShowAdd(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, borderRadius: 16, padding: 22, width: 440, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 20px 60px #00000030' }}>
+      {showAdd && typeof document !== 'undefined' && createPortal(
+        <div onClick={() => setShowAdd(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(31,37,51,0.5)', zIndex: 99999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 16px', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.surface, borderRadius: 16, padding: 22, width: 440, maxWidth: '100%', boxShadow: '0 20px 60px #00000030', marginTop: 'auto', marginBottom: 'auto' }}>
             <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 3 }}>{editing ? 'Edit Staff' : 'Add Staff'}</div>
             <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>{editing ? 'Update details' : 'Create a new internal team member'}</div>
 
@@ -179,7 +180,8 @@ export default function MyStaffSection() {
               <button onClick={save} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
