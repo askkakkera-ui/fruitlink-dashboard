@@ -4798,11 +4798,11 @@ export default function Dashboard() {
           <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1050 }} />
         )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', position: isMobile ? 'sticky' : 'relative', top: 0, zIndex: 900, flexShrink: 0 }}>
             {isMobile && (
-              <button onClick={() => setMenuOpen(true)} style={{ background: C.topbar, color: '#fff', border: 'none', height: 52, width: 50, fontSize: 22, cursor: 'pointer', flexShrink: 0 }}>☰</button>
+              <button onClick={() => setMenuOpen(true)} aria-label="Open menu" style={{ background: C.topbar, color: '#fff', border: 'none', height: 52, width: 52, fontSize: 24, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitTapHighlightColor: 'transparent' }}>☰</button>
             )}
-            <div style={{ flex: 1 }}><TopBar active={active} /></div>
+            <div style={{ flex: 1, minWidth: 0 }}><TopBar active={active} /></div>
           </div>
           <PullToRefresh onRefresh={fetchData} isMobile={isMobile}>
             {pages[active] || <ComingSoon label={active} />}
