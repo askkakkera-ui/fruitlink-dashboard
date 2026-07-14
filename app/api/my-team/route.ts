@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const [teamRes, myPermRes] = await Promise.all([
       fetch(
         SB_URL + '/rest/v1/operators?select=id,name,email,role,state,country,created_at' +
-        '&owner_id=eq.' + encodeURIComponent(parentId) + '&order=created_at.desc',
+        '&owner_id=eq.' + encodeURIComponent(parentId) + '&deleted_at=is.null&order=created_at.desc',
         { headers: sbH() }
       ),
       fetch(

@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { logAudit } from '@/lib/audit';
 import { randomUUID } from 'crypto';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
+
 const sbHeaders = (extra: Record<string, string> = {}) => ({
   apikey: SB_KEY,
   Authorization: 'Bearer ' + SB_KEY,
   'Content-Type': 'application/json',
   ...extra,
 });
+
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' };
 
 async function getSession(request: NextRequest) {
@@ -49,7 +52,6 @@ export async function GET(request: NextRequest) {
     else if (role === 'operator') scopeOwner = ownerForOperator(session);
     else if (role === 'sub_operator') scopeOwner = String(session.owner_id || '');
     const ownerFilter = scopeOwner ? 'owner_id=eq.' + encodeURIComponent(scopeOwner) : '';
-
     // Machines this caller may dispatch to (same rule the POST guard enforces).
     if (sp.get('dispatchable') === '1') {
       const wantMode = role === 'super_admin' ? 'fruitlink_service' : 'self_service';
@@ -84,7 +86,6 @@ export async function GET(request: NextRequest) {
       const d = await r.json();
       return NextResponse.json(Array.isArray(d) ? d : [], { headers: NO_STORE });
     }
-
     if (sp.get('onhand') === '1') {
       const iurl = SB_URL + '/rest/v1/warehouse_items?select=*&active=eq.true';
       const ir = await fetch(iurl, { headers: sbHeaders() });
@@ -104,7 +105,6 @@ export async function GET(request: NextRequest) {
       }));
       return NextResponse.json(out, { headers: NO_STORE });
     }
-
     if (sp.get('movements') === '1') {
       let url = SB_URL + '/rest/v1/stock_movements?select=*&order=created_at.desc&limit=500';
       if (ownerFilter) url += '&' + ownerFilter;
@@ -119,10 +119,9 @@ export async function GET(request: NextRequest) {
       const d = await r.json();
       const rows = Array.isArray(d) ? d : [];
       const names = await operatorNames(rows.map((m: any) => m.created_by));
-      const withNames = rows.map((m: any) => ({ ...m, created_by_name: m.created_by ? (names[m.created_by] || '—') : '—' }));
+      const withNames = rows.map((m: any) => ({ ...m, created_by_name: m.created_by ? (names[m.created_by] || '\u2014') : '\u2014' }));
       return NextResponse.json(withNames, { headers: NO_STORE });
     }
-
     return NextResponse.json({ error: 'specify items|onhand|movements' }, { status: 400, headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
@@ -137,21 +136,17 @@ export async function POST(request: NextRequest) {
     if (role !== 'super_admin' && role !== 'operator' && role !== 'sub_operator') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
     }
-
     const body = await request.json().catch(() => ({}));
     const item_id = String(body.item_id || '');
     const movement_type = String(body.movement_type || '');
     if (!item_id || !['receive', 'dispatch', 'adjust', 'sale', 'damage_warehouse', 'transfer_out'].includes(movement_type)) {
       return NextResponse.json({ error: 'item_id and valid movement_type required' }, { status: 400, headers: NO_STORE });
     }
-
     const ir = await fetch(SB_URL + '/rest/v1/warehouse_items?select=*&id=eq.' + encodeURIComponent(item_id) + '&limit=1', { headers: sbHeaders() });
     const irows = await ir.json();
     if (!Array.isArray(irows) || !irows[0]) return NextResponse.json({ error: 'item not found' }, { status: 404, headers: NO_STORE });
     const item = irows[0];
-
     const ownerId = role === 'sub_operator' ? String(session.owner_id || '') : ownerForOperator(session);
-
     let qty_base: number;
     const packs = body.packs != null && body.packs !== '' ? Number(body.packs) : null;
     if (body.qty_base != null && body.qty_base !== '') {
@@ -164,7 +159,6 @@ export async function POST(request: NextRequest) {
     if (isNaN(qty_base) || qty_base <= 0) {
       return NextResponse.json({ error: 'quantity must be positive' }, { status: 400, headers: NO_STORE });
     }
-
     let signed = qty_base;
     if (movement_type === 'dispatch') signed = -Math.abs(qty_base);
     if (movement_type === 'sale') signed = -Math.abs(qty_base);
@@ -172,7 +166,6 @@ export async function POST(request: NextRequest) {
     if (movement_type === 'transfer_out') signed = -Math.abs(qty_base);
     if (movement_type === 'receive') signed = Math.abs(qty_base);
     if (movement_type === 'adjust' && body.direction === 'down') signed = -Math.abs(qty_base);
-
     const machine_id = body.machine_id ? String(body.machine_id) : null;
     if (movement_type === 'dispatch' && !machine_id) {
       return NextResponse.json({ error: 'dispatch needs a machine' }, { status: 400, headers: NO_STORE });
@@ -253,7 +246,6 @@ export async function POST(request: NextRequest) {
         }, { status: 400, headers: NO_STORE });
       }
     }
-
     const row = {
       owner_id: ownerId,
       item_id,
@@ -275,7 +267,24 @@ export async function POST(request: NextRequest) {
     });
     const d = await res.json();
     if (!res.ok) return NextResponse.json({ error: 'insert failed', detail: d }, { status: 500, headers: NO_STORE });
-    return NextResponse.json({ success: true, movement: Array.isArray(d) ? d[0] : d }, { headers: NO_STORE });
+
+    const movement = Array.isArray(d) ? d[0] : d;
+    // Append-only ledger: every movement is a new record, so there is no prior
+    // state to diff. old_value stays null; new_value is the movement itself.
+    // owner_id is scoped to the affected stock's tenant, not the actor's.
+    await logAudit({
+      session,
+      action: movement_type,
+      module: 'warehouse',
+      entity_table: 'stock_movements',
+      entity_id: movement && movement.id ? String(movement.id) : null,
+      old_value: null,
+      new_value: movement,
+      owner_id: ownerId,
+      req: request,
+    });
+
+    return NextResponse.json({ success: true, movement }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }

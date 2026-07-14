@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { logAudit } from '@/lib/audit';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
@@ -90,13 +91,27 @@ export async function POST(request: NextRequest) {
     const data = await res.json();
     if (!res.ok) return NextResponse.json({ error: 'Assign failed', detail: data }, { status: 500, headers: NO_STORE });
 
+    await logAudit({
+      session,
+      action: 'create',
+      module: 'staff',
+      entity_table: 'location_staff',
+      entity_id: null,
+      old_value: null,
+      new_value: { location_id, staff_id },
+      req: request,
+    });
+
     return NextResponse.json({ success: true }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
 }
 
-// DELETE /api/location-staff?location_id=&staff_id= — remove staff from location
+// DELETE /api/location-staff?location_id=&staff_id= — remove staff from location.
+// This is a join/link row: hard delete is correct (soft-delete would block re-adding
+// the same pair). The audit_log entry is the durable record that the assignment
+// existed and who removed it.
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getSession(request);
@@ -113,6 +128,17 @@ export async function DELETE(request: NextRequest) {
       { method: 'DELETE', headers: sbH() }
     );
     if (!res.ok) return NextResponse.json({ error: 'Remove failed' }, { status: 500, headers: NO_STORE });
+
+    await logAudit({
+      session,
+      action: 'delete',
+      module: 'staff',
+      entity_table: 'location_staff',
+      entity_id: null,
+      old_value: { location_id, staff_id },
+      new_value: null,
+      req: request,
+    });
 
     return NextResponse.json({ success: true }, { headers: NO_STORE });
   } catch (e: any) {

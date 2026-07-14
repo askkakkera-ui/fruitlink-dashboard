@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { logAudit } from '@/lib/audit';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
+
 const sbH = (extra: Record<string, string> = {}) => ({
   apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY,
   'Content-Type': 'application/json', Prefer: 'return=representation', ...extra,
 });
+
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
 const PERMISSION_KEYS = [
@@ -21,26 +24,19 @@ async function getSession(req: NextRequest) {
   return verifySession(req.cookies.get(SESSION_COOKIE)?.value);
 }
 
-// GET /api/operator-permissions?operator_id= — get permissions for an operator
-// GET /api/operator-permissions?my=1 — get own permissions (operator use)
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
-
     let operatorId: string;
-
     if (request.nextUrl.searchParams.get('my') === '1') {
-      // Operator reading own permissions
       operatorId = String(session.sub);
     } else {
-      // Super admin reading any operator's permissions
       if (session.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       operatorId = request.nextUrl.searchParams.get('operator_id') || '';
       if (!operatorId) {
-        // Return all operators with their permissions — bulk fetch
         const [opsRes, permsRes] = await Promise.all([
-          fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role&role=neq.super_admin&order=name.asc', { headers: sbH() }),
+          fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role&role=neq.super_admin&deleted_at=is.null&order=name.asc', { headers: sbH() }),
           fetch(SB_URL + '/rest/v1/operator_permissions?select=*', { headers: sbH() }),
         ]);
         const [ops, perms] = await Promise.all([opsRes.json(), permsRes.json()]);
@@ -53,7 +49,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(result, { headers: NO_STORE });
       }
     }
-
     const res = await fetch(
       SB_URL + '/rest/v1/operator_permissions?select=*&operator_id=eq.' + encodeURIComponent(operatorId) + '&limit=1',
       { headers: sbH() }
@@ -65,22 +60,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT /api/operator-permissions — upsert permissions (super admin only)
-// Body: { operator_id, permissions: { can_view_reports: true, ... } }
 export async function PUT(request: NextRequest) {
   try {
     const session = await getSession(request);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     if (session.role !== 'super_admin' && session.role !== 'operator') return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
-
     const body = await request.json().catch(() => ({}));
     const operator_id = String(body.operator_id || '');
     if (!operator_id) return NextResponse.json({ error: 'operator_id required' }, { status: 400, headers: NO_STORE });
-
     const permissions = body.permissions || {};
 
-    // Operators: (a) may only manage their own team, and
-    //            (b) may never grant a permission they do not hold themselves.
     if (session.role === 'operator') {
       const [subRes, myPermRes] = await Promise.all([
         fetch(SB_URL + '/rest/v1/operators?select=owner_id,role&id=eq.' + encodeURIComponent(operator_id) + '&limit=1', { headers: sbH() }),
@@ -88,18 +77,13 @@ export async function PUT(request: NextRequest) {
       ]);
       const subRows = await subRes.json();
       const myPermRows = await myPermRes.json();
-
-      // (a) ownership
       if (!Array.isArray(subRows) || !subRows[0] || String(subRows[0].owner_id) !== String(session.sub)) {
         return NextResponse.json({ error: 'You can only manage your own team members' }, { status: 403, headers: NO_STORE });
       }
-      // never let an operator edit another operator or a super_admin
       const targetRole = String(subRows[0].role || '');
       if (targetRole !== 'sub_operator' && targetRole !== 'field_staff') {
         return NextResponse.json({ error: 'You can only manage sub-operators and field staff' }, { status: 403, headers: NO_STORE });
       }
-
-      // (b) grant ceiling — cannot grant what you do not have. Revoking is always allowed.
       const mine = Array.isArray(myPermRows) && myPermRows[0] ? myPermRows[0] : {};
       const escalated = PERMISSION_KEYS.filter(
         (k) => (permissions[k] === true || permissions[k] === 'true') && mine[k] !== true
@@ -112,40 +96,48 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Validate only known permission keys
-    const patch: Record<string, any> = { operator_id, updated_at: new Date().toISOString() };
+    const patch: Record<string, any> = { operator_id, updated_at: new Date().toISOString(), updated_by: String(session.sub) };
     for (const key of PERMISSION_KEYS) {
       if (permissions[key] !== undefined) {
         patch[key] = permissions[key] === true || permissions[key] === 'true';
       }
     }
 
-    // Check if record exists
     const existsRes = await fetch(
-      SB_URL + '/rest/v1/operator_permissions?select=operator_id&operator_id=eq.' + encodeURIComponent(operator_id) + '&limit=1',
+      SB_URL + '/rest/v1/operator_permissions?select=*&operator_id=eq.' + encodeURIComponent(operator_id) + '&limit=1',
       { headers: sbH() }
     );
     const existing = await existsRes.json();
+    const before = Array.isArray(existing) && existing[0] ? existing[0] : null;
 
     let res;
-    if (Array.isArray(existing) && existing[0]) {
-      // Update
+    if (before) {
       res = await fetch(SB_URL + '/rest/v1/operator_permissions?operator_id=eq.' + encodeURIComponent(operator_id), {
         method: 'PATCH', headers: sbH(),
         body: JSON.stringify(patch),
       });
     } else {
-      // Insert with defaults
       res = await fetch(SB_URL + '/rest/v1/operator_permissions', {
         method: 'POST', headers: sbH(),
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ ...patch, created_by: String(session.sub) }),
       });
     }
-
     const data = await res.json();
     if (!res.ok) return NextResponse.json({ error: 'Save failed', detail: data }, { status: 500, headers: NO_STORE });
 
-    return NextResponse.json({ success: true, permissions: Array.isArray(data) ? data[0] : data }, { headers: NO_STORE });
+    const after = Array.isArray(data) ? data[0] : data;
+    await logAudit({
+      session,
+      action: before ? 'permission_change' : 'create',
+      module: 'permissions',
+      entity_table: 'operator_permissions',
+      entity_id: operator_id,
+      old_value: before,
+      new_value: after,
+      req: request,
+    });
+
+    return NextResponse.json({ success: true, permissions: after }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }

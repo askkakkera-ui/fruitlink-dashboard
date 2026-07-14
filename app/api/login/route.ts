@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { email, password } = await req.json();
     if (!email || !password) return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
 
-    const res = await fetch(SUPABASE_URL + '/rest/v1/operators?email=eq.' + encodeURIComponent(email) + '&select=id,name,email,password_hash,role,state,country,owner_id&limit=1', { headers });
+    const res = await fetch(SUPABASE_URL + '/rest/v1/operators?email=eq.' + encodeURIComponent(email) + '&select=id,name,email,password_hash,role,state,country,owner_id&deleted_at=is.null&limit=1', { headers });
     const data = await res.json();
     if (!data || data.length === 0) return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
 
