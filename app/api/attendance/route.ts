@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // Report: super_admin/operator gets attendance in date range
     if (params.get('report') === '1') {
-      if (session.role !== 'super_admin' && session.role !== 'operator' && session.role !== 'sub_operator') {
+      if (session.role !== 'super_admin' && session.role !== 'operator' && session.role !== 'sub_operator' && session.role !== 'staff') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       }
       let url = SB_URL + '/rest/v1/attendance?select=*&order=check_in_at.desc&limit=500';
@@ -40,14 +40,12 @@ export async function GET(request: NextRequest) {
       if (to) url += '&check_in_at=lte.' + encodeURIComponent(to);
       if (staffId && staffId !== 'all') url += '&staff_id=eq.' + encodeURIComponent(staffId);
       if (machineId && machineId !== 'all') url += '&machine_id=eq.' + encodeURIComponent(machineId);
-      // Scope attendance to the tenant
-      if (session.role === 'operator') {
-        // Operator sees all staff under them (their id IS the owner_id on staff records)
-        url += '&owner_id=eq.' + encodeURIComponent(String(session.sub));
-      } else if (session.role === 'sub_operator') {
-        // Sub-operator sees same tenant as their parent operator
-        const ownerId = session.owner_id ? String(session.owner_id) : String(session.sub);
-        url += '&owner_id=eq.' + encodeURIComponent(ownerId);
+      // scope to owner if operator
+      if (session.role === 'staff') {
+        // Internal staff see only their own attendance
+        url += '&staff_id=eq.' + encodeURIComponent(String(session.sub));
+      } else if (session.role === 'operator' && session.owner_id) {
+        url += '&owner_id=eq.' + encodeURIComponent(session.sub);
       }
       const res = await fetch(url, { headers: sbHeaders() });
       const rows = await res.json();
@@ -57,10 +55,11 @@ export async function GET(request: NextRequest) {
       const machineIds = Array.from(new Set(rows.map((r: any) => r.machine_id).filter(Boolean)));
       let names: Record<string, string> = {};
       let mnames: Record<string, string> = {};
+      let staffMeta: Record<string, { role: string; designation: string }> = {};
       if (staffIds.length) {
         const inList = '(' + staffIds.map(encodeURIComponent).join(',') + ')';
-        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
-        (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); });
+        const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,designation&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
+        (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); staffMeta[o.id] = { role: o.role, designation: o.designation }; });
       }
       if (machineIds.length) {
         const inList = '(' + machineIds.map(encodeURIComponent).join(',') + ')';
@@ -70,6 +69,8 @@ export async function GET(request: NextRequest) {
       const withNames = rows.map((r: any) => ({
         ...r,
         staff_name: names[r.staff_id] || '—',
+        staff_role: staffMeta[r.staff_id]?.role || '',
+        staff_designation: staffMeta[r.staff_id]?.designation || '',
         machine_name: r.machine_id ? (mnames[r.machine_id] || '—') : 'Office',
       }));
       return NextResponse.json(withNames, { headers: NO_STORE });
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
     // which the UI rendered as "Check in failed" with no hint why. Attendance is
     // a record, not a privilege — anyone who can reach the visit page may check in.
     if (session.role !== 'field_staff' && session.role !== 'super_admin'
-        && session.role !== 'operator' && session.role !== 'sub_operator') {
+        && session.role !== 'operator' && session.role !== 'sub_operator' && session.role !== 'staff') {
       return NextResponse.json({ error: 'Your role cannot check in (' + session.role + ')' }, { status: 403, headers: NO_STORE });
     }
     const body = await request.json().catch(() => ({}));
