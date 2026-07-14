@@ -4637,7 +4637,20 @@ export default function Dashboard() {
   const [operatorId, setOperatorId] = useState('')
   const [ownerId, setOwnerId] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
-  const [ready, setReady] = useState(false)          
+  const [ready, setReady] = useState(false)
+  // Attendance gate — Fruitlink staff must check in before using the dashboard
+  const [attendanceOpen, setAttendanceOpen] = useState<any>(null)   // open row or null
+  const [attnChecked, setAttnChecked] = useState(false)             // have we checked status yet
+  const [attnBusy, setAttnBusy] = useState(false)
+  const [attnPhoto, setAttnPhoto] = useState<Blob | null>(null)
+  const [attnPhotoPreview, setAttnPhotoPreview] = useState('')
+  const [attnErr, setAttnErr] = useState('')
+  const attnFileRef = useRef<HTMLInputElement>(null)
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [outPhoto, setOutPhoto] = useState<Blob | null>(null)
+  const [outPreview, setOutPreview] = useState('')
+  const outFileRef = useRef<HTMLInputElement>(null)
+  const isStaff = (getCookie('fl_role') || '') === 'staff'
   useEffect(() => {
     setRole(getCookie('fl_role') || 'operator')
     setName(getCookie('fl_operator_name') || 'Admin')
@@ -4648,6 +4661,16 @@ export default function Dashboard() {
       if (raw) setPermissions(JSON.parse(decodeURIComponent(raw)))
     } catch { setPermissions({}) }
     setReady(true)
+    // Staff attendance gate: check if they're currently checked in
+    const rr = getCookie('fl_role') || ''
+    if (rr === 'staff') {
+      fetch('/api/attendance?current=1', { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .then(row => { setAttendanceOpen(row); setAttnChecked(true) })
+        .catch(() => setAttnChecked(true))
+    } else {
+      setAttnChecked(true)
+    }
     // Refresh permissions live from the server so super-admin changes apply without re-login
     const r = getCookie('fl_role') || ''
     if (r === 'operator' || r === 'sub_operator' || r === 'staff') {
@@ -4727,6 +4750,95 @@ export default function Dashboard() {
     window.location.href = '/login'
   }
 
+  // Staff attendance check-in / check-out (GPS-stamped)
+  const getGeo = (): Promise<{ lat: number; lng: number } | null> => new Promise((resolve) => {
+    if (!('geolocation' in navigator)) return resolve(null)
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    )
+  })
+  async function processAttnPhoto(file: File, geo: { lat: number; lng: number } | null) {
+    setAttnErr('')
+    const readFile = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f) })
+    const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src })
+    const img = await loadImg(await readFile(file))
+    const MAX = 960; let w = img.width, h = img.height
+    if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX } else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX }
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0, w, h)
+    // Stamp time + GPS
+    const now = new Date(); const lines = ['Fruitlink Attendance', name + '  ' + now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })]
+    if (geo) lines.push('GPS ' + geo.lat.toFixed(5) + ', ' + geo.lng.toFixed(5))
+    const pad = Math.round(w * 0.02), fs = Math.max(12, Math.round(w * 0.028)), lineH = fs + 6
+    ctx.font = fs + 'px sans-serif'; const boxH = lineH * lines.length + pad
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, h - boxH, w, boxH)
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'top'
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, h - boxH + pad / 2 + i * lineH))
+    setAttnPhotoPreview(canvas.toDataURL('image/jpeg', 0.5))
+    await new Promise<void>((res) => canvas.toBlob((b) => { if (b) setAttnPhoto(b); res() }, 'image/jpeg', 0.5))
+  }
+
+  async function uploadAttnPhoto(blob: Blob): Promise<string> {
+    const presign = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: 'attendance.jpg', contentType: 'image/jpeg', operator_id: 'visits' }) })
+    const p = await presign.json()
+    if (!p.uploadUrl || !p.publicUrl) throw new Error(p.error || 'upload not configured')
+    const put = await fetch(p.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: blob })
+    if (!put.ok) throw new Error('upload rejected')
+    return p.publicUrl
+  }
+
+  const staffCheckIn = async () => {
+    if (!attnPhoto) { setAttnErr('Please take a photo first.'); return }
+    setAttnBusy(true); setAttnErr('')
+    try {
+      const geo = await getGeo()
+      let photo_url = ''
+      try { photo_url = await uploadAttnPhoto(attnPhoto) } catch { setAttnErr('Photo upload failed. Try again.'); setAttnBusy(false); return }
+      const res = await fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: geo?.lat ?? null, lng: geo?.lng ?? null, visit_mode: 'office', photo_url }) })
+      const d = await res.json()
+      if (res.ok) {
+        const cur = await fetch('/api/attendance?current=1', { cache: 'no-store' }).then(r => r.json()).catch(() => null)
+        setAttendanceOpen(cur || { id: d.id })
+        setAttnPhoto(null); setAttnPhotoPreview('')
+      } else { setAttnErr('Check-in failed. Try again.') }
+    } catch { setAttnErr('Something went wrong. Try again.') }
+    setAttnBusy(false)
+  }
+  async function processOutPhoto(file: File, geo: { lat: number; lng: number } | null) {
+    const readFile = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f) })
+    const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src })
+    const img = await loadImg(await readFile(file))
+    const MAX = 960; let w = img.width, h = img.height
+    if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX } else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX }
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')!; ctx.drawImage(img, 0, 0, w, h)
+    const now = new Date(); const lines = ['Fruitlink Check-out', name + '  ' + now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })]
+    if (geo) lines.push('GPS ' + geo.lat.toFixed(5) + ', ' + geo.lng.toFixed(5))
+    const pad = Math.round(w * 0.02), fs = Math.max(12, Math.round(w * 0.028)), lineH = fs + 6
+    ctx.font = fs + 'px sans-serif'; const boxH = lineH * lines.length + pad
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, h - boxH, w, boxH)
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'top'
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, h - boxH + pad / 2 + i * lineH))
+    setOutPreview(canvas.toDataURL('image/jpeg', 0.5))
+    await new Promise<void>((res) => canvas.toBlob((b) => { if (b) setOutPhoto(b); res() }, 'image/jpeg', 0.5))
+  }
+
+  const staffCheckOut = async () => {
+    if (!attendanceOpen) return
+    if (!outPhoto) { setAttnErr('Please take a photo to check out.'); return }
+    setAttnBusy(true); setAttnErr('')
+    try {
+      const geo = await getGeo()
+      let photo_url = ''
+      try { photo_url = await uploadAttnPhoto(outPhoto) } catch { setAttnErr('Photo upload failed.'); setAttnBusy(false); return }
+      await fetch('/api/attendance?id=' + attendanceOpen.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat: geo?.lat ?? null, lng: geo?.lng ?? null, photo_url }) })
+      setAttendanceOpen(null); setShowCheckout(false); setOutPhoto(null); setOutPreview('')
+    } catch { setAttnErr('Check-out failed.') }
+    setAttnBusy(false)
+  }
+
   const activeAlertCount = alerts.filter(a => !a.resolved_at).length
 
   const pages: Record<string, React.ReactElement> = {
@@ -4766,8 +4878,74 @@ export default function Dashboard() {
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
   }
 
+  // ── STAFF ATTENDANCE GATE ──
+  // Fruitlink staff must check in before accessing any dashboard tab.
+  if (isStaff && attnChecked && !attendanceOpen) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#312e81 0%,#4338ca 100%)', padding: 20 }}>
+        <div style={{ background: '#fff', borderRadius: 20, padding: '40px 32px', width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', fontSize: 30 }}>🕐</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Good day, {name}!</div>
+          <div style={{ fontSize: 14, color: C.text3, marginBottom: 22, lineHeight: 1.6 }}>Take a photo to check in and start your work session.</div>
+
+          <input ref={attnFileRef} type="file" accept="image/*" capture="user" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const g = await getGeo(); await processAttnPhoto(f, g) } }} />
+
+          {attnPhotoPreview ? (
+            <div style={{ marginBottom: 18 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={attnPhotoPreview} alt="Check-in" style={{ width: '100%', borderRadius: 12, maxHeight: 240, objectFit: 'cover' }} />
+              <button onClick={() => { setAttnPhoto(null); setAttnPhotoPreview(''); if (attnFileRef.current) attnFileRef.current.value = '' }} style={{ marginTop: 8, background: 'none', border: 'none', color: C.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>↺ Retake photo</button>
+            </div>
+          ) : (
+            <button onClick={() => attnFileRef.current?.click()} style={{ width: '100%', padding: '28px 14px', borderRadius: 12, border: '2px dashed ' + C.border2, background: C.surface2, color: C.text2, fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 18, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 30 }}>📷</span>
+              Take Photo
+            </button>
+          )}
+
+          {attnErr && <div style={{ marginBottom: 14, padding: '8px 12px', borderRadius: 8, background: '#fdeaec', color: '#dc2626', fontSize: 13, fontWeight: 600 }}>{attnErr}</div>}
+
+          <button onClick={staffCheckIn} disabled={attnBusy || !attnPhoto} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: (attnBusy || !attnPhoto) ? '#c7cdd6' : C.orange, color: '#fff', fontWeight: 800, fontSize: 16, cursor: (attnBusy || !attnPhoto) ? 'default' : 'pointer' }}>
+            {attnBusy ? 'Checking in…' : '✓ Check In'}
+          </button>
+          <button onClick={handleLogout} style={{ width: '100%', marginTop: 12, padding: '10px', borderRadius: 10, border: '1px solid ' + C.border, background: '#fff', color: C.text3, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Log out</button>
+          <div style={{ fontSize: 11, color: C.text3, marginTop: 18 }}>Your photo, time & location are recorded at check-in.</div>
+        </div>
+      </div>
+    )
+  }
+  // While we're still checking attendance status for staff, show a brief loader
+  if (isStaff && !attnChecked) {
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, color: C.text3, fontSize: 15 }}>Loading…</div>
+  }
+
   return (
     <>
+      {isStaff && showCheckout && (
+        <div onClick={() => !attnBusy && setShowCheckout(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, padding: 26, width: 400, maxWidth: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 6 }}>Check Out</div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>Take a photo to end your work session.</div>
+            <input ref={outFileRef} type="file" accept="image/*" capture="user" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const g = await getGeo(); await processOutPhoto(f, g) } }} />
+            {outPreview ? (
+              <div style={{ marginBottom: 16 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={outPreview} alt="Check-out" style={{ width: '100%', borderRadius: 12, maxHeight: 220, objectFit: 'cover' }} />
+                <button onClick={() => { setOutPhoto(null); setOutPreview(''); if (outFileRef.current) outFileRef.current.value = '' }} style={{ marginTop: 8, background: 'none', border: 'none', color: C.orange, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>↺ Retake</button>
+              </div>
+            ) : (
+              <button onClick={() => outFileRef.current?.click()} style={{ width: '100%', padding: '24px 14px', borderRadius: 12, border: '2px dashed ' + C.border2, background: C.surface2, color: C.text2, fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 28 }}>📷</span> Take Photo
+              </button>
+            )}
+            {attnErr && <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: '#fdeaec', color: '#dc2626', fontSize: 13, fontWeight: 600 }}>{attnErr}</div>}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { setShowCheckout(false); setOutPhoto(null); setOutPreview('') }} disabled={attnBusy} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid ' + C.border, background: '#fff', color: C.text2, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={staffCheckOut} disabled={attnBusy || !outPhoto} style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: (attnBusy || !outPhoto) ? '#c7cdd6' : '#dc2626', color: '#fff', fontWeight: 800, fontSize: 14, cursor: (attnBusy || !outPhoto) ? 'default' : 'pointer' }}>{attnBusy ? 'Checking out…' : 'Check Out'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -4817,6 +4995,11 @@ export default function Dashboard() {
               <button onClick={() => setMenuOpen(true)} aria-label="Open menu" style={{ background: C.topbar, color: '#fff', border: 'none', height: 52, width: 52, fontSize: 24, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitTapHighlightColor: 'transparent' }}>☰</button>
             )}
             <div style={{ flex: 1, minWidth: 0 }}><TopBar active={active} /></div>
+            {isStaff && attendanceOpen && (
+              <button onClick={() => { setShowCheckout(true); setAttnErr('') }} title="Check out — ends your work session" style={{ background: '#dc2626', color: '#fff', border: 'none', height: 52, padding: isMobile ? '0 12px' : '0 18px', fontSize: isMobile ? 12 : 13, fontWeight: 800, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                {isMobile ? '⏻ Out' : '⏻ Check Out'}
+              </button>
+            )}
           </div>
           <PullToRefresh onRefresh={fetchData} isMobile={isMobile}>
             {pages[active] || <ComingSoon label={active} />}
