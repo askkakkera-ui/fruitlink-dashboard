@@ -3312,8 +3312,10 @@ function PermissionsModal({ op, onClose, limitTo = null }: any) {
         { key: 'can_edit_machine_config', label: 'Edit machine config', hint: 'Change pricing & machine settings' },
         { key: 'can_manage_field_staff', label: 'Add & edit field staff', hint: 'Create, edit and assign staff' },
         { key: 'can_manage_locations', label: 'Add & edit locations', hint: 'Create, rename, delete locations' },
+        { key: 'can_manage_warehouse', label: 'Manage warehouse', hint: 'Receive, dispatch, sale, transfer stock' },
         { key: 'can_edit_office_location', label: 'Edit office location', hint: 'Move the office GPS pin' },
         { key: 'can_export_data', label: 'Export data', hint: 'Download CSV / PDF reports' },
+        { key: 'can_manage_warehouse', label: 'Manage warehouse', hint: 'Receive, dispatch, sell, edit stock' },
         { key: 'can_manage_ads', label: 'Manage ads', hint: 'Create & edit ad campaigns on their own machines' },
       ]
     }
@@ -4734,7 +4736,7 @@ export default function Dashboard() {
     machines: <ErrorBoundary><MachinesPage machines={machines} loading={loading} fetchData={fetchData} /></ErrorBoundary>,
     map: <FleetMapPage machines={machines} />,
     orders: <OrdersPage />,
-    warehouse: <WarehouseSection role={role} />,
+    warehouse: <WarehouseSection role={role} permissions={permissions} />,
     notifyconfig: (role === 'super_admin' || permissions.can_view_notify_config)
       ? <NotifyConfigSection />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>You don't have permission to view this page.</div>,
