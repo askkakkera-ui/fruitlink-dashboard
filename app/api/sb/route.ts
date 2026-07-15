@@ -11,7 +11,7 @@ const SUPER_ADMIN_WRITE_TABLES = ['operators', 'machines', 'machine_operators'];
 const SOFT_DELETE_TABLES = ['operators'];
 // Tables the browser-facing proxy must NEVER touch, for any role or method.
 // machine_credentials holds device signing secrets: service-side only.
-const PROXY_FORBIDDEN_TABLES = ['machine_credentials'];
+const PROXY_FORBIDDEN_TABLES = ['machine_credentials', 'machine_claim_codes'];
 
 // ── Read scoping model ────────────────────────────────────────────────
 // Tables that are scoped to an operator's own machines (by machine_id column).
