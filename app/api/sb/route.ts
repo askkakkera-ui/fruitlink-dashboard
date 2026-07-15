@@ -9,6 +9,9 @@ const SB_KEY = process.env.SB_KEY || '';
 // Tables only a super_admin may WRITE to (POST/PATCH/DELETE).
 const SUPER_ADMIN_WRITE_TABLES = ['operators', 'machines', 'machine_operators'];
 const SOFT_DELETE_TABLES = ['operators'];
+// Tables the browser-facing proxy must NEVER touch, for any role or method.
+// machine_credentials holds device signing secrets: service-side only.
+const PROXY_FORBIDDEN_TABLES = ['machine_credentials'];
 
 // ── Read scoping model ────────────────────────────────────────────────
 // Tables that are scoped to an operator's own machines (by machine_id column).
@@ -71,6 +74,7 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
   const role = session.role;
   const sub = String(session.sub || '');
   const table = tableOf(rawPath);
+  if (PROXY_FORBIDDEN_TABLES.includes(table)) return { block: true };
   const withDeletedFilter = (pp: string) => table === 'operators' ? appendFilter(pp, 'deleted_at=is.null') : pp;
 
   // super_admin: unrestricted read.
@@ -210,6 +214,7 @@ async function guardWrite(request: NextRequest, method: string) {
   const table = tableOf(rawPath);
 
   // ── Ad campaigns: operator-scoped writes (super_admin unrestricted) ──
+  if (PROXY_FORBIDDEN_TABLES.includes(table)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (AD_OWNED_TABLES.includes(table) && session.role !== 'super_admin') {
     // Only operators / sub_operators with the can_manage_ads permission.
     const role = session.role;
