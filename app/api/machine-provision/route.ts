@@ -87,7 +87,11 @@ export async function POST(request: NextRequest) {
     // retire the old one rather than leave two valid ways in.
     await fetch(
       SB_URL + '/rest/v1/machine_claim_codes?machine_id=eq.' + encodeURIComponent(machine_id) + '&redeemed_at=is.null',
-      { method: 'DELETE', headers: sbH({ Prefer: 'return=minimal' }) }
+      {
+        method: 'PATCH',
+        headers: sbH({ Prefer: 'return=minimal' }),
+        body: JSON.stringify({ redeemed_at: new Date().toISOString(), redeemed_board_serial: 'SUPERSEDED' }),
+      }
     );
 
     const code = generateClaimCode();
