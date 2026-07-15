@@ -1897,10 +1897,10 @@ function MachinesPage({ machines, loading, fetchData }: any) {
     if (!confirm('Send ' + command.toUpperCase() + ' to ' + name + '?')) return
     setCmdSending(true)
     try {
-      const r = await fetch('https://api.fruitlinktech.in/api/device/commands/create', {
+      const r = await fetch('/api/machine-control', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' },
-        body: JSON.stringify({ machine_id: machineId, command, params, created_by: 'dashboard' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'command', machine_id: machineId, command, params })
       })
       const data = await r.json()
       if (data.code === 1) { alert(command + ' command sent to ' + name + '. It will execute on the next heartbeat (~5 min).'); setCmdMenu(null) }
@@ -2877,10 +2877,10 @@ function FaultLogPage({ machines }: { machines: any[] }) {
     if (!sn) { alert('Machine SN not found'); return }
     if (!confirm('Resolve fault ' + faultCode + ' on ' + (machineMap[machineId] || sn) + '?')) return
     try {
-      const r = await fetch('https://api.fruitlinktech.in/api/device/fault', {
+      const r = await fetch('/api/machine-control', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' },
-        body: JSON.stringify({ sn, event: 'clear', fault_code: faultCode, resolution: 'manual_dashboard' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fault_clear', sn, fault_code: faultCode })
       })
       const data = await r.json()
       if (data.code === 1) { loadEvents() } else { alert('Failed: ' + (data.msg || 'unknown error')) }
@@ -3074,9 +3074,7 @@ function CommLogPage({ machines }: any) {
     if (!forSn) return
     setLoading(true); setErr('')
     try {
-      const r = await fetch('https://api.fruitlinktech.in/api/device/commlog?sn=' + encodeURIComponent(forSn), {
-        headers: { 'x-machine-key': 'FLf91312c5de92d0f60cb34741faf61635' }
-      })
+      const r = await fetch('/api/machine-control?action=commlog&sn=' + encodeURIComponent(forSn))
       const text = await r.text()
       if (!r.ok) { setErr('Error loading log (HTTP ' + r.status + ')'); setLog(''); }
       else if (!text || text.includes('No log entries yet')) { setErr(text || 'No log entries yet.'); setLog(''); }
