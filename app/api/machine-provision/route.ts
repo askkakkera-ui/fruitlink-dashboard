@@ -11,6 +11,11 @@ const sbH = (extra: Record<string, string> = {}) => ({
   'Content-Type': 'application/json', ...extra,
 });
 const NO_STORE = { 'Cache-Control': 'no-store' };
+// The claim code is delivered out-of-band by machine-api (Telegram DM), never
+// returned in this response. A code in an HTTP response ends up in a console,
+// a screenshot, or a paste; a code in a private DM does not.
+const MACHINE_API = process.env.MACHINE_API_URL || 'https://api.fruitlinktech.in';
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET || '';
 
 export const runtime = 'nodejs';
 
@@ -125,13 +130,44 @@ export async function POST(request: NextRequest) {
       req: request,
     });
 
+    // Hand the code to machine-api for private delivery. If this fails the code
+    // is already stored (hashed) and burned-on-supersede, so the operator simply
+    // re-issues: we never fall back to returning it here.
+    if (!INTERNAL_API_SECRET) {
+      return NextResponse.json({
+        error: 'Delivery not configured (INTERNAL_API_SECRET missing). Code was issued but cannot be delivered; re-issue once configured.',
+      }, { status: 500, headers: NO_STORE });
+    }
+
+    let delivered = false;
+    try {
+      const dRes = await fetch(MACHINE_API + '/api/provision/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': INTERNAL_API_SECRET },
+        body: JSON.stringify({ sn: machine.sn, name: machine.name, claim_code: code, expires_at: expiresAt }),
+      });
+      delivered = dRes.ok;
+      if (!dRes.ok) {
+        const detail = await dRes.text().catch(() => '');
+        console.error('[provision] delivery failed', dRes.status, detail);
+      }
+    } catch (e: any) {
+      console.error('[provision] delivery threw', e && e.message);
+    }
+
+    if (!delivered) {
+      return NextResponse.json({
+        error: 'Code issued but delivery failed. Re-issue to get a new code.',
+      }, { status: 502, headers: NO_STORE });
+    }
+
     return NextResponse.json({
       success: true,
       sn: machine.sn,
       name: machine.name,
-      claim_code: code,
+      delivered: 'telegram',
       expires_at: expiresAt,
-      note: 'Shown once. Put this into the machine config; it cannot be retrieved again.',
+      note: 'The claim code has been sent to your Telegram. It is not shown here.',
     }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
