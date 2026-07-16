@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
-const MACHINE_API = 'https://api.fruitlinktech.in';
-const MACHINE_KEY = 'FLf91312c5de92d0f60cb34741faf61635';
+const MACHINE_API = process.env.MACHINE_API_URL || 'https://api.fruitlinktech.in';
+// Server env, never a literal. This key grants reboot / reset_mcu / fault-clear on
+// every machine in the fleet; it was rotated on 15 Jul after being found in six
+// APK files and in client-side React, and it was still sitting in git here.
+// machine-control/route.ts already reads it from env - this route did not.
+const MACHINE_KEY = process.env.MACHINE_KEY || '';
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' };
@@ -18,6 +22,7 @@ export async function GET(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
     // Call VPS stock endpoint (handles ALL machines — JW + NewSaier, cumulative loads)
+    if (!MACHINE_KEY) return NextResponse.json({ error: 'MACHINE_KEY not configured' }, { status: 500, headers: NO_STORE });
     const res = await fetch(MACHINE_API + '/api/machine/stock', {
       headers: { 'x-machine-key': MACHINE_KEY },
     });
