@@ -121,6 +121,7 @@ export default function VisitPage() {
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const [loaded, setLoaded] = useState('');
   const [damaged, setDamaged] = useState('');
+  const [fruitCount, setFruitCount] = useState('');
   const [cups, setCups] = useState('');
   const [lids, setLids] = useState('');
   const [film, setFilm] = useState('');
@@ -409,6 +410,9 @@ export default function VisitPage() {
       if (visitType === 'loading') {
         if (loaded !== '') payload.oranges_loaded = parseInt(loaded);
         if (damaged !== '') payload.oranges_damaged = parseInt(damaged);
+        // The size loaded THIS visit. Oranges-per-cup follows the fruit, not the
+        // machine: F4 ran at 5/cup on 88s and the balance sank ~60 a day.
+        if (fruitCount !== '') payload.fruit_count = parseInt(fruitCount);
       }
       const r = await fetch('/api/visit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -424,7 +428,7 @@ export default function VisitPage() {
       }
       setVisitCount((n) => n + 1);
       setMsg('✓ Visit saved');
-      setNote(''); if (noteRef.current) noteRef.current.value = ''; setLoaded(''); setDamaged(''); setCups(''); setLids(''); setFilm(''); setStraws('');
+      setNote(''); if (noteRef.current) noteRef.current.value = ''; setLoaded(''); setDamaged(''); setFruitCount(''); setCups(''); setLids(''); setFilm(''); setStraws('');
       clearPhoto(); setMachineId('');
       setStep(6);
     } catch { setErr('Network problem. Try again.'); }
@@ -692,6 +696,16 @@ export default function VisitPage() {
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 700, color: C.text2 }}>Oranges loaded</label>
                       <input value={loaded} onChange={(e) => setLoaded(e.target.value)} type="number" inputMode="numeric" style={{ ...inputStyle, marginTop: 5 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: C.text2 }}>Fruit size (count on box)</label>
+                      <select value={fruitCount} onChange={(e) => setFruitCount(e.target.value)} style={{ ...inputStyle, marginTop: 5 }}>
+                        <option value="">Select size…</option>
+                        <option value="80">80 — big (4 per cup)</option>
+                        <option value="88">88 — big (4 per cup)</option>
+                        <option value="100">100 — small (5 per cup)</option>
+                        <option value="105">105 — small (5 per cup)</option>
+                      </select>
                     </div>
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 700, color: C.text2 }}>Damaged</label>

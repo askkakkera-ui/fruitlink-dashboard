@@ -234,6 +234,13 @@ export async function POST(request: NextRequest) {
     const loaded = body.oranges_loaded != null ? parseInt(body.oranges_loaded) : null;
     const damaged = body.oranges_damaged != null ? parseInt(body.oranges_damaged) : null;
     const net = (loaded != null && damaged != null) ? (loaded - damaged) : (loaded != null ? loaded : null);
+    // The fruit size loaded on THIS visit. Oranges-per-cup follows the fruit, not
+    // the machine: F4 was configured count 100 (5/cup) while holding 88s (4/cup),
+    // and the stock balance sank ~60 oranges a day until it read -359 while the
+    // machine physically held 170. The count in Settings is now only a fallback
+    // for visits that did not record one.
+    const fruitCount = body.fruit_count != null && !isNaN(parseInt(body.fruit_count))
+      ? parseInt(body.fruit_count) : null;
 
     const row = {
       machine_id,
@@ -244,6 +251,7 @@ export async function POST(request: NextRequest) {
       oranges_loaded: loaded,
       oranges_damaged: damaged,
       oranges_net: net,
+      fruit_count: fruitCount,
       consumables: body.consumables && typeof body.consumables === 'object' ? body.consumables : null,
       photo_url: body.photo_url ? String(body.photo_url).slice(0, 500) : null,
       lat: (body.lat != null && !isNaN(parseFloat(body.lat))) ? parseFloat(body.lat) : null,
