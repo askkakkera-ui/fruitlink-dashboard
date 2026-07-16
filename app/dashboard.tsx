@@ -124,6 +124,38 @@ function SectionLabel({ children }: any) {
 // the row stays at refund_state = 2, so this still counts it as revenue when the
 // money has in fact gone. Rs 600 on 15 Jul. A settled_cash state belongs in
 // Tier 3's refund lifecycle split.
+// ─── Fetching ────────────────────────────────────────────────────
+// PostgREST caps rows at db-max-rows and returns 200 with no error, so a
+// `limit=` above the cap is a request, not a promise. On 16 Jul a Reports PDF
+// headed 01 Jul in fact began at 07 Jul: 1,185 orders in the table, exactly
+// 1,000 in the document, Rs 14,770 of gross silently absent.
+//
+// Pages in windows via Range and reads Content-Range for the true total.
+// Never returns a short array quietly: if the server has more than we can
+// fetch, that is raised, not rounded off.
+async function sbFetchAll(path: string, headers: any, opts: { max?: number } = {}): Promise<any[]> {
+  const MAX = opts.max ?? 20000
+  const WINDOW = 1000
+  const all: any[] = []
+  let from = 0
+  for (;;) {
+    const res = await fetch('/api/sb?path=' + encodeURIComponent(path), {
+      headers: { ...headers, 'Range-Unit': 'items', Range: from + '-' + (from + WINDOW - 1), Prefer: 'count=exact' },
+    })
+    if (!res.ok) throw new Error('sbFetchAll: HTTP ' + res.status + ' on ' + path.slice(0, 80))
+    const batch = await res.json()
+    if (!Array.isArray(batch)) throw new Error('sbFetchAll: non-array response for ' + path.slice(0, 80))
+    all.push(...batch)
+    const cr = res.headers.get('content-range') || ''
+    const total = Number((cr.split('/')[1] || '').trim())
+    if (batch.length < WINDOW) break
+    if (Number.isFinite(total) && all.length >= total) break
+    from += batch.length
+    if (all.length >= MAX) throw new Error('sbFetchAll: exceeded ' + MAX + ' rows for ' + path.slice(0, 80))
+  }
+  return all
+}
+
 const isTestRefund = (n: string) => /test/i.test(n || '')
 const netPaise = (o: any) =>
   (o.refund_state === 1 && !isTestRefund(o.refund_note)) ? 0 : (o.amount_paise || 0)
@@ -1143,6 +1175,7 @@ function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([])
   const [machines, setMachines] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [filter, setFilter] = useState('all')
   const [machineSel, setMachineSel] = useState('all')
   const [showAllMachines, setShowAllMachines] = useState(false)
@@ -1175,8 +1208,16 @@ function OrdersPage() {
       const f = ids.length > 0 ? '&machine_id=in.(' + ids.join(',') + ')' : ''
       setAllowedIds(ids)
       const thirtyDaysAgo = new Date(Date.now() - 30*86400000).toISOString();
-      const os = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/orders?select=*&order=created_at.desc&limit=2000&created_at=gte.' + thirtyDaysAgo + f), { headers: h }).then(r => r.json())
-      setOrders(Array.isArray(os) ? os : [])
+      // No limit= : PostgREST caps silently and returns 200, so a limit above the
+      // cap is a request, not a promise. sbFetchAll pages and throws rather than
+      // return a short array that reads as a quiet day.
+      try {
+        const os = await sbFetchAll('/rest/v1/orders?select=*&order=created_at.desc&created_at=gte.' + thirtyDaysAgo + f, h)
+        setOrders(os)
+      } catch (e: any) {
+        setLoadError(e?.message || 'fetch failed')
+        setOrders([])
+      }
       setLoading(false)
     }
     load()
@@ -1551,7 +1592,13 @@ const filtered = scopedOrders.filter((o: any) => {
             ))}
           </div>
 
-          {loading ? (
+          {loadError ? (
+            <div style={{ textAlign: 'center', padding: 40, background: C.redBg, borderRadius: 16, border: '1px solid ' + C.red }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.red, marginBottom: 6 }}>Couldn't load orders</div>
+              <div style={{ fontSize: 13, color: C.text2 }}>{loadError}</div>
+              <div style={{ fontSize: 12, color: C.text3, marginTop: 8 }}>Figures on this page are incomplete. Reload before trusting any number.</div>
+            </div>
+          ) : loading ? (
             <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading orders...</div>
           ) : filtered.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 60, background: C.surface, borderRadius: 16, border: '1px solid ' + C.border }}>
