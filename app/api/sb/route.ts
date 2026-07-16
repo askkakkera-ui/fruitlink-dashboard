@@ -168,9 +168,25 @@ export async function GET(request: NextRequest) {
       const text = await res.text();
       return new NextResponse(text, { status: res.status, headers: { 'Content-Type': 'text/plain; charset=utf-8', ...NO_STORE } });
     }
-    const res = await fetch(SB_URL + path, { headers: sbHeaders() });
+    // PostgREST silently caps rows (db-max-rows) and returns 200. A `limit=`
+    // above the cap is a request, not a promise: on 16 Jul a Reports PDF headed
+    // 01 Jul silently began at 07 Jul - 185 orders and Rs 14,770 dropped, no
+    // error. Forward Range/Prefer so callers can page, and echo Content-Range
+    // so they can know the true total.
+    const fwd: Record<string, string> = {};
+    for (const h of ['range', 'range-unit', 'prefer']) {
+      const v = request.headers.get(h);
+      if (v) fwd[h] = v;
+    }
+    const res = await fetch(SB_URL + path, { headers: sbHeaders(fwd) });
     const data = await res.json();
-    return NextResponse.json(data, { headers: NO_STORE });
+    const out: Record<string, string> = { ...NO_STORE };
+    const cr = res.headers.get('content-range');
+    if (cr) out['Content-Range'] = cr;
+    // Pass the real status through. This route previously returned 200 for a
+    // PostgREST 400, so a failed query rendered as zero orders - identical to
+    // a quiet day.
+    return NextResponse.json(data, { status: res.status, headers: out });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
