@@ -452,7 +452,17 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   })()
   const BOX_KG = Number(tuning.box_kg) > 0 ? Number(tuning.box_kg) : 15
   const COUNT = Number(tuning.count) > 0 ? Number(tuning.count) : 100
-  const OPC = Number(tuning.oranges_per_cup) > 0 ? Number(tuning.oranges_per_cup) : 4.5
+  // Oranges per cup is NOT a setting - it follows the fruit size. Sri loads
+  // 80, 88, 100, 105 as supply dictates; the count is what changes, and the
+  // ratio must follow it. When these were two independent fields, F5 sat at
+  // count 100 with 4/cup for who knows how long, and the all-machines view
+  // borrowed that 4 for the whole fleet.
+  //
+  // The rule: 80 or 88 (bigger fruit) take 4 per 250 ml cup, anything smaller
+  // takes 5. This is a planning assumption, not a physical claim - the machine
+  // juices to a 250 ml target and the funnel carries any excess to the next cup.
+  // Better yield than assumed just means more cups out of the same load.
+  const OPC = COUNT <= 88 ? 4 : 5
   const CAP = Number(tuning.capacity) > 0 ? Number(tuning.capacity) : 310
   const GPO = Math.round((BOX_KG * 1000) / COUNT)
   const TARE = Number.isFinite(Number(tuning.tare_g)) ? Number(tuning.tare_g) : 235
@@ -4438,7 +4448,7 @@ function StockTuningSection({ role, SB_KEY, showSaved, showErr, saving, setSavin
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
   const [machines, setMachines] = useState<any[]>([])
   const [tune, setTune] = useState<Record<string, any>>({})
-  const DEF = { box_kg: 15, count: 100, oranges_per_cup: 5, capacity: 310, tare_g: 235, service_level: 90, open_hour: 9, close_hour: 22 }
+  const DEF = { box_kg: 15, count: 100, capacity: 310, tare_g: 235, service_level: 90, open_hour: 9, close_hour: 22 }
   const hourLabel = (h: number) => h === 24 || h === 0 ? '12 AM' : h === 12 ? '12 PM' : h > 12 ? (h - 12) + ' PM' : h + ' AM'
 
   useEffect(() => {
@@ -4496,7 +4506,7 @@ function StockTuningSection({ role, SB_KEY, showSaved, showErr, saving, setSavin
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 12 }}>
               <div><label style={lbl}>Box weight (kg)</label><input type="number" value={t.box_kg ?? ''} onChange={e => setV(m.id, 'box_kg', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /></div>
               <div><label style={lbl}>Orange count / box</label><input type="number" value={t.count ?? ''} onChange={e => setV(m.id, 'count', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>≈ {gpo(t)} g per orange</div></div>
-              <div><label style={lbl}>Oranges per 250 ml cup</label><input type="number" step="0.5" value={t.oranges_per_cup ?? ''} onChange={e => setV(m.id, 'oranges_per_cup', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>88 → 4 · 100 → 5</div></div>
+              <div><label style={lbl}>Oranges per 250 ml cup</label><div style={{ ...inputStyle, background: C.surface2, color: C.text2, display: 'flex', alignItems: 'center', fontWeight: 700 }}>{(Number(t.count) > 0 ? Number(t.count) : 100) <= 88 ? 4 : 5} per cup</div><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Follows the count · 80 or 88 → 4 · larger → 5</div></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
               <div><label style={lbl}>Machine capacity (oranges)</label><input type="number" value={t.capacity ?? ''} onChange={e => setV(m.id, 'capacity', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Most it physically holds. F3/4/5 ≈ 310 · F1/2 ≈ 500</div></div>
