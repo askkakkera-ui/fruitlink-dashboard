@@ -3353,6 +3353,7 @@ function ComingSoon({ label }: { label: string }) {
 function AssignMachinesModal({ op, onClose }: any) {
   const [machines, setMachines] = useState<any[]>([])
   const [assigned, setAssigned] = useState<string[]>([])
+  const [initial, setInitial] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const J = { 'Content-Type': 'application/json' }
@@ -3363,7 +3364,8 @@ function AssignMachinesModal({ op, onClose }: any) {
         fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + op.id)).then(r => r.json()).catch(() => []),
       ])
       setMachines(Array.isArray(mData) ? mData.filter((m: any) => { let st: any = {}; try { st = typeof m.state === 'string' ? JSON.parse(m.state || '{}') : (m.state || {}) } catch (e) {} return st.hidden !== true }) : [])
-      setAssigned(Array.isArray(aData) ? aData.map((r: any) => r.machine_id) : [])
+      const cur = Array.isArray(aData) ? aData.map((r: any) => r.machine_id) : []
+      setAssigned(cur); setInitial(cur)
     }
     load()
   }, [])
@@ -3371,12 +3373,28 @@ function AssignMachinesModal({ op, onClose }: any) {
   const save = async () => {
     setSaving(true); setMsg('')
     try {
-      const delRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + op.id), { method: 'DELETE', headers: J })
-      if (!delRes.ok) { setMsg('Error: could not clear old assignments (' + delRes.status + ')'); setSaving(false); return }
-      if (assigned.length > 0) {
-        const insRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify(assigned.map(mid => ({ machine_id: mid, operator_id: op.id }))) })
-        if (!insRes.ok) { const t = await insRes.text().catch(() => ''); setMsg('Error saving: ' + (t || insRes.status)); setSaving(false); return }
+      // Diff, do not replace. This used to DELETE every row then INSERT the new
+      // set: a failed POST - a blip, a 400 - left the operator with ZERO machines
+      // and an error toast. Since field staff inherit their operator's machines,
+      // that strips the whole team at once. PostgREST gives us no transaction, so
+      // touch only what actually changed and leave the rest alone.
+      const toAdd = assigned.filter((mid: string) => !initial.includes(mid))
+      const toRemove = initial.filter((mid: string) => !assigned.includes(mid))
+      if (toRemove.length === 0 && toAdd.length === 0) { setMsg('\u2713 No changes'); setTimeout(onClose, 800); setSaving(false); return }
+      if (toRemove.length > 0) {
+        const inList = '(' + toRemove.map(encodeURIComponent).join(',') + ')'
+        const delRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators?operator_id=eq.' + op.id + '&machine_id=in.' + inList), { method: 'DELETE', headers: J })
+        if (!delRes.ok) { setMsg('Error: could not remove ' + toRemove.length + ' assignment(s) (' + delRes.status + '). Nothing was changed.'); setSaving(false); return }
       }
+      if (toAdd.length > 0) {
+        const insRes = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machine_operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify(toAdd.map((mid: string) => ({ machine_id: mid, operator_id: op.id }))) })
+        if (!insRes.ok) {
+          const t = await insRes.text().catch(() => '')
+          setMsg('Error adding: ' + (t || insRes.status) + (toRemove.length ? ' - the ' + toRemove.length + ' removal(s) did go through.' : ''))
+          setSaving(false); return
+        }
+      }
+      setInitial(assigned)
       setMsg('\u2713 Saved'); setTimeout(onClose, 800)
     } catch (e: any) { setMsg('Error: ' + e.message) }
     setSaving(false)
