@@ -453,6 +453,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const BOX_KG = Number(tuning.box_kg) > 0 ? Number(tuning.box_kg) : 15
   const COUNT = Number(tuning.count) > 0 ? Number(tuning.count) : 100
   const OPC = Number(tuning.oranges_per_cup) > 0 ? Number(tuning.oranges_per_cup) : 4.5
+  const CAP = Number(tuning.capacity) > 0 ? Number(tuning.capacity) : 310
   const GPO = Math.round((BOX_KG * 1000) / COUNT)
   const TARE = Number.isFinite(Number(tuning.tare_g)) ? Number(tuning.tare_g) : 235
   const SL = Number(tuning.service_level) > 0 ? Number(tuning.service_level) : 90
@@ -578,7 +579,14 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const tomName = new Date(tomKey + 'T12:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'long' })
   const restCups = Math.max(0, fcToday.mu - cupsToday)
   const projEndLeftover = leftOranges != null ? Math.max(0, Math.round(leftOranges - restCups * OPC)) : null
-  const bring = projEndLeftover != null ? Math.max(0, fcTom.oranges - projEndLeftover) : fcTom.oranges
+  // Never ask for more than the machine physically holds. F3/4/5 take 300-310
+  // oranges (60-62 racks), F1/F2 400-500. Before this, the plan asked for
+  // whatever the forecast wanted - 489 into a 310 machine on 16 Jul. Capacity is
+  // a property of the machine, not the fruit: same either way for 88s or 100s.
+  const wantOranges = projEndLeftover != null ? Math.max(0, fcTom.oranges - projEndLeftover) : fcTom.oranges
+  const roomLeft = Math.max(0, CAP - (projEndLeftover || 0))
+  const bring = Math.min(wantOranges, roomLeft)
+  const shortBy = Math.max(0, wantOranges - bring)
   const loadedEst = leftOranges != null ? Math.round(leftOranges + cupsToday * OPC) : null
 
   const card: any = { background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }
@@ -717,7 +725,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text2 }}>{bring > 0 ? 'oranges to bring' : 'enough rolls over — skip'}</span>
                 </div>
                 <div style={{ fontSize: 12, color: C.text2 }}>Forecast {Math.round(fcTom.mu)} cups (±{Math.round(fcTom.ss)}) = {fcTom.oranges} needed · ~{projEndLeftover != null ? projEndLeftover : 0} rolling over</div>
-                <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>= {fcTom.oranges} target − {projEndLeftover != null ? projEndLeftover : 0} carryover (final on tomorrow's scale)</div>
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>{shortBy > 0 ? <>Machine holds {CAP} — <b style={{ color: C.amber }}>{shortBy} short of forecast</b>, expect it to run dry before close. Top up if you can.</> : <>= {fcTom.oranges} target − {projEndLeftover != null ? projEndLeftover : 0} carryover (final on tomorrow's scale)</>}</div>
                 {projEndLeftover != null && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, borderRadius: 8, padding: '6px 9px', marginTop: 9, fontWeight: 600, background: projEndLeftover > 120 ? C.amberBg : C.greenBg, color: projEndLeftover > 120 ? C.amber : C.green }}>
                     🍊 {projEndLeftover > 120 ? 'Heavy rollover — rotate older fruit to the front first.' : 'Freshness OK — light rollover, well inside the 3–4 day window.'}
@@ -4430,7 +4438,7 @@ function StockTuningSection({ role, SB_KEY, showSaved, showErr, saving, setSavin
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' }
   const [machines, setMachines] = useState<any[]>([])
   const [tune, setTune] = useState<Record<string, any>>({})
-  const DEF = { box_kg: 15, count: 100, oranges_per_cup: 5, tare_g: 235, service_level: 90, open_hour: 9, close_hour: 22 }
+  const DEF = { box_kg: 15, count: 100, oranges_per_cup: 5, capacity: 310, tare_g: 235, service_level: 90, open_hour: 9, close_hour: 22 }
   const hourLabel = (h: number) => h === 24 || h === 0 ? '12 AM' : h === 12 ? '12 PM' : h > 12 ? (h - 12) + ' PM' : h + ' AM'
 
   useEffect(() => {
@@ -4491,6 +4499,7 @@ function StockTuningSection({ role, SB_KEY, showSaved, showErr, saving, setSavin
               <div><label style={lbl}>Oranges per 250 ml cup</label><input type="number" step="0.5" value={t.oranges_per_cup ?? ''} onChange={e => setV(m.id, 'oranges_per_cup', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>88 → 4 · 100 → 5</div></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+              <div><label style={lbl}>Machine capacity (oranges)</label><input type="number" value={t.capacity ?? ''} onChange={e => setV(m.id, 'capacity', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Most it physically holds. F3/4/5 ≈ 310 · F1/2 ≈ 500</div></div>
               <div><label style={lbl}>Empty tray weight (g)</label><input type="number" value={t.tare_g ?? ''} onChange={e => setV(m.id, 'tare_g', e.target.value === '' ? '' : +e.target.value)} style={inputStyle} /><div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Subtracted from scale</div></div>
               <div><label style={lbl}>Service level</label>
                 <select value={t.service_level ?? 90} onChange={e => setV(m.id, 'service_level', +e.target.value)} style={inputStyle}>
