@@ -659,6 +659,20 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
         </div>
       </div>
 
+      {/* Runway and restock are per-machine physics. The fleet has no single
+          answer: F2/F3 load 88s at 4 oranges per cup, F1/F4/F5 load 100s at 5;
+          F1/F2 hold 500 oranges, F3/4/5 hold 310. This view used to pick ONE
+          machine (lowest stock) and apply its tuning to fleet-wide sales - on
+          16 Jul it borrowed F5's ratio, the only mis-tuned one, for everything. */}
+      {machineSel === 'all' ? (<>
+        <div style={sectit}>⛽ Stock runway &amp; restock</div>
+        <div style={{ ...card, padding: '28px 22px', textAlign: 'center', marginBottom: 22 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text2 }}>Pick a machine to see runway and restock</div>
+          <div style={{ fontSize: 12, color: C.text3, marginTop: 8, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
+            Each machine has its own fruit size and capacity — F1 and F2 hold about 500 oranges, F3/F4/F5 about 310, and size 88 takes 4 oranges per cup where 100 takes 5. There is no fleet-wide figure to show. Sales and revenue above are fleet-wide and correct.
+          </div>
+        </div>
+      </>) : (<>
       <div style={sectit}>⛽ Stock runway — today</div>
       <div style={card}>
         <div style={{ height: 3, background: runReady ? runCol : C.border2 }} />
@@ -747,6 +761,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
           </div>
         </div>
       </div>
+      </>)}
     </>
   )
 }
