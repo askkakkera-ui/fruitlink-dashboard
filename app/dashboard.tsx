@@ -1387,27 +1387,27 @@ const filtered = scopedOrders.filter((o: any) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
       doc.text('By Machine', 14, y); y += 7
       doc.setFontSize(9); doc.setTextColor(120, 120, 120)
-      doc.text('Machine', 16, y); doc.text('Placed', 92, y); doc.text('Paid', 116, y); doc.text('Cups', 140, y); doc.text('Revenue', 166, y); y += 5
+      doc.text('Machine', 16, y); doc.text('Placed', 74, y); doc.text('Paid', 94, y); doc.text('Cups', 112, y); doc.text('Gross', 130, y); doc.text('Refunds', 152, y); doc.text('Net', 178, y); y += 5
       doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
       const byM: any = {}
-      rows.forEach((o: any) => { const id = o.machine_id; if (!byM[id]) byM[id] = { placed: 0, paid: 0, cups: 0, rev: 0 }; byM[id].placed++; if (o.pay_state === 1) { byM[id].paid++; byM[id].cups += (o.cup_num || 1); byM[id].rev += (o.amount_paise || 0) / 100 } })
-      Object.keys(byM).forEach(id => { const m = getMachine(id); const r = byM[id]; doc.text(String(m.display_name || id.slice(0, 8)).slice(0, 30), 16, y); doc.text(String(r.placed), 92, y); doc.text(String(r.paid), 116, y); doc.text(String(r.cups), 140, y); doc.text('Rs ' + r.rev.toFixed(0), 166, y); y += 5; if (y > 270) { doc.addPage(); y = 20 } })
+      rows.forEach((o: any) => { const id = o.machine_id; if (!byM[id]) byM[id] = { placed: 0, paid: 0, cups: 0, rev: 0, net: 0 }; byM[id].placed++; if (o.pay_state === 1) { byM[id].paid++; byM[id].cups += (o.cup_num || 1); byM[id].rev += (o.amount_paise || 0) / 100; byM[id].net += netPaise(o) / 100 } })
+      Object.keys(byM).forEach(id => { const m = getMachine(id); const r = byM[id]; const ref = r.rev - r.net; doc.text(String(m.display_name || id.slice(0, 8)).slice(0, 24), 16, y); doc.text(String(r.placed), 74, y); doc.text(String(r.paid), 94, y); doc.text(String(r.cups), 112, y); doc.text('Rs ' + r.rev.toFixed(0), 130, y); doc.text(ref > 0 ? '- Rs ' + ref.toFixed(0) : '-', 152, y); doc.text('Rs ' + r.net.toFixed(0), 178, y); y += 5; if (y > 270) { doc.addPage(); y = 20 } })
       y += 8
       if (y > 250) { doc.addPage(); y = 20 }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
       doc.text('Daily Breakdown (paid)', 14, y); y += 7
       doc.setFontSize(9); doc.setTextColor(120, 120, 120)
-      doc.text('Date', 16, y); doc.text('Paid', 92, y); doc.text('Cups', 120, y); doc.text('Revenue', 150, y); y += 5
+      doc.text('Date', 16, y); doc.text('Paid', 76, y); doc.text('Cups', 100, y); doc.text('Gross', 126, y); doc.text('Refunds', 150, y); doc.text('Net', 178, y); y += 5
       doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
       const byD: any = {}
-      paid.forEach((o: any) => { const key = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); if (!byD[key]) byD[key] = { paid: 0, cups: 0, rev: 0 }; byD[key].paid++; byD[key].cups += (o.cup_num || 1); byD[key].rev += (o.amount_paise || 0) / 100 })
-      Object.keys(byD).sort().forEach(key => { const r = byD[key]; doc.text(key, 16, y); doc.text(String(r.paid), 92, y); doc.text(String(r.cups), 120, y); doc.text('Rs ' + r.rev.toFixed(0), 150, y); y += 5; if (y > 280) { doc.addPage(); y = 20 } })
+      paid.forEach((o: any) => { const key = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); if (!byD[key]) byD[key] = { paid: 0, cups: 0, rev: 0, net: 0 }; byD[key].paid++; byD[key].cups += (o.cup_num || 1); byD[key].rev += (o.amount_paise || 0) / 100; byD[key].net += netPaise(o) / 100 })
+      Object.keys(byD).sort().forEach(key => { const r = byD[key]; const ref = r.rev - r.net; doc.text(key, 16, y); doc.text(String(r.paid), 76, y); doc.text(String(r.cups), 100, y); doc.text('Rs ' + r.rev.toFixed(0), 126, y); doc.text(ref > 0 ? '- Rs ' + ref.toFixed(0) : '-', 150, y); doc.text('Rs ' + r.net.toFixed(0), 178, y); y += 5; if (y > 280) { doc.addPage(); y = 20 } })
 
       // ── Full transaction list (all orders: paid + failed + refunded) ──
       doc.addPage(); y = 20
       doc.setFillColor(249, 115, 22); doc.rect(0, 0, 210, 16, 'F')
       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
-      doc.text('Transaction List — All Orders', 14, 11)
+      doc.text('Transaction List — Paid, Refunded & Failed', 14, 11)
       y = 26
       const _txnStatus = (o: any) => {
         if (o.refund_state === 1) return 'Refunded'
@@ -1458,7 +1458,8 @@ const filtered = scopedOrders.filter((o: any) => {
         if (y > 285) { doc.addPage(); y = 20; y = drawTxnHeader(y); doc.setFontSize(7) }
       })
       doc.setFontSize(8); doc.setTextColor(150, 150, 150)
-      doc.text('Total transactions listed: ' + txns.length, 12, y + 4)
+      const _pending = rows.length - txns.length
+      doc.text('Total listed: ' + txns.length + ' of ' + rows.length + ' orders placed' + (_pending > 0 ? '  ·  ' + _pending + ' pending (payment never completed) not listed' : ''), 12, y + 4)
 
       doc.setFontSize(8); doc.setTextColor(150, 150, 150)
       doc.text('Fruitlink Technologies Pvt Ltd - Confidential', 14, 290)
