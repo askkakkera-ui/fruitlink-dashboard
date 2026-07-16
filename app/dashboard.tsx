@@ -462,6 +462,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
 
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   useEffect(() => {
     if (!machine) { setLoading(false); return }
     let alive = true
@@ -477,11 +478,16 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
       } catch {}
       try {
         const machineFilter = machineSel === 'all' ? '' : '&machine_id=eq.' + mid
-        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state,refund_state,refund_note&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc&limit=3000'
-        const d = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h }).then(r => r.json())
-        if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) }
-      } catch {
-        if (alive) { setOrders([]); setLoading(false) }
+        // No limit= : PostgREST caps at db-max-rows and returns 200, so a limit
+        // above the cap is a request, not a promise. F4 alone did 632 paid orders
+        // in 16 days - this 35-day window crosses 1,000 within a month, and the
+        // chart would then under-report silently, exactly as the Console did.
+        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state,refund_state,refund_note&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc'
+        const d = await sbFetchAll(path, h)
+        if (alive) { setOrders(d); setLoading(false) }
+      } catch (e: any) {
+        // Was: silently setOrders([]) - an empty chart reads as a quiet month.
+        if (alive) { setLoadError(e?.message || 'fetch failed'); setOrders([]); setLoading(false) }
       }
     }
     run()
@@ -587,6 +593,13 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
 
   const tStr = sellAt != null ? ampm(Math.floor(sellAt)).replace(/ (AM|PM)/, ':' + String(Math.round((sellAt - Math.floor(sellAt)) * 60)).padStart(2, '0') + ' $1') : ''
 
+  if (loadError) return (
+    <div style={{ textAlign: 'center', padding: 40, background: C.redBg, borderRadius: 16, border: '1px solid ' + C.red, marginBottom: 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: C.red, marginBottom: 6 }}>Couldn't load orders</div>
+      <div style={{ fontSize: 13, color: C.text2 }}>{loadError}</div>
+      <div style={{ fontSize: 12, color: C.text3, marginTop: 8 }}>Sales, runway and restock figures below are incomplete. Reload before trusting any number.</div>
+    </div>
+  )
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: 14, marginBottom: 14 }}>
