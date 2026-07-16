@@ -60,7 +60,9 @@ export async function GET(request: NextRequest) {
       const srows = await sr.json();
       let ids: string[] = (Array.isArray(srows) ? srows : []).map((r: any) => r.machine_id).filter(Boolean);
       if (role !== 'super_admin' && role !== 'staff') {
-        const gr = await fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(String(session.sub || '')), { headers: sbHeaders() });
+        // Tenancy, not per-person: field staff inherit their operator's machines.
+        const tenantId = session.owner_id ? String(session.owner_id) : String(session.sub || '');
+        const gr = await fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(tenantId), { headers: sbHeaders() });
         const grows = await gr.json();
         const mine = new Set((Array.isArray(grows) ? grows : []).map((r: any) => String(r.machine_id)));
         ids = ids.filter((id) => mine.has(String(id)));

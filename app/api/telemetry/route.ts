@@ -23,7 +23,12 @@ async function snAllowed(sn: string, session: any): Promise<boolean> {
   const mid = Array.isArray(mRows) && mRows[0] ? mRows[0].id : null;
   if (!mid) return false;
   // is it granted to this operator?
-  const gRes = await fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(String(session.sub)) + '&machine_id=eq.' + encodeURIComponent(mid), { headers: sbHeaders() });
+  // machine_operators is TENANCY: which operator owns which machine. Field staff
+  // and sub-operators inherit their tenant's machines - they never hold rows of
+  // their own. Keying on session.sub denied every field staff member once the
+  // duplicate assignment rows were removed.
+  const tenantId = session.owner_id ? String(session.owner_id) : String(session.sub || '');
+  const gRes = await fetch(SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(tenantId) + '&machine_id=eq.' + encodeURIComponent(mid), { headers: sbHeaders() });
   const gRows = gRes.ok ? await gRes.json() : [];
   return Array.isArray(gRows) && gRows.length > 0;
 }

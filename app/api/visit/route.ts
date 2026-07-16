@@ -119,7 +119,20 @@ export async function GET(request: NextRequest) {
       }
       const staffId = String(session.sub || '');
       const owner = tenantOf(session);
-      const ids = await tenantMachineIds(session.role === 'field_staff' ? staffId : owner);
+      // Field staff inherit their tenant's machines. machine_operators is TENANCY
+      // (which operator owns which machine) - it was also being used as a work
+      // assignment for field staff, so one table meant two things and a guard
+      // could not tell them apart. That is why an operator could not self-serve
+      // and why test6 was created on 16 Jul with 8 permissions and still saw no
+      // machines: nothing writes the assignment rows, so every new hire was dead
+      // on arrival until someone ran SQL.
+      //
+      // The assignment layer is location_staff: the operator rosters staff to
+      // sites, which is self-service and matches the flow - LOCATION, CHECK IN,
+      // then MACHINE. A field staff member is standing at the machine with a GPS
+      // check-in; a second gate on top of the roster and the geography filter
+      // (page.tsx:505) added nothing but a way to break new accounts.
+      const ids = await tenantMachineIds(owner);
       if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
       const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';
       const res = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,location,location_id,location_lat,location_lng&id=in.' + inList + '&order=display_name.asc', { headers: sbHeaders() });
