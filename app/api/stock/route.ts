@@ -61,6 +61,13 @@ export async function GET(req: NextRequest) {
       loaded_today: s.loaded_today,
       consumed_today: s.consumed_today,
       remaining_oranges: s.remaining,
+      // The VPS reports when its rolling balance has gone negative - the model
+      // has drifted from the machine and the stock is unknown. This mapping is a
+      // whitelist, so anything not named here is silently dropped: needs_recount
+      // was returned by the API and never reached the dashboard.
+      balance: s.balance,
+      needs_recount: s.needs_recount,
+      count: s.count,
       capacity: s.capacity,
       machine_type: s.machine_type,
       visits_today: s.visits_today,
