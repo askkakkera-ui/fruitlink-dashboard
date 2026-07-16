@@ -560,11 +560,24 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const haveStockSensors = machine && (machine.stock_l1 !== undefined || machine.stock_l2 !== undefined || machine.stock_l3 !== undefined)
   // Fall back to visit-based stock data for NewSaier machines (no hardware scale)
   const visitStock = (stockData || []).find((s: any) => s.machine_id === machine?.id)
-  const leftOranges = visitStock?.stock_known
-    ? visitStock.remaining_oranges ?? Math.round((visitStock.cups_remaining || 0) * OPC)
-    : haveScale
-      ? Math.max(0, Math.round((sw - TARE) / GPO))
-      : null
+  // The API returns needs_recount when its rolling balance has gone negative -
+  // loaded minus consumed since the first-ever visit, which drifts because opc
+  // is the machine's CONFIGURED fruit size, not what is actually loaded. F4 sat
+  // at balance -349 on 16 Jul while physically holding 170 oranges, and the
+  // panel read "0 left" and told the operator to send someone to top up a
+  // half-full machine.
+  //
+  // A known-wrong number must not drive an instruction. When the model has
+  // drifted, we do not know the stock: leftOranges is null, runReady goes false,
+  // and the runway says so instead of guessing.
+  const stockDrifted = visitStock?.needs_recount === true
+  const leftOranges = stockDrifted
+    ? null
+    : visitStock?.stock_known
+      ? visitStock.remaining_oranges ?? Math.round((visitStock.cups_remaining || 0) * OPC)
+      : haveScale
+        ? Math.max(0, Math.round((sw - TARE) / GPO))
+        : null
   const usedToday = cupsToday * OPC
   const sellThrough = leftOranges != null && (usedToday + leftOranges) > 0 ? Math.round(usedToday / (usedToday + leftOranges) * 100) : null
 
@@ -692,7 +705,8 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
             </div>
             <div style={{ fontSize: 11.5, color: C.text3, marginTop: 8, fontWeight: 600 }}>{leftOranges} oranges left · ~{Math.round(leftOranges / OPC)} cups</div>
             <div style={{ fontSize: 12.5, color: C.text2, lineHeight: 1.5, marginTop: 6 }}>
-              {!runReady ? 'Too early in the day to project a reliable runway — check back after a few sales.'
+              {stockDrifted ? <><b style={{ color: C.amber }}>Stock count has drifted {Math.abs(visitStock?.balance ?? 0)} oranges</b> — more cups have been sold than the logged loads can account for, so the machine's stock is unknown. Count the racks and log a calibration visit to re-anchor it. (5 oranges per rack.)</>
+              : !runReady ? 'Too early in the day to project a reliable runway — check back after a few sales.'
                 : sellAt >= CLOSE ? <>At the current pace (<b>{cph.toFixed(1)} cups/hr</b>), the <b>{leftOranges} oranges</b> left last past closing. <b style={{ color: C.green }}>No refill needed today</b> ✓</>
                   : sellAt < peakStart ? <>At the current pace, stock runs dry near <b style={{ color: C.red }}>{tStr}</b> — <b style={{ color: C.red }}>before the {ampm(peakStart)} peak</b>. Send the boys to top up <b>now</b> ⚠</>
                     : sellAt < peakEnd ? <>At the current pace, stock sells out near <b style={{ color: C.amber }}>{tStr}</b>, <b style={{ color: C.amber }}>mid-peak</b>. Top up before {ampm(peakStart)}.</>
