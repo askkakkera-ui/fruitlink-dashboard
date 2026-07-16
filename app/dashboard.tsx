@@ -1294,10 +1294,17 @@ const filtered = scopedOrders.filter((o: any) => {
     const startISO = new Date(exFrom + 'T00:00:00+05:30').toISOString()
     const endISO = new Date(exTo + 'T23:59:59.999+05:30').toISOString()
     const idf = allowedIds.length > 0 ? '&machine_id=in.(' + allowedIds.join(',') + ')' : ''
-    const path = '/rest/v1/orders?select=*&created_at=gte.' + startISO + '&created_at=lte.' + endISO + idf + '&order=created_at.desc&limit=10000'
-    const res = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h })
-    const d = await res.json()
-    return Array.isArray(d) ? d : []
+    // No limit= : PostgREST caps at db-max-rows and returns 200, so limit=10000
+    // was a request, not a promise. The 16 Jul PDF headed 01 Jul in fact began at
+    // 07 Jul - 1,185 orders in the range, exactly 1,000 in the document, Rs 14,770
+    // of gross absent, no error anywhere.
+    //
+    // sbFetchAll pages and throws rather than return short. Callers must NOT
+    // swallow that: a dashboard can be reloaded, a PDF is saved, sent, and
+    // believed months later. A report that cannot prove it is complete must not
+    // be produced at all.
+    const path = '/rest/v1/orders?select=*&created_at=gte.' + startISO + '&created_at=lte.' + endISO + idf + '&order=created_at.desc'
+    return await sbFetchAll(path, h)
   }
 
   const _download = (content: BlobPart, filename: string, type: string) => {
@@ -1314,7 +1321,7 @@ const filtered = scopedOrders.filter((o: any) => {
     setExporting('csv')
     try {
       const rows = await fetchRange()
-      if (rows.length === 0) { alert('No orders found in that date range.'); setExporting(''); return }
+      if (rows.length === 0) { alert('No orders returned for that range.'); setExporting(''); return }
       const head = ['Order Code', 'Machine', 'Location', 'Amount (INR)', 'Payment', 'Delivery', 'Cups', 'Created (IST)', 'Paid (IST)', 'Delivered (IST)', 'PayU ID']
       const lines = [head.join(',')]
       rows.filter((o: any) => o.pay_state === 1).forEach((o: any) => {
@@ -1340,7 +1347,7 @@ const filtered = scopedOrders.filter((o: any) => {
     setExporting('pdf')
     try {
       const rows = await fetchRange()
-      if (rows.length === 0) { alert('No orders found in that date range.'); setExporting(''); return }
+      if (rows.length === 0) { alert('No orders returned for that range.'); setExporting(''); return }
       const lib = await _loadJsPDF()
       const doc = new lib.jsPDF({ unit: 'mm', format: 'a4' })
       const paid = rows.filter((o: any) => o.pay_state === 1)
