@@ -110,6 +110,24 @@ function SectionLabel({ children }: any) {
   )
 }
 
+// ─── Revenue ─────────────────────────────────────────────────────
+// A refunded order is not income. Reports has computed this correctly since it
+// was written (netRevenue = revenue - refGenuineAmt); the Console never did, and
+// showed gross as if it were earnings - Rs 5,270 over the fortnight to 15 Jul,
+// about 5% overstated, growing daily.
+//
+// Only refund_state === 1 counts: a FAILED refund (state 2) means the money
+// never actually left, so it is still revenue. Test refunds are excluded by
+// their note, matching Reports.
+//
+// KNOWN GAP: when PhonePe rejects a refund and we settle the customer in CASH,
+// the row stays at refund_state = 2, so this still counts it as revenue when the
+// money has in fact gone. Rs 600 on 15 Jul. A settled_cash state belongs in
+// Tier 3's refund lifecycle split.
+const isTestRefund = (n: string) => /test/i.test(n || '')
+const netPaise = (o: any) =>
+  (o.refund_state === 1 && !isTestRefund(o.refund_note)) ? 0 : (o.amount_paise || 0)
+
 // ─── Sidebar ─────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { key: 'console', label: 'Console', icon: '⊞', badge: 'LIVE', group: '', permission: 'can_view_console' },
@@ -427,7 +445,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
       } catch {}
       try {
         const machineFilter = machineSel === 'all' ? '' : '&machine_id=eq.' + mid
-        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc&limit=3000'
+        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state,refund_state,refund_note&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc&limit=3000'
         const d = await fetch('/api/sb?path=' + encodeURIComponent(path), { headers: h }).then(r => r.json())
         if (alive) { setOrders(Array.isArray(d) ? d : []); setLoading(false) }
       } catch {
@@ -453,7 +471,7 @@ function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, sto
   const nowHour = dHour(now) + (parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: IST, minute: '2-digit' }).format(now), 10) || 0) / 60
 
   const dailyCups: Record<string, number> = {}, dailyRev: Record<string, number> = {}
-  orders.forEach(o => { const k = dKey(o.created_at); dailyCups[k] = (dailyCups[k] || 0) + (o.cup_num || 1); dailyRev[k] = (dailyRev[k] || 0) + (o.amount_paise || 0) / 100 })
+  orders.forEach(o => { const k = dKey(o.created_at); dailyCups[k] = (dailyCups[k] || 0) + (o.cup_num || 1); dailyRev[k] = (dailyRev[k] || 0) + netPaise(o) / 100 })
 
   const week = Array.from({ length: 7 }, (_, i) => {
     const k = dKey(new Date(now.getTime() - (6 - i) * 86400000))
@@ -1187,7 +1205,7 @@ function OrdersPage() {
   })
 
   const paidOrders = periodOrders.filter((o: any) => o.pay_state === 1)
-  const totalRevenue = paidOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
+  const totalRevenue = paidOrders.reduce((s: number, o: any) => s + netPaise(o), 0)
   const totalCups = paidOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
   const avgOrder = paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0
   const convRate = periodOrders.length > 0 ? (paidOrders.length / periodOrders.length * 100) : 0
@@ -1195,7 +1213,7 @@ function OrdersPage() {
   // Revenue per machine
   const machineRevenue = machines.map((m: any) => {
     const mOrders = paidOrders.filter((o: any) => o.machine_id === m.id)
-    const rev = mOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
+    const rev = mOrders.reduce((s: number, o: any) => s + netPaise(o), 0)
     const cups = mOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
     return { ...m, revenue: rev, cups, orders: mOrders.length }
   }).sort((a: any, b: any) => b.revenue - a.revenue)
@@ -1207,7 +1225,7 @@ function OrdersPage() {
   })
   const dailyData = days.map(day => {
     const dayOrders = scopedOrders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
-    return { day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), revenue: dayOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
+    return { day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), revenue: dayOrders.reduce((s: number, o: any) => s + netPaise(o), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
   })
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
 
