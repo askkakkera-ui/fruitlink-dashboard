@@ -75,6 +75,14 @@ function verdictChip(l: Loc): { text: string; color: string; bg: string } {
 }
 
 // ── page ─────────────────────────────────────────────────────────
+// Card lives at module scope on purpose. Declared inside VisitPage it was a new
+// function identity on every render, so React unmounted and remounted everything
+// it wrapped on each keystroke - the input was destroyed and rebuilt and the phone
+// keyboard closed. Typing "100" into Oranges loaded took three taps.
+const Card = ({ children }: any) => (
+  <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 18, marginBottom: 14 }}>{children}</div>
+);
+
 export default function VisitPage() {
   // mode + step. step is the no-skip spine of the machine flow.
   //   1 location · 2 check in · 3 machine & type · 4 photo · 5 details · 6 done
@@ -438,9 +446,6 @@ export default function VisitPage() {
   // ── ui atoms ───────────────────────────────────────────────────
   const inputStyle: any = { width: '100%', padding: '11px 12px', borderRadius: 10, border: '1px solid ' + C.border, fontSize: 15, color: C.text, boxSizing: 'border-box', outline: 'none' };
 
-  const Card = ({ children }: any) => (
-    <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, padding: 18, marginBottom: 14 }}>{children}</div>
-  );
   const H = ({ n, children }: any) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
       <div style={{ width: 26, height: 26, borderRadius: '50%', background: C.orange, color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</div>
