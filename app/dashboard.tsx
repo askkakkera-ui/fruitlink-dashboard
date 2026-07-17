@@ -3713,7 +3713,6 @@ function LocationsModal({ op, onClose }: any) {
                       {loc.lat && <span>GPS: {Number(loc.lat).toFixed(4)}, {Number(loc.lng).toFixed(4)}</span>}
                       <span>Geofence: {loc.geofence_radius_m}m</span>
                       <span>🖥 {loc.machine_count || 0} machine{loc.machine_count !== 1 ? 's' : ''}</span>
-                      <span>👷 {loc.staff_count || 0} staff</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>

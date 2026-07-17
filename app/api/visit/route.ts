@@ -127,11 +127,17 @@ export async function GET(request: NextRequest) {
       // machines: nothing writes the assignment rows, so every new hire was dead
       // on arrival until someone ran SQL.
       //
-      // The assignment layer is location_staff: the operator rosters staff to
-      // sites, which is self-service and matches the flow - LOCATION, CHECK IN,
-      // then MACHINE. A field staff member is standing at the machine with a GPS
-      // check-in; a second gate on top of the roster and the geography filter
-      // (page.tsx:505) added nothing but a way to break new accounts.
+      // There is no per-person scoping anywhere, by design: any staff member may
+      // service any machine in their operator's fleet. The flow already scopes it
+      // - LOCATION, CHECK IN, then MACHINE - and the visit page filters machines
+      // by the location_id you checked into (page.tsx:505). A field staff member
+      // is standing at the machine with a GPS-verified check-in; a second gate on
+      // top of that added nothing but a way to break new accounts.
+      //
+      // (An earlier version of this comment claimed location_staff was the
+      // assignment layer. It was not: that table had zero rows, nothing read it
+      // except a staff_count that always rendered 0, and it has since been
+      // removed.)
       const ids = await tenantMachineIds(owner);
       if (ids.length === 0) return NextResponse.json([], { headers: NO_STORE });
       const inList = '(' + ids.map(encodeURIComponent).join(',') + ')';

@@ -50,11 +50,8 @@ export async function GET(request: NextRequest) {
     if (locIds.length === 0) return NextResponse.json([], { headers: NO_STORE });
 
     const idList = '(' + locIds.map(encodeURIComponent).join(',') + ')';
-    const [machRes, staffRes] = await Promise.all([
-      fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location_id&location_id=in.' + idList, { headers: sbH() }),
-      fetch(SB_URL + '/rest/v1/location_staff?select=location_id,staff_id&location_id=in.' + idList, { headers: sbH() }),
-    ]);
-    const [machines, staff] = await Promise.all([machRes.json(), staffRes.json()]);
+    const machRes = await fetch(SB_URL + '/rest/v1/machines?select=id,display_name,sn,status,location_id&location_id=in.' + idList, { headers: sbH() });
+    const machines = await machRes.json();
 
     // Build machine map
     const machByLoc: Record<string, any[]> = {};
@@ -62,16 +59,11 @@ export async function GET(request: NextRequest) {
       if (!machByLoc[m.location_id]) machByLoc[m.location_id] = [];
       machByLoc[m.location_id].push(m);
     });
-    const staffCountByLoc: Record<string, number> = {};
-    (Array.isArray(staff) ? staff : []).forEach((s: any) => {
-      staffCountByLoc[s.location_id] = (staffCountByLoc[s.location_id] || 0) + 1;
-    });
 
     const result = locations.map((l: any) => ({
       ...l,
       machines: machByLoc[l.id] || [],
       machine_count: (machByLoc[l.id] || []).length,
-      staff_count: staffCountByLoc[l.id] || 0,
     }));
 
     return NextResponse.json(result, { headers: NO_STORE });
