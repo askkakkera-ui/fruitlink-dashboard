@@ -250,7 +250,9 @@ export async function POST(request: NextRequest) {
       if (rate == null || isNaN(rate) || rate <= 0) {
         return NextResponse.json({ error: 'sale needs a positive ex-GST rate' }, { status: 400, headers: NO_STORE });
       }
-      taxable_value = Math.round(rate * qty_base * 100) / 100;
+      // Rate is per BOX (pack), not per orange. Fruit is priced per 15kg box.
+      const boxes = packs != null ? packs : (qty_base / Number(item.pack_size || 1));
+      taxable_value = Math.round(rate * boxes * 100) / 100;
 
       // Financial year (Apr-Mar) -> "2026-27", then an atomic challan number.
       const now = new Date();

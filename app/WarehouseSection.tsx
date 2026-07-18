@@ -105,7 +105,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
     if (movement_type === 'dispatch' && !machineId) { setErr('Pick a machine'); return; }
     if (movement_type === 'sale') {
       if (!soldToOp && !soldToName.trim()) { setErr('Pick a buyer or type a name'); return; }
-      if (!rate || Number(rate) <= 0) { setErr('Enter the ex-GST rate per unit'); return; }
+      if (!rate || Number(rate) <= 0) { setErr('Enter the ex-GST rate per box'); return; }
       if (!buyerCompany.trim()) { setErr('Enter buyer company'); return; }
       if (!buyerAddress.trim()) { setErr('Enter buyer address'); return; }
       if (!buyerContact.trim()) { setErr('Enter buyer contact'); return; }
@@ -266,11 +266,11 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
           <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
           <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
           {selItem && packs && <div style={{ marginTop: 6, color: C.orange, fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''}</div>}
-          <label style={lbl}>Rate per {selItem?.base_unit || 'unit'} (ex-GST)</label>
-          <input style={inp} type="number" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} placeholder="Price per unit, before GST" />
+          <label style={lbl}>Rate per {selItem?.pack_label || 'box'} (ex-GST)</label>
+          <input style={inp} type="number" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} placeholder="Price per box, before GST" />
           {selItem && packs && rate && Number(rate) > 0 && (
             <div style={{ marginTop: 6, color: C.green, fontWeight: 600, fontSize: 14 }}>
-              Taxable value = {(previewBase * Number(rate)).toFixed(2)} (GST added by accounts)
+              Taxable value = {(Number(packs) * Number(rate)).toFixed(2)} (GST added by accounts)
             </div>
           )}
           <label style={lbl}>Note (optional)</label>
