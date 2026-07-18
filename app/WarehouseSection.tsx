@@ -255,11 +255,26 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
             <label style={lbl}>Other buyer name</label>
             <input style={inp} value={soldToName} onChange={e => setSoldToName(e.target.value)} placeholder="Buyer name (non-operator)" />
           </>)}
+          <label style={lbl}>Buyer company</label>
+          <input style={inp} value={buyerCompany} onChange={e => setBuyerCompany(e.target.value)} placeholder="Registered company name" />
+          <label style={lbl}>Buyer address</label>
+          <input style={inp} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder="Billing / shipping address" />
+          <label style={lbl}>Buyer GSTIN (optional)</label>
+          <input style={inp} value={buyerGstin} onChange={e => setBuyerGstin(e.target.value)} placeholder="Leave blank if unregistered" />
+          <label style={lbl}>Buyer contact</label>
+          <input style={inp} value={buyerContact} onChange={e => setBuyerContact(e.target.value)} placeholder="Phone and/or email" />
           <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
           <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
           {selItem && packs && <div style={{ marginTop: 6, color: C.orange, fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''}</div>}
+          <label style={lbl}>Rate per {selItem?.base_unit || 'unit'} (ex-GST)</label>
+          <input style={inp} type="number" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} placeholder="Price per unit, before GST" />
+          {selItem && packs && rate && Number(rate) > 0 && (
+            <div style={{ marginTop: 6, color: C.green, fontWeight: 600, fontSize: 14 }}>
+              Taxable value = {(previewBase * Number(rate)).toFixed(2)} (GST added by accounts)
+            </div>
+          )}
           <label style={lbl}>Note (optional)</label>
-          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Invoice / reference…" />
+          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Internal reference…" />
           <button onClick={() => record('sale')} disabled={saving}
             style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: C.orange, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
             {saving ? 'Saving…' : 'Record sale'}
