@@ -3837,7 +3837,7 @@ function OperatorsPage({ myId }: any) {
   const [assignOp, setAssignOp] = useState<any>(null)
   const [permissionsOp, setPermissionsOp] = useState<any>(null)
   const [locationsOp, setLocationsOp] = useState<any>(null)
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const J = { 'Content-Type': 'application/json' }
@@ -3847,22 +3847,27 @@ function OperatorsPage({ myId }: any) {
   const parentOperators = operators.filter((o: any) => o.role === 'operator')
   const fetchOperators = async () => {
     setLoading(true)
-    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,created_at&order=created_at.desc'))
+    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,created_at&order=created_at.desc'))
     const data = await res.json()
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
   useEffect(() => { fetchOperators() }, [])
-  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
-  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '' }); setEditOp(op); setShowAdd(true); setMsg('') }
+  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
+  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '', company_name: op.company_name || '', billing_address: op.billing_address || '', gstin: op.gstin || '' }); setEditOp(op); setShowAdd(true); setMsg('') }
   const saveOperator = async () => {
     if (NEEDS_PARENT.includes(form.role) && !form.owner_id) {
       setMsg('Please select the parent operator for this role'); return
     }
+    if (form.role === 'operator') {
+      if (!form.company_name.trim()) { setMsg('Registered company name is required for an operator'); return }
+      if (!form.billing_address.trim()) { setMsg('Billing address is required for an operator'); return }
+      if (!form.gstin.trim()) { setMsg('GSTIN is required for an operator'); return }
+    }
     setSaving(true); setMsg('')
     try {
       if (editOp) {
-        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null }
+        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null }
         if (form.password) {
           const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
@@ -3873,7 +3878,7 @@ function OperatorsPage({ myId }: any) {
       } else {
         const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
-        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null }) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null }) })
         if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Added')
       }
@@ -4015,6 +4020,23 @@ function OperatorsPage({ myId }: any) {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
               </div>
             </div>
+            {form.role === 'operator' && (<>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Registered Company Name *</label>
+                <input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} placeholder="e.g. Fruitlinq Agro Private Limited"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Billing Address *</label>
+                <input value={form.billing_address} onChange={e => setForm({ ...form, billing_address: e.target.value })} placeholder="Full registered address with pincode"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>GSTIN *</label>
+                <input value={form.gstin} onChange={e => setForm({ ...form, gstin: e.target.value })} placeholder="e.g. 36ABCDE1234F1Z5"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text, textTransform: 'uppercase' as const }} />
+              </div>
+            </>)}
             {NEEDS_PARENT.includes(form.role) && (
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Belongs To (Parent Operator) *</label>
