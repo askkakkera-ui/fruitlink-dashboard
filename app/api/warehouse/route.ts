@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
-import { randomUUID } from 'crypto';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
@@ -154,7 +153,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const item_id = String(body.item_id || '');
     const movement_type = String(body.movement_type || '');
-    if (!item_id || !['receive', 'dispatch', 'adjust', 'sale', 'damage_warehouse', 'transfer_out'].includes(movement_type)) {
+    if (!item_id || !['receive', 'dispatch', 'adjust', 'sale', 'damage_warehouse'].includes(movement_type)) {
       return NextResponse.json({ error: 'item_id and valid movement_type required' }, { status: 400, headers: NO_STORE });
     }
     const ir = await fetch(SB_URL + '/rest/v1/warehouse_items?select=*&id=eq.' + encodeURIComponent(item_id) + '&limit=1', { headers: sbHeaders() });
@@ -181,7 +180,6 @@ export async function POST(request: NextRequest) {
     if (movement_type === 'dispatch') signed = -Math.abs(qty_base);
     if (movement_type === 'sale') signed = -Math.abs(qty_base);
     if (movement_type === 'damage_warehouse') signed = -Math.abs(qty_base);
-    if (movement_type === 'transfer_out') signed = -Math.abs(qty_base);
     if (movement_type === 'receive') signed = Math.abs(qty_base);
     if (movement_type === 'adjust' && body.direction === 'down') signed = -Math.abs(qty_base);
     const machine_id = body.machine_id ? String(body.machine_id) : null;
@@ -225,26 +223,49 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    const transfer_to_operator_id = body.transfer_to_operator_id ? String(body.transfer_to_operator_id) : null;
-    if (movement_type === 'transfer_out') {
-      // Policy: only super_admin initiates transfers. Mechanism stays general (any owner -> any owner).
-      if (role !== 'super_admin') {
-        return NextResponse.json({ error: 'Only Fruitlink may transfer stock' }, { status: 403, headers: NO_STORE });
-      }
-      if (!transfer_to_operator_id) {
-        return NextResponse.json({ error: 'transfer needs a destination operator' }, { status: 400, headers: NO_STORE });
-      }
-      if (transfer_to_operator_id === ownerId) {
-        return NextResponse.json({ error: 'cannot transfer to yourself' }, { status: 400, headers: NO_STORE });
-      }
-    }
     const sold_to_operator_id = body.sold_to_operator_id ? String(body.sold_to_operator_id) : null;
     const sold_to_name = body.sold_to_name ? String(body.sold_to_name).slice(0, 200) : null;
-    if (movement_type === 'sale' && !sold_to_operator_id && !sold_to_name) {
-      return NextResponse.json({ error: 'sale needs a buyer (operator or name)' }, { status: 400, headers: NO_STORE });
-    }
-    if (movement_type === 'sale' && sold_to_operator_id && sold_to_operator_id === ownerId) {
-      return NextResponse.json({ error: 'cannot sell to yourself' }, { status: 400, headers: NO_STORE });
+
+    // Sale accounting fields. Rate is EX-GST; the dashboard never computes GST.
+    let rate: number | null = null;
+    let taxable_value: number | null = null;
+    let buyer_company: string | null = null;
+    let buyer_address: string | null = null;
+    let buyer_gstin: string | null = null;
+    let buyer_contact: string | null = null;
+    let challan_no: string | null = null;
+
+    if (movement_type === 'sale') {
+      buyer_company = body.buyer_company ? String(body.buyer_company).slice(0, 200) : null;
+      buyer_address = body.buyer_address ? String(body.buyer_address).slice(0, 500) : null;
+      buyer_gstin = body.buyer_gstin ? String(body.buyer_gstin).slice(0, 20).toUpperCase() : null; // OPTIONAL
+      buyer_contact = body.buyer_contact ? String(body.buyer_contact).slice(0, 120) : null;
+      if (!buyer_company || !buyer_address || !buyer_contact) {
+        return NextResponse.json({ error: 'sale needs buyer company, address and contact' }, { status: 400, headers: NO_STORE });
+      }
+      if (sold_to_operator_id && sold_to_operator_id === ownerId) {
+        return NextResponse.json({ error: 'cannot sell to yourself' }, { status: 400, headers: NO_STORE });
+      }
+      rate = body.rate != null && body.rate !== '' ? Number(body.rate) : null;
+      if (rate == null || isNaN(rate) || rate <= 0) {
+        return NextResponse.json({ error: 'sale needs a positive ex-GST rate' }, { status: 400, headers: NO_STORE });
+      }
+      taxable_value = Math.round(rate * qty_base * 100) / 100;
+
+      // Financial year (Apr-Mar) -> "2026-27", then an atomic challan number.
+      const now = new Date();
+      const y = now.getUTCFullYear();
+      const fyStart = now.getUTCMonth() >= 3 ? y : y - 1; // Apr = month 3
+      const fy = fyStart + '-' + String((fyStart + 1) % 100).padStart(2, '0');
+      const cr = await fetch(SB_URL + '/rest/v1/rpc/next_challan_no', {
+        method: 'POST', headers: sbHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ p_fy: fy }),
+      });
+      const cj = await cr.json();
+      if (!cr.ok || typeof cj !== 'string') {
+        return NextResponse.json({ error: 'could not assign challan number', detail: cj }, { status: 500, headers: NO_STORE });
+      }
+      challan_no = cj;
     }
     // Negative-stock guard: a movement may never take an owner's balance below zero.
     // Applies to every stock-out (dispatch, sale, damage_warehouse, adjust-down).
@@ -274,9 +295,13 @@ export async function POST(request: NextRequest) {
       note: body.note ? String(body.note).slice(0, 500) : null,
       sold_to_operator_id,
       sold_to_name,
-      transfer_to_operator_id,
-      transfer_id: movement_type === 'transfer_out' ? randomUUID() : null,
-      transfer_status: movement_type === 'transfer_out' ? 'in_transit' : null,
+      rate,
+      taxable_value,
+      buyer_company,
+      buyer_address,
+      buyer_gstin,
+      buyer_contact,
+      challan_no,
       created_by: String(session.sub || ''),
     };
     const res = await fetch(SB_URL + '/rest/v1/stock_movements', {
