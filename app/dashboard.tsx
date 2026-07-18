@@ -3837,7 +3837,7 @@ function OperatorsPage({ myId }: any) {
   const [assignOp, setAssignOp] = useState<any>(null)
   const [permissionsOp, setPermissionsOp] = useState<any>(null)
   const [locationsOp, setLocationsOp] = useState<any>(null)
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const J = { 'Content-Type': 'application/json' }
@@ -3847,14 +3847,14 @@ function OperatorsPage({ myId }: any) {
   const parentOperators = operators.filter((o: any) => o.role === 'operator')
   const fetchOperators = async () => {
     setLoading(true)
-    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,created_at&order=created_at.desc'))
+    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,pincode,phone,created_at&order=created_at.desc'))
     const data = await res.json()
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
   useEffect(() => { fetchOperators() }, [])
-  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
-  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '', company_name: op.company_name || '', billing_address: op.billing_address || '', gstin: op.gstin || '' }); setEditOp(op); setShowAdd(true); setMsg('') }
+  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
+  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '', company_name: op.company_name || '', billing_address: op.billing_address || '', gstin: op.gstin || '', pincode: op.pincode || '', phone: op.phone || '' }); setEditOp(op); setShowAdd(true); setMsg('') }
   const saveOperator = async () => {
     if (NEEDS_PARENT.includes(form.role) && !form.owner_id) {
       setMsg('Please select the parent operator for this role'); return
@@ -3862,12 +3862,13 @@ function OperatorsPage({ myId }: any) {
     if (form.role === 'operator') {
       if (!form.company_name.trim()) { setMsg('Registered company name is required for an operator'); return }
       if (!form.billing_address.trim()) { setMsg('Billing address is required for an operator'); return }
-      if (!form.gstin.trim()) { setMsg('GSTIN is required for an operator'); return }
+      if (!form.pincode.trim()) { setMsg('Pincode is required for an operator'); return }
+      if (!form.phone.trim()) { setMsg('Phone is required for an operator'); return }
     }
     setSaving(true); setMsg('')
     try {
       if (editOp) {
-        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null }
+        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null, pincode: form.pincode.trim() || null, phone: form.phone.trim() || null }
         if (form.password) {
           const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
@@ -3878,7 +3879,7 @@ function OperatorsPage({ myId }: any) {
       } else {
         const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
-        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null }) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null, pincode: form.pincode.trim() || null, phone: form.phone.trim() || null }) })
         if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Added')
       }
@@ -4032,9 +4033,21 @@ function OperatorsPage({ myId }: any) {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>GSTIN *</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>GSTIN (optional)</label>
                 <input value={form.gstin} onChange={e => setForm({ ...form, gstin: e.target.value })} placeholder="e.g. 36ABCDE1234F1Z5"
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text, textTransform: 'uppercase' as const }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Pincode *</label>
+                  <input value={form.pincode} onChange={e => setForm({ ...form, pincode: e.target.value })} placeholder="500045"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Phone *</label>
+                  <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 90000 00000"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+                </div>
               </div>
             </>)}
             {NEEDS_PARENT.includes(form.role) && (
