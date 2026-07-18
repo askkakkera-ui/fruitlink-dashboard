@@ -52,7 +52,10 @@ export async function GET(request: NextRequest) {
     else if (role === 'operator') scopeOwner = ownerForOperator(session);
     else if (role === 'sub_operator') scopeOwner = String(session.owner_id || '');
     else if (role === 'staff') scopeOwner = String(session.owner_id || '');  // Fruitlink staff see Fruitlink's warehouse (owner_id = super_admin id)
-    const ownerFilter = scopeOwner ? 'owner_id=eq.' + encodeURIComponent(scopeOwner) : '';
+    // Every branch above must yield a tenant. Empty means the session is
+    // malformed, not that the caller may see everything.
+    if (!scopeOwner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
+    const ownerFilter = 'owner_id=eq.' + encodeURIComponent(scopeOwner);
     // Machines this caller may dispatch to (same rule the POST guard enforces).
     if (sp.get('dispatchable') === '1') {
       const wantMode = (role === 'super_admin' || role === 'staff') ? 'fruitlink_service' : 'self_service';
