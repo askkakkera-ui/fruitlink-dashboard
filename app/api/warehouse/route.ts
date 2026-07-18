@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
     const item = irows[0];
 
     const ownerId = (role === 'sub_operator' || role === 'staff') ? String(session.owner_id || '') : ownerForOperator(session);
+    if (!ownerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
     let qty_base: number;
     const packs = body.packs != null && body.packs !== '' ? Number(body.packs) : null;
@@ -205,14 +206,14 @@ export async function POST(request: NextRequest) {
         const drows = await dr.json();
         mode = Array.isArray(drows) && drows[0] ? String(drows[0].mode || 'self_service') : 'self_service';
       }
-      if (role === 'super_admin') {
+      if (role === 'super_admin' || role === 'staff') {
         if (mode !== 'fruitlink_service') {
           return NextResponse.json({ error: 'You do not service this machine. Transfer stock to the operator instead.' }, { status: 403, headers: NO_STORE });
         }
       } else {
         const gr = await fetch(
           SB_URL + '/rest/v1/machine_operators?select=machine_id&machine_id=eq.' + encodeURIComponent(machine_id) +
-          '&operator_id=eq.' + encodeURIComponent(String(session.sub || '')) + '&limit=1',
+          '&operator_id=eq.' + encodeURIComponent(ownerId) + '&limit=1',
           { headers: sbHeaders() }
         );
         const grows = await gr.json();
