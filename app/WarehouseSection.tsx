@@ -40,7 +40,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const [packs, setPacks] = useState('');
   const [machineId, setMachineId] = useState('');
   const [note, setNote] = useState('');
-  const [operators, setOperators] = useState<{id:string;name:string}[]>([]);
+  const [operators, setOperators] = useState<{id:string;name:string;company_name?:string;billing_address?:string;gstin?:string;pincode?:string;phone?:string}[]>([]);
   const [soldToOp, setSoldToOp] = useState('');
   const [soldToName, setSoldToName] = useState('');
   const [rate, setRate] = useState('');
@@ -71,7 +71,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
       const r = await fetch('/api/warehouse?buyers=1', { cache: 'no-store' });
       const d = await r.json();
       const arr = Array.isArray(d) ? d : [];
-      setOperators(arr.map((o:any)=>({id:o.id,name:o.name||o.email})));
+      setOperators(arr.map((o:any)=>({id:o.id,name:o.name||o.email,company_name:o.company_name||'',billing_address:o.billing_address||'',gstin:o.gstin||'',pincode:o.pincode||'',phone:o.phone||''})));
     } catch { /* ignore */ }
   }
   async function loadLog() {
@@ -247,7 +247,20 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
             <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
           </select>
           <label style={lbl}>Buyer (operator)</label>
-          <select style={inp} value={soldToOp} onChange={e => { setSoldToOp(e.target.value); if (e.target.value) setSoldToName(''); }}>
+          <select style={inp} value={soldToOp} onChange={e => {
+            const id = e.target.value;
+            setSoldToOp(id);
+            if (id) {
+              setSoldToName('');
+              const op = operators.find(o => o.id === id);
+              if (op) {
+                setBuyerCompany(op.company_name || op.name || '');
+                setBuyerAddress([op.billing_address, op.pincode].filter(Boolean).join(' - '));
+                setBuyerGstin(op.gstin || '');
+                setBuyerContact(op.phone || '');
+              }
+            }
+          }}>
             <option value="">— Other buyer (type below) —</option>
             {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>

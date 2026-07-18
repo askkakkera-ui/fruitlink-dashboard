@@ -78,11 +78,11 @@ export async function GET(request: NextRequest) {
     // Operators this caller may sell to (never themselves).
     if (sp.get('buyers') === '1') {
       const me = role === 'sub_operator' ? String(session.owner_id || '') : ownerForOperator(session);
-      const r = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email&role=eq.operator&order=name.asc', { headers: sbHeaders() });
+      const r = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,company_name,billing_address,gstin,pincode,phone&role=eq.operator&order=name.asc', { headers: sbHeaders() });
       const rows = await r.json();
       const out = (Array.isArray(rows) ? rows : [])
         .filter((o: any) => String(o.id) !== String(me))
-        .map((o: any) => ({ id: o.id, name: o.name || o.email }));
+        .map((o: any) => ({ id: o.id, name: o.name || o.email, company_name: o.company_name || '', billing_address: o.billing_address || '', gstin: o.gstin || '', pincode: o.pincode || '', phone: o.phone || '' }));
       return NextResponse.json(out, { headers: NO_STORE });
     }
     if (sp.get('items') === '1') {
