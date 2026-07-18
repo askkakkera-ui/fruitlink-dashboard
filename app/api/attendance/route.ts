@@ -44,8 +44,15 @@ export async function GET(request: NextRequest) {
       if (session.role === 'staff') {
         // Internal staff see only their own attendance
         url += '&staff_id=eq.' + encodeURIComponent(String(session.sub));
-      } else if (session.role === 'operator' && session.owner_id) {
-        url += '&owner_id=eq.' + encodeURIComponent(session.sub);
+      } else if (session.role === 'operator' || session.role === 'sub_operator') {
+        // A top-level operator IS the tenant: their own id is the owner id, and
+        // session.owner_id is null. The old condition required owner_id to be
+        // truthy, so it never fired for the only role that reaches it - and no
+        // filter was applied at all. Fruitlinq's operator login could read
+        // Fruitlink's attendance. Same rule as tenantOf() in visit/route.ts.
+        const tenant = session.owner_id ? String(session.owner_id) : String(session.sub || '');
+        if (!tenant) return NextResponse.json([], { headers: NO_STORE });
+        url += '&owner_id=eq.' + encodeURIComponent(tenant);
       }
       const res = await fetch(url, { headers: sbHeaders() });
       const rows = await res.json();
@@ -118,7 +125,9 @@ export async function POST(request: NextRequest) {
 
     const row = {
       staff_id: staffId,
-      owner_id: session.owner_id || null,
+      // Tenant, not parent: a top-level operator has owner_id null and is its own
+      // tenant. Stamping null here would orphan the row from every read filter.
+      owner_id: session.owner_id ? String(session.owner_id) : String(session.sub || ''),
       machine_id: body.machine_id ? String(body.machine_id) : null,
       location_id: body.location_id ? String(body.location_id) : null,
       visit_mode: (body.visit_mode === 'office' || body.visit_mode === 'machine') ? body.visit_mode : null,
