@@ -39,10 +39,12 @@ function verdictFor(distance: number, accuracy: number, radius: number): 'inside
 }
 
 /** Which operator's locations should this session see? */
-function scopeOwnerId(session: any): string | null {
-  if (session.role === 'super_admin') return null;              // all locations
-  if (session.role === 'operator') return String(session.sub);
-  return session.owner_id ? String(session.owner_id) : null;    // sub_operator, field_staff
+type Scope = { kind: 'all' } | { kind: 'owner'; id: string } | { kind: 'none' };
+function scopeOwnerId(session: any): Scope {
+  if (session.role === 'super_admin') return { kind: 'all' };   // all locations
+  if (session.role === 'operator') return { kind: 'owner', id: String(session.sub) };
+  // sub_operator, field_staff, staff: must have a tenant. No tenant, no read.
+  return session.owner_id ? { kind: 'owner', id: String(session.owner_id) } : { kind: 'none' };
 }
 
 /**
@@ -70,9 +72,10 @@ export async function POST(request: NextRequest) {
 
     const hasFix = Number.isFinite(lat) && Number.isFinite(lng);
 
-    const ownerId = scopeOwnerId(session);
+    const scope = scopeOwnerId(session);
+    if (scope.kind === 'none') return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
     let url = SB_URL + '/rest/v1/locations?select=id,name,address,lat,lng,geofence_radius_m,is_office&active=eq.true&order=name.asc';
-    if (ownerId) url += '&owner_id=eq.' + encodeURIComponent(ownerId);
+    if (scope.kind === 'owner') url += '&owner_id=eq.' + encodeURIComponent(scope.id);
 
     const res = await fetch(url, { headers: sbH() });
     const rows = await res.json();
