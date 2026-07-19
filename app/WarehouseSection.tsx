@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { formatMoney } from './lib/dashboard-shared';
 
 // Dashboard-native Warehouse section — redesigned.
 // Grouped, eyebrow-labelled field sections in a 2-column form + sticky summary
@@ -99,6 +100,16 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const selItem = itemById(itemId);
   const previewBase = selItem && packs ? Number(packs) * selItem.pack_size : 0;
   const taxable = packs && rate ? Number(packs) * Number(rate) : 0;
+  // Warehouse stock is sold from the Indian entity and invoiced in INR; there is
+  // no per-sale currency column. Rate is typed in major units, so it is scaled
+  // to minor units for formatMoney, which always shows two decimals here.
+  //
+  // The old preview passed only minimumFractionDigits, so it inherited Intl's
+  // default maximum of 3 and could read ₹12,34,567.891 for a rate typed to three
+  // decimals — while POST /api/warehouse stores Math.round(rate * boxes * 100) /
+  // 100, i.e. ₹12,34,567.89. The preview now shows the value that is recorded.
+  const saleCur = 'INR';
+  const fmtTaxable = (v: number) => formatMoney(Math.round(v * 100), saleCur, { minDigits: 2 });
 
   async function record(movement_type: 'receive' | 'dispatch' | 'sale' | 'damage_warehouse') {
     setErr(''); setMsg('');
@@ -303,7 +314,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
               <Field label={`Quantity (${selItem?.pack_label || 'box'}s)`} hint={qtyHint} hintColor={C.orange}>
                 <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
               </Field>
-              <Field label={`Rate per ${selItem?.pack_label || 'box'} (ex-GST)`} hint={taxable ? `Taxable value = ₹${taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : ''} hintColor={C.green}>
+              <Field label={`Rate per ${selItem?.pack_label || 'box'} (ex-GST)`} hint={taxable ? `Taxable value = ${fmtTaxable(taxable)}` : ''} hintColor={C.green}>
                 <input style={inp} type="number" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} placeholder="Price per box, before GST" />
               </Field>
               <Field label="Note (optional)"><input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Internal reference…" /></Field>
@@ -346,7 +357,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
               <RailRow label="Item" value={selItem ? selItem.name : '—'} />
               <RailRow label="Quantity" value={previewBase ? `${previewBase} ${selItem?.base_unit}s` : '—'} />
               <RailRow label="On hand after" value={selItem ? `${((selItem.on_hand ?? 0) - previewBase).toLocaleString('en-IN')} ${selItem.base_unit}s` : '—'} color={C.blue} />
-              <RailRow label="Taxable value" value={taxable ? `₹${taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'} color={C.green} big />
+              <RailRow label="Taxable value" value={taxable ? fmtTaxable(taxable) : '—'} color={C.green} big />
               <div style={{ marginTop: 12 }}><Pill color={C.indigo} bg={C.indigoBg}>📄 Challan auto-generated</Pill></div>
               <div style={{ marginTop: 10, fontSize: 12, color: C.text3, lineHeight: 1.5 }}>GST is added by accounts. Value shown is the ex-GST taxable value.</div>
             </SummaryRail>

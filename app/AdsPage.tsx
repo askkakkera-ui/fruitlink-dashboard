@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { C, SB_KEY, getCookie, Dot, Badge, Pill, StatCard } from './lib/dashboard-shared'
+import { C, SB_KEY, getCookie, Dot, Badge, Pill, StatCard, formatMoney, currencySymbol } from './lib/dashboard-shared'
 
 // ═══════════════════════════════════════════════════════════════════════
 //  AdsPage — DROP-IN REPLACEMENT for the existing AdsPage in dashboard.tsx
@@ -188,7 +188,12 @@ export function AdsPage({ machines, permissions = {}, role: roleProp = '', opera
   const totalRev = Object.values(perf).reduce((s: number, p: any) => s + (Number(p.revenue) || 0), 0)
 
   const fmtK = (n: number) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '' + n
-  const fmtINR = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN')
+  // Campaign revenue and CPM rates are entered and stored in major units, so
+  // they are scaled to minor units for formatMoney. Advertisers are billed in
+  // one currency per account; there is no per-campaign currency column yet, so
+  // this is the house currency and INR is the only one that exists today.
+  const scopeCur = 'INR'
+  const fmtAmt = (n: number) => formatMoney(Math.round(n) * 100, scopeCur, { maxDigits: 0 })
   const hh = (h: number) => String(h).padStart(2, '0') + ':00'
   const snName = (sn: string) => machines.find(m => m.sn === sn)?.display_name || sn
 
@@ -274,7 +279,7 @@ export function AdsPage({ machines, permissions = {}, role: roleProp = '', opera
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         <StatCard label="Active Campaigns" value={activeCount} sub={campaigns.length + ' total'} color={C.orange} icon="🎬" pct={campaigns.length ? (activeCount / campaigns.length) * 100 : 0} />
         <StatCard label="Impressions" value={fmtK(totalImpr)} sub="all-time plays" color={C.blue} icon="👁" pct={70} />
-        <StatCard label="Ad Revenue" value={fmtINR(totalRev)} sub="third-party brands" color={C.green} icon="₹" pct={60} />
+        <StatCard label="Ad Revenue" value={fmtAmt(totalRev)} sub="third-party brands" color={C.green} icon={currencySymbol(scopeCur)} pct={60} />
         <StatCard label="Pending Approval" value={pendingCount} sub={pendingCount ? 'needs review' : 'all clear'} color={pendingCount ? C.amber : C.green} icon="⏳" pct={pendingCount ? 100 : 0} />
       </div>
 
@@ -321,7 +326,7 @@ export function AdsPage({ machines, permissions = {}, role: roleProp = '', opera
                   </div>
                   <div style={{ fontSize: 11, color: C.text3, marginTop: 3, display: 'flex', gap: 12 }}>
                     <span>{fmtK(p.impressions || 0)} impressions</span>
-                    {!c.is_own && c.rate_cpm && <span style={{ color: C.green }}>{fmtINR(Number(p.revenue) || 0)} · ₹{c.rate_cpm} CPM</span>}
+                    {!c.is_own && c.rate_cpm && <span style={{ color: C.green }}>{fmtAmt(Number(p.revenue) || 0)} · {currencySymbol(scopeCur)}{c.rate_cpm} CPM</span>}
                     <span>weight {c.weight}×</span>
                   </div>
                 </div>
@@ -477,7 +482,8 @@ export function AdEditor({ campaign, machines, saving, onClose, onSave, onDelete
 
           {!isOwn && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 13, marginBottom: 14 }}>
-              <div><label style={lbl}>Rate (₹ CPM)</label><input type="number" style={inp} value={f.rate_cpm} onChange={e => set('rate_cpm', e.target.value)} placeholder="e.g. 300" /></div>
+              {/* House currency — campaigns carry no currency of their own yet. */}
+              <div><label style={lbl}>Rate ({currencySymbol()} CPM)</label><input type="number" style={inp} value={f.rate_cpm} onChange={e => set('rate_cpm', e.target.value)} placeholder="e.g. 300" /></div>
               <div><label style={lbl}>Ad duration (sec)</label><input type="number" style={inp} value={f.duration_s} onChange={e => set('duration_s', +e.target.value)} /></div>
             </div>
           )}

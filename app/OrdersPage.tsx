@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { C, SB_KEY, FL_LOGO, Pill, StatCard, sbFetchAll, netPaise, useIsMobile } from './lib/dashboard-shared'
+import { C, SB_KEY, FL_LOGO, Pill, StatCard, sbFetchAll, netPaise, useIsMobile, formatMoney, currencySymbol } from './lib/dashboard-shared'
 
 // ─── Searchable machine picker ───────────────────────────────────────
 // Defined outside OrdersPage: a component declared inside the render body is a
@@ -159,7 +159,12 @@ export function OrdersPage() {
   }, [uRole, uOpId])
 
   const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
-  const fmtAmt = (p: number) => '₹' + (p / 100).toFixed(0)
+  // Whole units, ungrouped — the format this page has always shown.
+  const fmtAmt = (p: number, cur = 'INR') => formatMoney(p, cur, { maxDigits: 0, grouping: false })
+  // The currency of the page's aggregates. Every order in scope is INR today.
+  // Once machines exist outside India this must come from the selected machine's
+  // country (and a mixed-country "all machines" total stops being one number).
+  const scopeCur = 'INR'
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
 
@@ -521,9 +526,9 @@ const filtered = scopedOrders.filter((o: any) => {
         <div>
           {/* ── KPI strip ──────────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: isMobile ? 10 : 14, marginBottom: 18 }}>
-            <StatCard label="Total Revenue" value={fmtAmt(totalRevenue)} sub={refundedPaise > 0 ? periodLabel + ' · net of ' + fmtAmt(refundedPaise) + ' refunds' : periodLabel} color={C.green} icon="₹" meter={grossRevenue > 0 ? (totalRevenue / grossRevenue) * 100 : 0} />
+            <StatCard label="Total Revenue" value={fmtAmt(totalRevenue, scopeCur)} sub={refundedPaise > 0 ? periodLabel + ' · net of ' + fmtAmt(refundedPaise, scopeCur) + ' refunds' : periodLabel} color={C.green} icon={currencySymbol(scopeCur)} meter={grossRevenue > 0 ? (totalRevenue / grossRevenue) * 100 : 0} />
             <StatCard label="Paid Orders" value={paidOrders.length.toString()} sub={periodOrders.length + ' placed · ' + convRate.toFixed(0) + '% paid'} color={C.blue} icon="✅" meter={convRate} />
-            <StatCard label="Avg Order Value" value={fmtAmt(avgOrder)} sub="per paid transaction" color={C.orange} icon="📈" />
+            <StatCard label="Avg Order Value" value={fmtAmt(avgOrder, scopeCur)} sub="per paid transaction" color={C.orange} icon="📈" />
             <StatCard label="Cups Served" value={totalCups.toString()} sub={paidOrders.length > 0 ? (totalCups / paidOrders.length).toFixed(2) + ' cups per order' : 'juice cups'} color={C.amber} icon="🥤" />
           </div>
 
@@ -667,7 +672,7 @@ const filtered = scopedOrders.filter((o: any) => {
                             <div style={{ fontSize: 12, color: C.text3 }}>{m.location || ''}</div>
                           </div>
                           <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: isRefundView && o.refund_state !== 1 ? C.red : C.green }}>{fmtAmt(o.amount_paise || 0)}</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: isRefundView && o.refund_state !== 1 ? C.red : C.green }}>{fmtAmt(o.amount_paise || 0, o.currency)}</div>
                             <div style={{ fontSize: 11.5, color: C.text3 }}>{o.cup_num || '--'} cups</div>
                           </div>
                         </div>
@@ -713,7 +718,7 @@ const filtered = scopedOrders.filter((o: any) => {
                           </td>
                           {isRefundView ? (
                             <>
-                              <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: o.refund_state === 1 ? C.green : C.red, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
+                              <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: o.refund_state === 1 ? C.green : C.red, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0, o.currency)}</div></td>
                               <td style={{ padding: '12px 16px' }}>
                                 <Pill color={rs.color} bg={rs.bg}>{rs.label}</Pill>
                                 {o.refund_note && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.refund_note}</div>}
@@ -721,7 +726,7 @@ const filtered = scopedOrders.filter((o: any) => {
                             </>
                           ) : (
                             <>
-                              <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0)}</div></td>
+                              <td style={{ padding: '12px 16px' }}><div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>{fmtAmt(o.amount_paise || 0, o.currency)}</div></td>
                               <td style={{ padding: '12px 16px' }}>
                                 <Pill color={ps.color} bg={ps.bg}>{ps.label}</Pill>
                                 {o.pay_type && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{o.pay_type.toUpperCase()}</div>}

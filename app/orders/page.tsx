@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { formatMoney } from '../lib/dashboard-shared';
 
 // createClient throws on an empty URL, and at module scope that turned a missing
 // env var into a build failure: `next build` prerenders this page, evaluates the
@@ -113,13 +114,16 @@ export default function Orders() {
             <div className="text-xs text-gray-500 mb-1">Total orders</div>
             <div className="text-2xl font-medium">{totalCount}</div>
           </div>
+          {/* Totals over one machine's orders, so one currency by construction —
+              but the machine's currency is not loaded here, and totalRevenue is
+              already summed in major units. INR until countries is read. */}
           <div className="bg-white rounded-xl p-4 border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">Total revenue</div>
-            <div className="text-2xl font-medium">Rs {totalRevenue}</div>
+            <div className="text-2xl font-medium">{formatMoney(totalRevenue * 100, 'INR', { maxDigits: 0 })}</div>
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">Avg per order</div>
-            <div className="text-2xl font-medium">Rs {totalCount > 0 ? Math.round(totalRevenue / totalCount) : 0}</div>
+            <div className="text-2xl font-medium">{formatMoney(totalCount > 0 ? (totalRevenue / totalCount) * 100 : 0, 'INR', { maxDigits: 0 })}</div>
           </div>
         </div>
 
@@ -152,7 +156,7 @@ export default function Orders() {
                     <td className="py-2">#{o.order_code}</td>
                     <td className="py-2">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
                     <td className="py-2">{new Date(o.created_at).toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="py-2">Rs {Math.round((o.amount_paise || 0) / 100)}</td>
+                    <td className="py-2">{formatMoney(o.amount_paise || 0, o.currency, { maxDigits: 0 })}</td>
                     <td className="py-2">{o.pay_type || 'upi'}</td>
                     <td className="py-2">
                       <span className={o.pay_state === 1 ? 'bg-green-100 text-green-700 px-2 py-0.5 rounded-full' : 'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full'}>

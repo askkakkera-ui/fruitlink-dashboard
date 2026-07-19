@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { C, SB_KEY, useIsMobile, Dot, Pill, StatCard, MachineCard, sbFetchAll, netPaise } from './lib/dashboard-shared'
+import { C, SB_KEY, useIsMobile, Dot, Pill, StatCard, MachineCard, sbFetchAll, netPaise, formatMoney, currencySymbol } from './lib/dashboard-shared'
 
 // ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
 export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, stockData }: any) {
@@ -87,7 +87,14 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
   const dKey = (t: any) => new Intl.DateTimeFormat('en-CA', { timeZone: IST }).format(new Date(t))
   const dHour = (t: any) => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: IST, hour: '2-digit', hourCycle: 'h23' }).format(new Date(t)), 10)
   const wdayOfKey = (k: string) => new Date(k + 'T12:00:00+05:30').getDay()
-  const fmt = (rs: number) => '₹' + Math.round(rs).toLocaleString('en-IN')
+  // Every figure on this page is a sum or mean over the selected scope, and the
+  // orders query does not select `currency`. All of it is INR today; when it is
+  // not, this must follow the selected machine's country and an all-machines
+  // total across currencies has to be split rather than added.
+  const scopeCur = 'INR'
+  // These aggregates arrive in major units already (netPaise / 100), so they go
+  // back to minor units for formatMoney. Whole units, grouped — as before.
+  const fmt = (rs: number) => formatMoney(rs * 100, scopeCur, { maxDigits: 0 })
   const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length
   const sd = (a: number[]) => { const m = mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, a.length - 1)) }
   const wmean = (a: number[]) => { let n = 0, d = 0; a.forEach((x, i) => { const w = i + 1; n += x * w; d += w }); return d ? n / d : 0 }
@@ -238,7 +245,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
                   {week.map((d, i) => {
                     const h = Math.max(Math.round(d.v / maxV * 88), d.v > 0 ? 6 : 3)
                     return <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text2 }}>{d.v > 0 ? '₹' + (d.v / 1000).toFixed(1) + 'k' : ''}</div>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text2 }}>{d.v > 0 ? currencySymbol(scopeCur) + (d.v / 1000).toFixed(1) + 'k' : ''}</div>
                       <div style={{ width: '100%', height: h, borderRadius: '5px 5px 0 0', background: d.today ? C.orange : '#d9d6f0', transition: 'height .5s' }} />
                       <div style={{ fontSize: 10.5, fontWeight: d.today ? 800 : 600, color: d.today ? C.orange : C.text3 }}>{d.day}</div>
                     </div>

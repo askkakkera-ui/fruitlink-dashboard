@@ -153,6 +153,49 @@ export const isTestRefund = (n: string) => /test/i.test(n || '')
 export const netPaise = (o: any) =>
   (o.refund_state === 1 && !isTestRefund(o.refund_note)) ? 0 : (o.amount_paise || 0)
 
+// ─── Money ───────────────────────────────────────────────────────
+// Amounts are stored in minor units (amount_paise, whatever the currency) and
+// the symbol belongs to the currency, not to the page. A ZAR machine must read
+// R120, not R120-worth-of-rupee-sign.
+//
+// `opts` is here because the display it replaced was never one format: Orders
+// used .toFixed(0) with no grouping, Console and Ads used Math.round with
+// en-IN grouping, Warehouse always showed two decimals. Each call site passes
+// the opts that reproduce its own established output byte for byte, so making
+// this currency-aware changed no number anyone was already reading. Defaults
+// (grouped, 0 to `digits` decimals) are for new call sites.
+export const CURRENCY_META: Record<string, { symbol: string; digits: number }> = {
+  INR: { symbol: '₹', digits: 2 },
+  ZAR: { symbol: 'R', digits: 2 },
+  USD: { symbol: '$', digits: 2 },
+  AED: { symbol: 'AED ', digits: 2 },
+}
+
+export function formatMoney(
+  amountMinor: number,
+  currency = 'INR',
+  opts: { minDigits?: number; maxDigits?: number; grouping?: boolean } = {},
+): string {
+  const m = CURRENCY_META[currency] || CURRENCY_META.INR
+  const major = amountMinor / Math.pow(10, m.digits)
+  return m.symbol + major.toLocaleString('en-IN', {
+    minimumFractionDigits: opts.minDigits ?? 0,
+    maximumFractionDigits: opts.maxDigits ?? m.digits,
+    useGrouping: opts.grouping ?? true,
+  })
+}
+
+export const currencySymbol = (currency = 'INR') =>
+  (CURRENCY_META[currency] || CURRENCY_META.INR).symbol
+
+// A machine's currency lives one hop away: machines.country_code -> countries
+// .currency_code. Callers that have not loaded `countries` pass nothing and get
+// INR, which is correct for every machine today (all country_code = 'IN').
+export function machineCurrency(machine: any, countries?: Record<string, string>): string {
+  const cc = machine?.country_code
+  return (cc && countries?.[cc]) || 'INR'
+}
+
 export function StatCard({ label, value, sub, color, icon, pct, meter, attention }: any) {
   return (
     <div style={{
