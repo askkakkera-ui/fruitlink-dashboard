@@ -1,15 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-// Dashboard-native Warehouse section — full-width, matches dashboard C tokens.
-// Calls the secure /api/warehouse route (auth + scoping server-side).
+// Dashboard-native Warehouse section — redesigned.
+// Grouped, eyebrow-labelled field sections in a 2-column form + sticky summary
+// rail; KPI strip; status pills on stock; responsive. All logic preserved:
+// server-scoped /api/warehouse calls, isSuper/canManage gating, buyer auto-fill,
+// per-box math, challan button, Sale hidden for operators.
 
 const C = {
   active: '#FE6505', bg: '#f4f5f9', surface: '#ffffff', surface2: '#f4f5f9',
   border: '#e8eaf0', border2: '#dcdfe9', text: '#1f2533', text2: '#5b6478', text3: '#9099ac',
   green: '#198754', greenBg: '#e7f8ef', red: '#DC3545', redBg: '#fdeaec',
   amber: '#c98a00', amberBg: '#fff7e0', blue: '#0D6EFD', blueBg: '#e7f0ff',
-  orange: '#FE6505', orangeBg: '#fff3ea',
+  orange: '#FE6505', orangeBg: '#fff3ea', indigo: '#423A8E', indigoBg: '#efeefc',
+  dangerDeep: '#B00020',
 };
 
 type Item = {
@@ -24,8 +28,7 @@ type Movement = {
 };
 
 export default function WarehouseSection({ role = 'operator', permissions = {} }: { role?: string; permissions?: Record<string, boolean> }) {
-  const isSuper = role === 'super_admin' || role === 'staff';  // Fruitlink staff see Fruitlink's warehouse
-  // Who may WRITE: super_admin & operators always; staff only with can_manage_warehouse.
+  const isSuper = role === 'super_admin' || role === 'staff';
   const canManage = role === 'super_admin' || permissions.can_manage_warehouse === true;
   const [tab, setTab] = useState<'onhand' | 'receive' | 'dispatch' | 'sale' | 'damage' | 'log'>('onhand');
   const [items, setItems] = useState<Item[]>([]);
@@ -58,7 +61,6 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
     } catch { setErr('Could not load stock'); }
   }
   async function loadMachines() {
-    // Only machines this user may actually dispatch to (server decides; same rule the POST guard enforces).
     try {
       const r = await fetch('/api/warehouse?dispatchable=1', { cache: 'no-store' });
       const d = await r.json();
@@ -67,7 +69,6 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   }
   async function loadOperators() {
     try {
-      // Server decides who this user may sell to (never themselves).
       const r = await fetch('/api/warehouse?buyers=1', { cache: 'no-store' });
       const d = await r.json();
       const arr = Array.isArray(d) ? d : [];
@@ -87,7 +88,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   }, []);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640);
+    const check = () => setIsMobile(window.innerWidth < 720);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
@@ -97,6 +98,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const machineLabel = (m?: Machine) => m ? (m.display_name || m.sn || m.id.slice(0, 6)) : '';
   const selItem = itemById(itemId);
   const previewBase = selItem && packs ? Number(packs) * selItem.pack_size : 0;
+  const taxable = packs && rate ? Number(packs) * Number(rate) : 0;
 
   async function record(movement_type: 'receive' | 'dispatch' | 'sale' | 'damage_warehouse') {
     setErr(''); setMsg('');
@@ -142,205 +144,239 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const fruit = items.filter(i => i.category === 'fruit');
   const cons = items.filter(i => i.category === 'consumable');
 
+  // ---- derived KPI figures ----
+  const totalOranges = fruit.reduce((s, i) => s + (i.on_hand ?? 0), 0);
+  const totalBoxes = fruit.reduce((s, i) => s + (i.boxes_equiv ?? 0), 0);
+  const consLow = cons.filter(i => (i.on_hand ?? 0) <= i.pack_size * 2).length;
+  const today = new Date().toDateString();
+  const movesToday = movements.filter(m => new Date(m.created_at).toDateString() === today).length;
+
+  // ---- tab list (unchanged logic) ----
+  const TABS = (!canManage
+    ? [['onhand', 'On hand'], ['log', 'Movement log']]
+    : isSuper
+    ? [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]
+    : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][];
+
+  const qtyHint = selItem
+    ? (previewBase ? `= ${previewBase} ${selItem.base_unit}${previewBase !== 1 ? 's' : ''}` : `1 ${selItem.pack_label} = ${selItem.pack_size} ${selItem.base_unit}s`)
+    : '';
+
+  const ItemSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select style={inp} value={value} onChange={e => onChange(e.target.value)}>
+      <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+      <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+    </select>
+  );
+
   return (
-    <div style={{ padding: 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
+    <div style={{ padding: isMobile ? 16 : 24, background: C.bg, minHeight: '100%', overflow: 'auto' }}>
       {!canManage && (
         <div style={{ padding: '10px 14px', background: '#fff8e6', border: '1px solid #ffe08a', borderRadius: 10, fontSize: 13, color: '#8a6d00', marginBottom: 16 }}>
-          👁 View-only access. You can see stock levels and history. Ask a super admin to grant "Manage warehouse" to record movements.
+          👁 View-only access. You can see stock levels and history. Ask a super admin to grant &quot;Manage warehouse&quot; to record movements.
         </div>
       )}
+
+      {/* KPI strip */}
+      {!loading && (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: isMobile ? 10 : 14, marginBottom: 18 }}>
+          <StatCard label="Oranges on hand" value={totalOranges.toLocaleString('en-IN')} sub={`${totalBoxes} boxes`} icon="🍊" color={C.orange} />
+          <StatCard label="Consumables" value={String(cons.length)} sub={consLow ? `${consLow} low` : 'all stocked'} icon="📦" color={C.blue} />
+          <StatCard label="Machines" value={String(machines.length)} sub={isSuper ? 'fleet' : 'you service'} icon="▣" color={C.green} />
+          <StatCard label="Movements today" value={String(movesToday)} sub={`${movements.length} total`} icon="🔁" color={C.indigo} />
+        </div>
+      )}
+
       {/* tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-        {((!canManage
-          ? [['onhand', 'On hand'], ['log', 'Movement log']]
-          : isSuper
-          ? [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]
-          : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][]).map(([k, l]) => (
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18, overflowX: 'auto', paddingBottom: 2 }}>
+        {TABS.map(([k, l]) => (
           <button key={k} onClick={() => { setTab(k as any); setErr(''); setMsg(''); }}
-            style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
+            style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{l}</button>
         ))}
       </div>
 
       {err && <div style={{ padding: '11px 14px', background: C.redBg, color: C.red, borderRadius: 9, fontSize: 14, marginBottom: 14 }}>{err}</div>}
-      {msg && <div style={{ padding: '11px 14px', background: C.greenBg, color: C.green, borderRadius: 9, fontSize: 14, marginBottom: 14 }}>{msg}</div>}
+      {msg && <div style={{ padding: '11px 14px', background: C.greenBg, color: C.green, borderRadius: 9, fontSize: 14, marginBottom: 14, fontWeight: 600 }}>{msg}</div>}
 
       {loading && <div style={{ color: C.text2 }}>Loading…</div>}
 
-      {/* ON HAND — two columns on desktop */}
+      {/* ON HAND */}
       {!loading && tab === 'onhand' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 }}>
-          <div style={card}>
-            <div style={cardTitle}>Fruit</div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'start' }}>
+          <div style={{ ...card, borderTop: `3px solid ${C.green}` }}>
+            <div style={cardTitle}>🍊 Fruit</div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th><th style={{ ...th, textAlign: 'right' }}>Boxes</th></tr></thead>
               <tbody>
                 {fruit.map(i => (
                   <tr key={i.id}>
                     <td style={td}>{i.name}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{i.on_hand ?? 0}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')}</td>
                     <td style={{ ...td, textAlign: 'right', color: C.text2 }}>{i.boxes_equiv ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div style={card}>
-            <div style={cardTitle}>Consumables</div>
+          <div style={{ ...card, borderTop: `3px solid ${C.blue}` }}>
+            <div style={cardTitle}>📦 Consumables</div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th></tr></thead>
+              <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th><th style={{ ...th, textAlign: 'right' }}></th></tr></thead>
               <tbody>
-                {cons.map(i => (
-                  <tr key={i.id}>
-                    <td style={td}>{i.name}{i.machine_type && i.machine_type !== 'common' ? <span style={{ color: C.text3, fontSize: 12 }}> ({i.machine_type})</span> : ''}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{i.on_hand ?? 0} <span style={{ color: C.text3, fontWeight: 400, fontSize: 12 }}>{i.base_unit}s</span></td>
-                  </tr>
-                ))}
+                {cons.map(i => {
+                  const low = (i.on_hand ?? 0) <= i.pack_size * 2;
+                  return (
+                    <tr key={i.id}>
+                      <td style={td}>{i.name}{i.machine_type && i.machine_type !== 'common' ? <span style={{ color: C.text3, fontSize: 12 }}> ({i.machine_type})</span> : ''}</td>
+                      <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')} <span style={{ color: C.text3, fontWeight: 400, fontSize: 12 }}>{i.base_unit}s</span></td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        <Pill color={low ? C.red : C.green} bg={low ? C.redBg : C.greenBg}>{low ? 'Low' : 'OK'}</Pill>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* RECEIVE / DISPATCH */}
-      {!loading && (tab === 'receive' || tab === 'dispatch') && (
-        <div style={{ ...card, maxWidth: 560 }}>
-          <div style={cardTitle}>{tab === 'receive' ? 'Receive stock into warehouse' : 'Dispatch stock to a machine'}</div>
-          <label style={lbl}>Item</label>
-          <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
-            <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
-            <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
-          </select>
+      {/* RECEIVE / DISPATCH / DAMAGE — form + summary rail */}
+      {!loading && (tab === 'receive' || tab === 'dispatch' || tab === 'damage') && (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.7fr 1fr', gap: 18, alignItems: 'start' }}>
+          <div style={{ ...card, padding: isMobile ? 18 : 24 }}>
+            {tab === 'receive' && <ActionHeader icon="📥" color={C.orange} title="Receive stock into warehouse" subtitle="Log a delivery arriving into the warehouse." />}
+            {tab === 'dispatch' && <ActionHeader icon="🚚" color={C.blue} title="Dispatch stock to a machine" subtitle="Move stock out to a machine you service." />}
+            {tab === 'damage' && <ActionHeader icon="⚠️" color={C.red} title="Write off damaged stock" subtitle="Remove spoiled or damaged stock from the warehouse." />}
 
-          {tab === 'dispatch' && (<>
-            <label style={lbl}>To machine</label>
-            {machines.length === 0 ? (
-              <div style={{ padding: '10px 12px', borderRadius: 8, background: '#fff3ea', color: '#B25000', fontSize: 13.5, marginBottom: 4 }}>
-                You do not service any machines.
-              </div>
-            ) : (
-              <select style={inp} value={machineId} onChange={e => setMachineId(e.target.value)}>
-                {machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}</option>)}
-              </select>
-            )}
-          </>)}
+            <FormGroup label="Item & quantity" isMobile={isMobile}>
+              <Field label="Item" span2={tab !== 'dispatch'}><ItemSelect value={itemId} onChange={setItemId} /></Field>
+              {tab === 'dispatch' && (
+                <Field label="To machine">
+                  {machines.length === 0
+                    ? <div style={{ padding: '10px 12px', borderRadius: 8, background: C.orangeBg, color: '#B25000', fontSize: 13.5 }}>You do not service any machines.</div>
+                    : <select style={inp} value={machineId} onChange={e => setMachineId(e.target.value)}>{machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}</option>)}</select>}
+                </Field>
+              )}
+              <Field label={`Quantity (${selItem?.pack_label || 'unit'}s)`} hint={qtyHint} hintColor={tab === 'damage' ? C.dangerDeep : C.orange} span2>
+                <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
+              </Field>
+            </FormGroup>
 
-          <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}${selItem.pack_size > 1 ? `s — 1 ${selItem.pack_label} = ${selItem.pack_size} ${selItem.base_unit}s` : 's'})` : ''}</label>
-          <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
-          {selItem && packs && <div style={{ marginTop: 6, color: C.orange, fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''}</div>}
+            <FormGroup label={tab === 'damage' ? 'Reason' : 'Reference'} isMobile={isMobile}>
+              <Field label={tab === 'receive' ? 'Note (supplier / invoice)' : tab === 'damage' ? 'Reason' : 'Note (optional)'} span2>
+                <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder={tab === 'receive' ? 'Supplier / invoice…' : tab === 'damage' ? 'Rotten / spoiled / damaged…' : 'Reason…'} />
+              </Field>
+            </FormGroup>
 
-          <label style={lbl}>Note (optional)</label>
-          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder={tab === 'receive' ? 'Supplier / invoice…' : 'Reason…'} />
+            <button onClick={() => record(tab === 'receive' ? 'receive' : tab === 'dispatch' ? 'dispatch' : 'damage_warehouse')} disabled={saving}
+              style={{ marginTop: 4, padding: '12px 24px', border: 'none', borderRadius: 9, background: tab === 'receive' ? C.orange : tab === 'dispatch' ? C.blue : C.dangerDeep, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : tab === 'receive' ? 'Receive stock' : tab === 'dispatch' ? 'Dispatch to machine' : 'Write off damaged'}
+            </button>
+          </div>
 
-          <button onClick={() => record(tab === 'receive' ? 'receive' : 'dispatch')} disabled={saving}
-            style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: tab === 'receive' ? C.orange : C.blue, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving…' : (tab === 'receive' ? 'Receive stock' : 'Dispatch to machine')}
-          </button>
-        </div>
-      )}
-
-      {!loading && tab === 'sale' && isSuper && (
-        <div style={{ ...card, maxWidth: 560 }}>
-          <div style={cardTitle}>Sell stock to an operator or buyer</div>
-          <label style={lbl}>Item</label>
-          <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
-            <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
-            <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
-          </select>
-          <label style={lbl}>Buyer (operator)</label>
-          <select style={inp} value={soldToOp} onChange={e => {
-            const id = e.target.value;
-            setSoldToOp(id);
-            if (id) {
-              setSoldToName('');
-              const op = operators.find(o => o.id === id);
-              if (op) {
-                setBuyerCompany(op.company_name || op.name || '');
-                setBuyerAddress([op.billing_address, op.pincode].filter(Boolean).join(' - '));
-                setBuyerGstin(op.gstin || '');
-                setBuyerContact(op.phone || '');
-              }
-            }
-          }}>
-            <option value="">— Other buyer (type below) —</option>
-            {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
-          {!soldToOp && (<>
-            <label style={lbl}>Other buyer name</label>
-            <input style={inp} value={soldToName} onChange={e => setSoldToName(e.target.value)} placeholder="Buyer name (non-operator)" />
-          </>)}
-          <label style={lbl}>Buyer company</label>
-          <input style={inp} value={buyerCompany} onChange={e => setBuyerCompany(e.target.value)} placeholder="Registered company name" />
-          <label style={lbl}>Buyer address</label>
-          <input style={inp} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder="Billing / shipping address" />
-          <label style={lbl}>Buyer GSTIN (optional)</label>
-          <input style={inp} value={buyerGstin} onChange={e => setBuyerGstin(e.target.value)} placeholder="Leave blank if unregistered" />
-          <label style={lbl}>Buyer contact</label>
-          <input style={inp} value={buyerContact} onChange={e => setBuyerContact(e.target.value)} placeholder="Phone and/or email" />
-          <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
-          <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
-          {selItem && packs && <div style={{ marginTop: 6, color: C.orange, fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''}</div>}
-          <label style={lbl}>Rate per {selItem?.pack_label || 'box'} (ex-GST)</label>
-          <input style={inp} type="number" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} placeholder="Price per box, before GST" />
-          {selItem && packs && rate && Number(rate) > 0 && (
-            <div style={{ marginTop: 6, color: C.green, fontWeight: 600, fontSize: 14 }}>
-              Taxable value = {(Number(packs) * Number(rate)).toFixed(2)} (GST added by accounts)
-            </div>
+          {!isMobile && (
+            <SummaryRail title="Summary">
+              <RailRow label="Item" value={selItem ? selItem.name : '—'} />
+              <RailRow label="Current on hand" value={selItem ? `${(selItem.on_hand ?? 0).toLocaleString('en-IN')} ${selItem.base_unit}s` : '—'} />
+              {tab === 'dispatch' && machines.length > 0 && <RailRow label="Destination" value={machineLabel(machines.find(m => m.id === machineId))} />}
+              <RailRow
+                label={tab === 'damage' ? 'Writing off' : tab === 'receive' ? 'Adding' : 'Removing'}
+                value={previewBase ? `${previewBase} ${selItem?.base_unit}s` : '—'}
+                color={tab === 'receive' ? C.green : tab === 'damage' ? C.dangerDeep : C.blue}
+                big
+              />
+              {selItem && <div style={{ marginTop: 12, fontSize: 12, color: C.text3, lineHeight: 1.5 }}>1 {selItem.pack_label} = {selItem.pack_size} {selItem.base_unit}s. Enter whole {selItem.pack_label}s; the warehouse tracks {selItem.base_unit}s.</div>}
+            </SummaryRail>
           )}
-          <label style={lbl}>Note (optional)</label>
-          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Internal reference…" />
-          <button onClick={() => record('sale')} disabled={saving}
-            style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: C.orange, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving…' : 'Record sale'}
-          </button>
         </div>
       )}
-      {!loading && tab === 'damage' && (
-        <div style={{ ...card, maxWidth: 560 }}>
-          <div style={cardTitle}>Write off damaged stock from warehouse</div>
-          <label style={lbl}>Item</label>
-          <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
-            <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
-            <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
-          </select>
-          <label style={lbl}>Quantity {selItem ? `(${selItem.pack_label}s — 1 = ${selItem.pack_size} ${selItem.base_unit}s)` : ''}</label>
-          <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
-          {selItem && packs && <div style={{ marginTop: 6, color: '#B00020', fontWeight: 600, fontSize: 14 }}>= {previewBase} {selItem.base_unit}{previewBase !== 1 ? 's' : ''} written off</div>}
-          <label style={lbl}>Reason</label>
-          <input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Rotten / spoiled / damaged…" />
-          <button onClick={() => record('damage_warehouse')} disabled={saving}
-            style={{ marginTop: 18, padding: '12px 24px', border: 'none', borderRadius: 9, background: '#B00020', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving…' : 'Write off damaged'}
-          </button>
+
+      {/* SALE — super admin only */}
+      {!loading && tab === 'sale' && isSuper && (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.7fr 1fr', gap: 18, alignItems: 'start' }}>
+          <div style={{ ...card, padding: isMobile ? 18 : 24 }}>
+            <ActionHeader icon="🧾" color={C.indigo} title="Sell stock to an operator or buyer" subtitle="Records a taxable sale and generates a delivery challan." />
+
+            <FormGroup label="What & how much" isMobile={isMobile}>
+              <Field label="Item"><ItemSelect value={itemId} onChange={setItemId} /></Field>
+              <Field label={`Quantity (${selItem?.pack_label || 'box'}s)`} hint={qtyHint} hintColor={C.orange}>
+                <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
+              </Field>
+              <Field label={`Rate per ${selItem?.pack_label || 'box'} (ex-GST)`} hint={taxable ? `Taxable value = ₹${taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : ''} hintColor={C.green}>
+                <input style={inp} type="number" inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} placeholder="Price per box, before GST" />
+              </Field>
+              <Field label="Note (optional)"><input style={inp} value={note} onChange={e => setNote(e.target.value)} placeholder="Internal reference…" /></Field>
+            </FormGroup>
+
+            <FormGroup label="Buyer details" isMobile={isMobile}>
+              <Field label="Buyer (operator)">
+                <select style={inp} value={soldToOp} onChange={e => {
+                  const id = e.target.value; setSoldToOp(id);
+                  if (id) {
+                    setSoldToName('');
+                    const op = operators.find(o => o.id === id);
+                    if (op) {
+                      setBuyerCompany(op.company_name || op.name || '');
+                      setBuyerAddress([op.billing_address, op.pincode].filter(Boolean).join(' - '));
+                      setBuyerGstin(op.gstin || '');
+                      setBuyerContact(op.phone || '');
+                    }
+                  }
+                }}>
+                  <option value="">— Other buyer (type below) —</option>
+                  {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </Field>
+              {!soldToOp && <Field label="Other buyer name"><input style={inp} value={soldToName} onChange={e => setSoldToName(e.target.value)} placeholder="Buyer name (non-operator)" /></Field>}
+              <Field label="Buyer company" span2={!!soldToOp}><input style={inp} value={buyerCompany} onChange={e => setBuyerCompany(e.target.value)} placeholder="Registered company name" /></Field>
+              <Field label="Buyer address" span2><input style={inp} value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} placeholder="Billing / shipping address" /></Field>
+              <Field label="Buyer GSTIN (optional)"><input style={inp} value={buyerGstin} onChange={e => setBuyerGstin(e.target.value)} placeholder="Leave blank if unregistered" /></Field>
+              <Field label="Buyer contact"><input style={inp} value={buyerContact} onChange={e => setBuyerContact(e.target.value)} placeholder="Phone and/or email" /></Field>
+            </FormGroup>
+
+            <button onClick={() => record('sale')} disabled={saving}
+              style={{ marginTop: 4, padding: '12px 24px', border: 'none', borderRadius: 9, background: C.orange, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : 'Record sale'}
+            </button>
+          </div>
+
+          {!isMobile && (
+            <SummaryRail title="Sale summary">
+              <RailRow label="Item" value={selItem ? selItem.name : '—'} />
+              <RailRow label="Quantity" value={previewBase ? `${previewBase} ${selItem?.base_unit}s` : '—'} />
+              <RailRow label="On hand after" value={selItem ? `${((selItem.on_hand ?? 0) - previewBase).toLocaleString('en-IN')} ${selItem.base_unit}s` : '—'} color={C.blue} />
+              <RailRow label="Taxable value" value={taxable ? `₹${taxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'} color={C.green} big />
+              <div style={{ marginTop: 12 }}><Pill color={C.indigo} bg={C.indigoBg}>📄 Challan auto-generated</Pill></div>
+              <div style={{ marginTop: 10, fontSize: 12, color: C.text3, lineHeight: 1.5 }}>GST is added by accounts. Value shown is the ex-GST taxable value.</div>
+            </SummaryRail>
+          )}
         </div>
       )}
+
       {/* LOG */}
       {!loading && tab === 'log' && (
         <div style={card}>
           <div style={cardTitle}>Movement log</div>
           {movements.length === 0 && <div style={{ color: C.text2, fontSize: 14 }}>No movements yet.</div>}
 
-          {/* Desktop: table */}
           {!isMobile && movements.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
               <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>By</th><th style={th}>Note</th>{isSuper && <th style={th}>Challan</th>}</tr></thead>
               <tbody>
                 {movements.map(m => {
                   const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
-                  const tagBg = m.movement_type === 'receive' ? C.greenBg : m.movement_type === 'dispatch' ? C.blueBg : C.amberBg;
-                  const tagC = m.movement_type === 'receive' ? C.green : m.movement_type === 'dispatch' ? C.blue : C.amber;
                   return (
                     <tr key={m.id}>
                       <td style={{ ...td, color: C.text2, whiteSpace: 'nowrap' }}>{new Date(m.created_at).toLocaleString('en-IN')}</td>
-                      <td style={td}><span style={{ background: tagBg, color: tagC, padding: '2px 9px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>{m.movement_type}</span></td>
+                      <td style={td}><MovementBadge type={m.movement_type} /></td>
                       <td style={td}>{it ? it.name : m.item_id.slice(0, 6)}</td>
                       <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: m.qty_base >= 0 ? C.green : C.blue }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</td>
                       <td style={{ ...td, color: C.text2 }}>{mac ? machineLabel(mac) : '—'}</td>
                       <td style={{ ...td, color: C.text2 }}>{m.created_by_name || '—'}</td>
                       <td style={{ ...td, color: C.text2 }}>{m.note || '—'}</td>
                       {isSuper && <td style={td}>{m.movement_type === 'sale' && m.challan_no
-                        ? <a href={'/api/challan?sale_id=' + m.id} target="_blank" rel="noreferrer"
-                            style={{ color: C.blue, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
-                            title={m.challan_no}>📄 Challan</a>
+                        ? <a href={'/api/challan?sale_id=' + m.id} target="_blank" rel="noreferrer" style={{ color: C.blue, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }} title={m.challan_no}>📄 Challan</a>
                         : '—'}</td>}
                     </tr>
                   );
@@ -349,10 +385,9 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
             </table>
           )}
 
-          {/* Mobile: rich stacked cards */}
           {isMobile && movements.map(m => {
             const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
-            const accent = m.movement_type === 'receive' ? C.green : m.movement_type === 'dispatch' ? C.blue : C.amber;
+            const accent = m.movement_type === 'receive' ? C.green : m.movement_type === 'sale' ? C.indigo : m.movement_type === 'damage_warehouse' ? C.red : C.blue;
             const unit = it ? it.base_unit + 's' : '';
             return (
               <div key={m.id} style={{ background: '#fff', borderRadius: 12, border: '0.5px solid ' + C.border, overflow: 'hidden', marginBottom: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -361,7 +396,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                   <div style={{ flex: 1, padding: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                       <div>
-                        <span style={{ background: accent, color: '#fff', padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>{m.movement_type}</span>
+                        <MovementBadge type={m.movement_type} solid />
                         <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginTop: 8 }}>{it ? it.name : m.item_id.slice(0, 6)}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -389,9 +424,91 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   );
 }
 
+// ---- presentational helpers ----
+function StatCard({ label, value, sub, icon, color }: { label: string; value: string; sub?: string; icon: string; color: string }) {
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text3 }}>{label}</span>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: C.text, marginTop: 6, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: C.text2, marginTop: 6 }}>{sub}</div>}
+      <div style={{ height: 3, background: color, borderRadius: 2, marginTop: 12, opacity: 0.85 }} />
+    </div>
+  );
+}
+
+function FormGroup({ label, children, isMobile }: { label: string; children: React.ReactNode; isMobile: boolean }) {
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text3, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span>{label}</span><span style={{ flex: 1, height: 1, background: C.border }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: '16px 18px' }}>{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, hint, hintColor, span2, children }: { label: string; hint?: string; hintColor?: string; span2?: boolean; children: React.ReactNode }) {
+  return (
+    <div style={span2 ? { gridColumn: '1 / -1' } : undefined}>
+      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 6 }}>{label}</label>
+      {children}
+      {hint && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 600, color: hintColor || C.text3 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function SummaryRail({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ position: 'sticky', top: 0, alignSelf: 'start', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text3, marginBottom: 10 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function RailRow({ label, value, color, big }: { label: string; value: string; color?: string; big?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: 12.5, color: C.text2 }}>{label}</span>
+      <span style={{ fontSize: big ? 20 : 14, fontWeight: 700, color: color || C.text }}>{value}</span>
+    </div>
+  );
+}
+
+function ActionHeader({ icon, color, title, subtitle }: { icon: string; color: string; title: string; subtitle: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 11, display: 'grid', placeItems: 'center', fontSize: 19, flexShrink: 0, background: color + '22' }}>{icon}</div>
+      <div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>{title}</div>
+        <div style={{ fontSize: 13, color: C.text2, marginTop: 1 }}>{subtitle}</div>
+      </div>
+    </div>
+  );
+}
+
+function Pill({ color, bg, children }: { color: string; bg: string; children: React.ReactNode }) {
+  return <span style={{ background: bg, color, padding: '2px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 700 }}>{children}</span>;
+}
+
+function MovementBadge({ type, solid }: { type: string; solid?: boolean }) {
+  const map: Record<string, { c: string; bg: string }> = {
+    receive: { c: C.green, bg: C.greenBg },
+    dispatch: { c: C.blue, bg: C.blueBg },
+    sale: { c: C.indigo, bg: C.indigoBg },
+    damage_warehouse: { c: C.red, bg: C.redBg },
+  };
+  const s = map[type] || { c: C.amber, bg: C.amberBg };
+  const label = type === 'damage_warehouse' ? 'damage' : type;
+  if (solid) return <span style={{ background: s.c, color: '#fff', padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</span>;
+  return <span style={{ background: s.bg, color: s.c, padding: '2px 9px', borderRadius: 20, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>{label}</span>;
+}
+
 const card: React.CSSProperties = { background: C.surface, borderRadius: 12, padding: 20, border: '1px solid ' + C.border, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' };
 const cardTitle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 14 };
 const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontSize: 12, fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid ' + C.border };
 const td: React.CSSProperties = { padding: '10px', borderBottom: '1px solid ' + C.border, color: C.text };
-const lbl: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: C.text2, margin: '14px 0 5px' };
 const inp: React.CSSProperties = { width: '100%', padding: '11px', fontSize: 15, border: '1px solid ' + C.border2, borderRadius: 9, boxSizing: 'border-box', background: '#fff', color: C.text };
