@@ -375,10 +375,10 @@ const [stockData, setStockData] = useState<any[]>([])
   const lacking = scopedMachines.filter((m: any) => m.status === 'online' && (!m.stock_l1 || !m.stock_l2 || !m.stock_l3)).length
 
 const stats = [
-    { label: machineSel === 'all' ? 'All Equipment' : 'Machine', value: scopedMachines.length.toString(), sub: `${online} online · ${scopedMachines.length - online} offline`, color: C.blue, icon: '🖥', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
-    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? scopedMachines.find((m: any) => m.status === 'online')?.display_name || '' : 'None online', color: C.green, icon: '📡', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
-    { label: 'Active Alerts', value: scopedAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: scopedAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(scopedAlerts.length * 10, 100) },
-    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: scopedMachines.length > 0 ? (lacking / scopedMachines.length) * 100 : 0 },
+    { label: machineSel === 'all' ? 'All Equipment' : 'Machine', value: scopedMachines.length.toString(), sub: `${online} online · ${scopedMachines.length - online} offline`, color: C.blue, icon: '🖥', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0, meter: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
+    { label: 'Online Equipment', value: online.toString(), sub: online > 0 ? scopedMachines.find((m: any) => m.status === 'online')?.display_name || '' : 'None online', color: C.green, icon: '📡', pct: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0, meter: scopedMachines.length > 0 ? (online / scopedMachines.length) * 100 : 0 },
+    { label: 'Active Alerts', value: scopedAlerts.length.toString(), sub: `${critical} critical · ${high} high`, color: scopedAlerts.length > 0 ? C.red : C.green, icon: '🔔', pct: Math.min(scopedAlerts.length * 10, 100), attention: scopedAlerts.length > 0 },
+    { label: 'Lacking Materials', value: lacking.toString(), sub: lacking > 0 ? 'Restock needed' : 'All stocked', color: lacking > 0 ? C.orange : C.green, icon: '📦', pct: scopedMachines.length > 0 ? (lacking / scopedMachines.length) * 100 : 0, attention: lacking > 0 },
   ]
 
   const SEVERITY_COLOR: any = { CRITICAL: C.red, HIGH: C.amber, MEDIUM: C.blue, LOW: C.green }
@@ -411,8 +411,16 @@ const stats = [
               <option key={m.id} value={m.id}>{m.display_name || m.sn}{m.location ? ' — ' + m.location : ''}</option>
             ))}
           </select>
-          {machineSel !== 'all' && (
+          {machineSel !== 'all' ? (
             <span style={{ fontSize: 12, color: C.text3, cursor: 'pointer' }} onClick={() => setMachineSel('all')}>✕ Clear</span>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.text2, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 20, padding: '5px 11px' }}>{scopedMachines.length} machines</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.green, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 20, padding: '5px 11px' }}><Dot color={C.green} size={6} />{online} online</span>
+              {scopedAlerts.length > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.red, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 20, padding: '5px 11px' }}>{scopedAlerts.length} alerts</span>
+              )}
+            </div>
           )}
         </div>
       )}

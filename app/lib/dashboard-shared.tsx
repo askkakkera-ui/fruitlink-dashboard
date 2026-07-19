@@ -153,18 +153,23 @@ export const isTestRefund = (n: string) => /test/i.test(n || '')
 export const netPaise = (o: any) =>
   (o.refund_state === 1 && !isTestRefund(o.refund_note)) ? 0 : (o.amount_paise || 0)
 
-export function StatCard({ label, value, sub, color, icon, pct }: any) {
+export function StatCard({ label, value, sub, color, icon, pct, meter, attention }: any) {
   return (
     <div style={{
-      background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12,
+      background: attention ? color + '0e' : C.surface, border: `1px solid ${attention ? color + '55' : C.border}`, borderRadius: 12,
       padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{label}</div>
         <div style={{ width: 32, height: 32, borderRadius: 9, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
       </div>
-      <div style={{ fontSize: 34, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
+      <div style={{ fontSize: 34, fontWeight: 700, color: attention ? color : C.text, letterSpacing: '-0.02em', lineHeight: 1, marginBottom: 6 }}>{value}</div>
       {sub && <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>{sub}</div>}
+      {typeof meter === 'number' && (
+        <div style={{ height: 5, background: C.surface2, borderRadius: 3, marginTop: 10, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, meter))}%`, background: color, borderRadius: 3 }} />
+        </div>
+      )}
     </div>
   )
 }
