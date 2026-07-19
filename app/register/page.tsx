@@ -48,8 +48,17 @@ export default function Register() {
       const { data: existing } = await supabase.from('operators').select('id').eq('email', email).single();
       if (existing) { setError('Email already registered'); setLoading(false); return; }
 
+      // password_hash used to receive the raw password. The column name was the
+      // only thing hashing it. Every other path that writes this column -
+      // OperatorsPage, MyStaffSection - bcrypts through /api/hash-password
+      // first, and login verifies with bcrypt.compare, so a plaintext row could
+      // never log in either: it was both a breach and a broken signup.
+      const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+      if (!hashRes.ok) { setError('Registration failed: could not hash password'); setLoading(false); return; }
+      const { hash } = await hashRes.json();
+
       const { error: err } = await supabase.from('operators').insert({
-        name, email, password_hash: password, phone,
+        name, email, password_hash: hash, phone,
       });
 
       if (err) { setError('Registration failed: ' + err.message); setLoading(false); return; }
