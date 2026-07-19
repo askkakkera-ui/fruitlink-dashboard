@@ -259,9 +259,6 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
         <div style={sectit}>⛽ Stock runway &amp; restock</div>
         <div style={{ ...card, padding: '28px 22px', textAlign: 'center', marginBottom: 22 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.text2 }}>Pick a machine to see runway and restock</div>
-          <div style={{ fontSize: 12, color: C.text3, marginTop: 8, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
-            Each machine has its own fruit size and capacity — F1 and F2 hold about 500 oranges, F3/F4/F5 about 310, and size 88 takes 4 oranges per cup where 100 takes 5. There is no fleet-wide figure to show. Sales and revenue above are fleet-wide and correct.
-          </div>
         </div>
       </>) : (<>
       <div style={sectit}>⛽ Stock runway — today</div>
