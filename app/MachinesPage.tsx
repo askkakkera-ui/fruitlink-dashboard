@@ -1,247 +1,260 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { C, SB_KEY, getCookie, Dot, Pill, StatCard } from './lib/dashboard-shared'
 
-// ─── Machine Grouped List ────────────────────────────────────────
-export function MachineRow({ m, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
-  const online = m.status === 'online'
-  const isExpanded = expandedId === m.id
-  const temp = m.inner_temp_c
-  const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
-  const mStock = stockData.find((s: any) => s.machine_id === m.id)
-  const msColor = !mStock?.stock_known ? C.text3 : mStock.cups_remaining <= 10 ? C.red : mStock.stock_pct <= 50 ? C.amber : C.green
-  const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
-  const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
-  const co = getCoords(m)
+// ─── Fleet screen: built for 500 machines ────────────────────────
+// The old screen rendered every machine's full detail block inside a nested
+// operator → location tree. At 30 machines that was merely heavy; at 500 it is
+// a wall. Detail is now expand-on-demand (one open machine at a time), the list
+// is a dense scannable row, and the work of finding a machine — search, status
+// filter, sort — sits in a toolbar above it. Nothing about how a machine is
+// read or commanded has changed, only how much of it is on screen at once.
+
+const CMDS: { cmd: string; label: string; danger?: boolean }[] = [
+  { cmd: 'reboot', label: '🔄 Reboot', danger: true },
+  { cmd: 'reset_mcu', label: '⚡ Reset MCU', danger: true },
+  { cmd: 'clear_fault', label: '🔧 Clear Fault' },
+  { cmd: 'sync_config', label: '📡 Sync Config' },
+  { cmd: 'maintenance_on', label: '🚧 Maintenance ON' },
+  { cmd: 'maintenance_off', label: '✅ Maintenance OFF' },
+  { cmd: 'run_cleaning', label: '🧹 Run Cleaning' },
+]
+
+// Above this width the list is a table of dense rows; below it, cards.
+const WIDE = 940
+function useWide() {
+  const [wide, setWide] = useState(true)
+  useEffect(() => {
+    const check = () => setWide(window.innerWidth > WIDE)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  return wide
+}
+
+// How many rows to paint before the "show more" button. A 500-machine fleet
+// filtered to "all" is 500 DOM rows otherwise, and every keystroke in the
+// search box re-renders them.
+const PAGE = 120
+
+const isOnline = (m: any) => m.status === 'online'
+const siteOf = (m: any) => (m.location || '').trim() || 'No site set'
+
+// Sort rank: broken things first. Offline is the thing you act on, so it leads;
+// an online machine nobody owns is last because it is an admin chore, not an
+// outage. Ownership is only known when the API enriched it (super_admin), which
+// is why "unassigned" never removes a machine from the offline count.
+const rankOf = (m: any, ownerKnown: boolean) =>
+  !isOnline(m) ? 0 : (!ownerKnown || m.owner_id) ? 1 : 2
+
+const stockOf = (stockData: any[], m: any) => stockData.find((s: any) => s.machine_id === m.id)
+
+const stockColors = (s: any) => {
+  if (!s?.stock_known) return { color: C.text3, bg: C.surface2 }
+  if (s.cups_remaining <= 10) return { color: C.red, bg: C.redBg }
+  if (s.stock_pct <= 50) return { color: C.amber, bg: C.amberBg }
+  return { color: C.green, bg: C.greenBg }
+}
+
+// ─── Compact stock bar for a list row ────────────────────────────
+function StockBar({ s }: { s: any }) {
+  if (!s?.stock_known) return <span style={{ fontSize: 11.5, color: C.text3 }}>no stock data</span>
+  const { color } = stockColors(s)
   return (
-    <div style={{ background: C.surface, borderTop: '1px solid ' + C.border }}>
-      <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
-        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🖥</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-          <div style={{ fontSize: 11, color: C.text2, marginTop: 2, fontFamily: 'monospace' }}>SN: {m.sn} · ID: {m.id?.slice(0,8)}...</div>
-        </div>
-        <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
-        <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 56, height: 6, background: C.surface2, borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{ height: '100%', width: Math.max(0, Math.min(100, s.stock_pct)) + '%', background: color, borderRadius: 3 }} />
       </div>
-      {isExpanded && (
-        <div style={{ borderTop: '1px solid ' + C.border }}>
-          <div style={{ height: 3, background: online ? C.green : C.border2 }} />
-          <div style={{ padding: '14px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
-                {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
-                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-                    {[['reboot','🔄 Reboot'],['reset_mcu','⚡ Reset MCU'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
-                      <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
-                    )}
-                  </div>}
-                </div>}
-                {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
-              </div>
-            </div>
-            {mStock?.stock_known ? (
-              <div style={{ background: msBg, borderRadius: 10, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 22 }}>🍊</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: msColor }}>{mStock.cups_remaining} cups remaining ({mStock.stock_pct}%)</div>
-                  {msDays != null && <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>Last loaded {msDays === 0 ? 'today' : msDays + 'd ago'}</div>}
-                </div>
-              </div>
-            ) : (
-              <div style={{ background: C.surface2, borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: C.text3 }}>🍊 No stock data — log a loading visit</div>
-            )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-              {[
-                { label: 'Temperature', value: temp != null ? temp + '°C' : '--', color: tempColor },
-                { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
-                { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--', color: C.text },
-                { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
-              ].map(f => (
-                <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 10px' }}>
-                  <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <span style={{ fontSize: 12, fontWeight: 700, color, whiteSpace: 'nowrap' as const }}>{s.cups_remaining} cups</span>
     </div>
   )
 }
 
-export function MachineGroupedList({ machines, search, expandedId, setExpandedId, stockData, role, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
-  const [collapsedOps, setCollapsedOps] = useState<Record<string, boolean>>({})
-
-  const filtered = (machines || []).filter((m: any) => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return (m.display_name || '').toLowerCase().includes(q) ||
-      (m.location || '').toLowerCase().includes(q) ||
-      (m.sn || '').toLowerCase().includes(q) ||
-      (m.owner_name || '').toLowerCase().includes(q)
-  })
-
-  // Group by operator → then by location
-  const opGroups: Record<string, { name: string; id: string; machines: any[] }> = {}
-  filtered.forEach((m: any) => {
-    const opName = m.owner_name || 'Unassigned'
-    const opId = m.owner_id || 'unassigned'
-    if (!opGroups[opId]) opGroups[opId] = { name: opName, id: opId, machines: [] }
-    opGroups[opId].machines.push(m)
-  })
-
-  const sortedOps = Object.values(opGroups).sort((a, b) =>
-    a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)
+function StatusPill({ m }: { m: any }) {
+  const on = isOnline(m)
+  return (
+    <Pill color={on ? C.green : C.red} bg={on ? C.greenBg : C.redBg}>
+      <Dot color={on ? C.green : C.red} pulse={on} size={5} />{on ? 'Online' : 'Offline'}
+    </Pill>
   )
+}
 
-  const toggleOp = (opId: string) => setCollapsedOps(p => ({ ...p, [opId]: !p[opId] }))
+// ─── Expanded detail (rendered for the open machine only) ────────
+export function MachineDetail({ m, stock, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
+  const online = isOnline(m)
+  const temp = m.inner_temp_c
+  const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
+  const sc = stockColors(stock)
+  const co = getCoords(m)
+  const firmware = m.firmware_version || m.fw_version || m.mcu_version || null
+
+  // Only facts the machine actually reports. A grid of "--" tells you nothing
+  // and reads as broken telemetry, so absent fields are dropped, not blanked.
+  const facts: { label: string; value: string; color?: string }[] = []
+  if (temp != null) facts.push({ label: 'Temperature', value: temp + '°C', color: tempColor })
+  if (stock?.stock_known) facts.push({ label: 'Stock', value: stock.cups_remaining + ' cups · ' + stock.stock_pct + '%', color: sc.color })
+  if (stock?.capacity) facts.push({ label: 'Capacity', value: stock.capacity + ' oranges' })
+  if (stock?.stock_known && stock.cups_loaded != null) facts.push({ label: 'Loaded / Dispensed', value: stock.cups_loaded + ' / ' + stock.cups_dispensed + ' cups' })
+  if (m.scale_weight_g != null) facts.push({ label: 'Scale', value: Math.max(0, m.scale_weight_g - 235) + 'g' })
+  if (m.app_version) facts.push({ label: 'App version', value: 'v' + m.app_version, color: C.blue })
+  if (firmware) facts.push({ label: 'Firmware', value: String(firmware), color: C.blue })
+  facts.push({ label: 'Last seen', value: fmtTime(m.last_seen), color: online ? C.text : C.red })
+  if (co) facts.push({ label: 'Coordinates', value: co.lat + ', ' + co.lng })
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {sortedOps.map(opGroup => {
-        const isCollapsed = collapsedOps[opGroup.id]
-        const onlineCount = opGroup.machines.filter((m: any) => m.status === 'online').length
-        const totalSales = opGroup.machines.reduce((sum: number, m: any) => sum + (m.today_revenue || 0), 0)
-
-        // Sub-group by location
-        const locGroups: Record<string, any[]> = {}
-        opGroup.machines.forEach((m: any) => {
-          const loc = m.location || 'Unassigned Location'
-          if (!locGroups[loc]) locGroups[loc] = []
-          locGroups[loc].push(m)
-        })
-        const sortedLocs = Object.entries(locGroups).sort(([a], [b]) =>
-          a === 'Unassigned Location' ? 1 : b === 'Unassigned Location' ? -1 : a.localeCompare(b)
-        )
-
-        return (
-          <div key={opGroup.id} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden' }}>
-            {/* Operator header — clickable to collapse */}
-            <div onClick={() => toggleOp(opGroup.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', cursor: 'pointer', background: isCollapsed ? C.surface2 : C.surface, borderBottom: isCollapsed ? 'none' : '1px solid ' + C.border }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0f1ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🧑‍💼</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{opGroup.name}</div>
-                <div style={{ fontSize: 12, color: C.text2, marginTop: 2, display: 'flex', gap: 10 }}>
-                  <span>🖥 {opGroup.machines.length} machine{opGroup.machines.length !== 1 ? 's' : ''}</span>
-                  <span style={{ color: onlineCount > 0 ? C.green : C.text3 }}>📡 {onlineCount} online</span>
-                  {totalSales > 0 && <span style={{ color: C.blue }}>₹{totalSales.toLocaleString('en-IN')} today</span>}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {onlineCount > 0 && <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.green }} />}
-                <span style={{ fontSize: 12, color: C.text3, fontWeight: 600 }}>{isCollapsed ? '▼ Show' : '▲ Hide'}</span>
-              </div>
-            </div>
-
-            {/* Locations + machines — hidden when collapsed */}
-            {!isCollapsed && (
-              <div>
-                {sortedLocs.map(([locName, locMachines], li) => (
-                  <div key={locName} style={{ borderBottom: li < sortedLocs.length - 1 ? '1px solid ' + C.border : 'none' }}>
-                    {/* Location sub-header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', background: C.surface2 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text2 }}>📍 {locName}</span>
-                      <span style={{ fontSize: 11, color: C.text3 }}>{locMachines.length} machine{locMachines.length !== 1 ? 's' : ''}</span>
-                    </div>
-
-                    {/* Machines in this location */}
-                    {locMachines.map((m: any) => {
-                      const online = m.status === 'online'
-                      const isExpanded = expandedId === m.id
-                      const temp = m.inner_temp_c
-                      const tempColor = temp == null ? C.text3 : temp > 18 ? C.red : temp > 12 ? C.amber : temp < 3 ? C.blue : C.green
-                      const mStock = stockData.find((s: any) => s.machine_id === m.id)
-                      const msColor = !mStock?.stock_known ? C.text3 : mStock.cups_remaining <= 10 ? C.red : mStock.stock_pct <= 50 ? C.amber : C.green
-                      const msBg = !mStock?.stock_known ? C.surface2 : mStock.cups_remaining <= 10 ? C.redBg : mStock.stock_pct <= 50 ? C.amberBg : C.greenBg
-                      const msDays = mStock?.last_loaded_at ? Math.floor((Date.now()-new Date(mStock.last_loaded_at).getTime())/86400000) : null
-                      const co = getCoords(m)
-
-                      return (
-                        <div key={m.id} style={{ background: C.surface, borderTop: '1px solid ' + C.border }}>
-                          {/* Compact row */}
-                          <div onClick={() => setExpandedId(isExpanded ? null : m.id)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
-                            <div style={{ width: 38, height: 38, borderRadius: 10, background: online ? C.greenBg : C.redBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🖥</div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                              <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>SN: {m.sn}</div>
-                            </div>
-                            <Pill color={online ? C.green : C.red} bg={online ? C.greenBg : C.redBg}><Dot color={online ? C.green : C.red} pulse={online} size={5} />{online ? 'Online' : 'Offline'}</Pill>
-                            <span style={{ fontSize: 12, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
-                          </div>
-
-                          {/* Expanded detail */}
-                          {isExpanded && (
-                            <div style={{ borderTop: '1px solid ' + C.border }}>
-                              <div style={{ height: 3, background: online ? C.green : C.border2 }} />
-                              <div style={{ padding: '14px 20px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                                  <div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.display_name}</div>
-                                    <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
-                                  </div>
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    {canEdit && <button onClick={e => { e.stopPropagation(); openEdit(m) }} style={{ background: C.surface2, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>}
-                {canEdit && <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }} style={{ background: C.surface2, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>⚡ Remote</button>
-                  {cmdMenu === m.id && <div style={{ position: 'absolute', right: 0, top: 28, background: C.surface, maxWidth: 180, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 150, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
-                    {[['reboot','🔄 Reboot'],['reset_mcu','⚡ Reset MCU'],['clear_fault','🔧 Clear Fault'],['sync_config','📡 Sync Config'],['maintenance_on','🚧 Maintenance ON'],['maintenance_off','✅ Maintenance OFF'],['run_cleaning','🧹 Run Cleaning']].map(([cmd,label]) =>
-                      <button key={cmd} disabled={cmdSending} onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, cmd) }} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '7px 10px', fontSize: 12, color: C.text, cursor: 'pointer', borderRadius: 6, fontWeight: 600 }}>{label}</button>
-                    )}
-                  </div>}
-                </div>}
-                                    {co && <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.blue, fontWeight: 600, textDecoration: 'none', padding: '4px 10px', background: C.blueBg, borderRadius: 8 }}>🗺 Maps</a>}
-                                  </div>
-                                </div>
-
-                                {/* Stock */}
-                                {mStock?.stock_known && (
-                                  <div style={{ background: msBg, borderRadius: 10, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <span style={{ fontSize: 22 }}>🍊</span>
-                                    <div style={{ flex: 1 }}>
-                                      <div style={{ fontSize: 13, fontWeight: 700, color: msColor }}>{mStock.cups_remaining} cups remaining ({mStock.stock_pct}%)</div>
-                                      {msDays != null && <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>Last loaded {msDays === 0 ? 'today' : msDays + 'd ago'}</div>}
-                                    </div>
-                                  </div>
-                                )}
-                                {!mStock?.stock_known && (
-                                  <div style={{ background: C.surface2, borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: C.text3 }}>🍊 Stock: No data — log a loading visit</div>
-                                )}
-
-                                {/* Stats grid */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                                  {[
-                                    { label: 'Temperature', value: temp != null ? temp + '°C' : '--', color: tempColor },
-                                    { label: 'Last Seen', value: fmtTime(m.last_seen), color: C.text },
-                                    { label: 'Scale', value: m.scale_weight_g != null ? Math.max(0, m.scale_weight_g - 235) + 'g' : '--', color: C.text },
-                                    { label: 'Version', value: m.app_version ? 'v' + m.app_version : '--', color: C.blue },
-                                  ].map(f => (
-                                    <div key={f.label} style={{ background: C.surface2, borderRadius: 8, padding: '7px 10px' }}>
-                                      <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{f.label}</div>
-                                      <div style={{ fontSize: 13, fontWeight: 700, color: f.color }}>{f.value}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+    <div style={{ borderTop: '1px solid ' + C.border, background: C.surface2 }}>
+      <div style={{ height: 3, background: online ? C.green : C.border2 }} />
+      <div style={{ padding: '14px 18px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8, alignItems: 'center', marginBottom: 12 }}>
+          {canEdit && (
+            <button onClick={e => { e.stopPropagation(); openEdit(m) }}
+              style={{ background: C.surface, color: C.text2, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              ✏️ Edit machine
+            </button>
+          )}
+          {canEdit && (
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button onClick={e => { e.stopPropagation(); setCmdMenu(cmdMenu === m.id ? null : m.id) }}
+                style={{ background: C.surface, color: C.orange, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                ⚡ Remote command {cmdMenu === m.id ? '▲' : '▼'}
+              </button>
+              {cmdMenu === m.id && (
+                <div style={{ position: 'absolute', left: 0, top: 34, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: 6, zIndex: 99, minWidth: 210, boxShadow: '0 8px 24px rgba(0,0,0,0.14)' }}>
+                  {CMDS.map(c => (
+                    <button key={c.cmd} disabled={cmdSending || !online}
+                      onClick={e => { e.stopPropagation(); sendCommand(m.id, m.sn, c.cmd) }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left' as const, border: 'none', borderRadius: 6,
+                        background: c.danger ? C.redBg : 'none', color: cmdSending || !online ? C.text3 : c.danger ? C.red : C.text,
+                        padding: '8px 10px', marginBottom: 2, fontSize: 12.5, fontWeight: 700,
+                        cursor: cmdSending || !online ? 'not-allowed' : 'pointer', opacity: cmdSending || !online ? 0.55 : 1,
+                      }}>
+                      {c.label}
+                    </button>
+                  ))}
+                  <div style={{ fontSize: 11, color: C.text3, padding: '6px 10px 2px', lineHeight: 1.45 }}>
+                    {online
+                      ? 'Runs on the next heartbeat (~5 min).'
+                      : 'Machine is offline — commands are disabled. They queue on the machine only once it reconnects.'}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+          )}
+          {co && (
+            <a href={'https://www.google.com/maps?q=' + co.lat + ',' + co.lng} target="_blank" rel="noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: 12, color: C.blue, fontWeight: 700, textDecoration: 'none', padding: '6px 12px', background: C.blueBg, borderRadius: 8 }}>
+              🗺 Maps
+            </a>
+          )}
+          {!online && <span style={{ fontSize: 11.5, color: C.red, fontWeight: 700 }}>Offline — remote commands unavailable</span>}
+        </div>
+
+        {stock?.needs_recount && (
+          <div style={{ background: C.amberBg, border: '1px solid ' + C.amber + '40', color: C.amber, borderRadius: 9, padding: '8px 12px', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
+            ⚠️ Stock balance has gone negative — needs a recount.
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+          {facts.map(f => (
+            <div key={f.label} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 9, padding: '8px 11px' }}>
+              <div style={{ fontSize: 10.5, color: C.text3, fontWeight: 700, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{f.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: f.color || C.text }}>{f.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── One machine, dense row (desktop) or card (mobile) ───────────
+export function MachineRow({ m, wide, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords, sendCommand, cmdMenu, setCmdMenu, cmdSending }: any) {
+  const online = isOnline(m)
+  const isExpanded = expandedId === m.id
+  const s = stockOf(stockData, m)
+  const detail = (
+    <MachineDetail m={m} stock={s} canEdit={canEdit} openEdit={openEdit} fmtTime={fmtTime} getCoords={getCoords}
+      sendCommand={sendCommand} cmdMenu={cmdMenu} setCmdMenu={setCmdMenu} cmdSending={cmdSending} />
+  )
+  const toggle = () => setExpandedId(isExpanded ? null : m.id)
+
+  if (!wide) {
+    return (
+      <div style={{ background: C.surface, border: '1px solid ' + (isExpanded ? C.border2 : C.border), borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
+        <div onClick={toggle} style={{ padding: '12px 14px', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{m.display_name}</div>
+              <div style={{ fontSize: 11, color: C.text2, fontFamily: 'monospace', marginTop: 2 }}>{m.sn}</div>
+            </div>
+            <StatusPill m={m} />
+            <span style={{ fontSize: 11, color: C.text3 }}>{isExpanded ? '▲' : '▼'}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: 11.5, color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>📍 {siteOf(m)}</span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: online ? C.text3 : C.red, whiteSpace: 'nowrap' as const }}>{fmtTime(m.last_seen)}</span>
+          </div>
+          <div style={{ marginTop: 8 }}><StockBar s={s} /></div>
+        </div>
+        {isExpanded && detail}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid ' + C.border, background: C.surface }}>
+      <div onClick={toggle}
+        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '9px 18px', cursor: 'pointer', background: isExpanded ? C.surface2 : C.surface }}>
+        <div style={{ width: 78, flexShrink: 0 }}><StatusPill m={m} /></div>
+        <div style={{ width: 230, minWidth: 0, flexShrink: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{m.display_name}</div>
+          <div style={{ fontSize: 11, color: C.text3, fontFamily: 'monospace', marginTop: 1 }}>{m.sn}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+          {siteOf(m)}
+        </div>
+        <div style={{ width: 140, flexShrink: 0 }}><StockBar s={s} /></div>
+        <div style={{ width: 78, flexShrink: 0, textAlign: 'right' as const, fontSize: 12, fontWeight: 700, color: online ? C.text3 : C.red }}>
+          {fmtTime(m.last_seen)}
+        </div>
+        <span style={{ width: 12, flexShrink: 0, fontSize: 11, color: C.text3, textAlign: 'right' as const }}>{isExpanded ? '▲' : '▼'}</span>
+      </div>
+      {isExpanded && detail}
+    </div>
+  )
+}
+
+// ─── Grouped-by-site list ────────────────────────────────────────
+export function MachineGroupedList({ machines, collapsed, setCollapsed, ...rest }: any) {
+  const groups: { site: string; list: any[] }[] = []
+  const byName: Record<string, any[]> = {}
+  machines.forEach((m: any) => {
+    const site = siteOf(m)
+    if (!byName[site]) { byName[site] = []; groups.push({ site, list: byName[site] }) }
+    byName[site].push(m)
+  })
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+      {groups.map(g => {
+        const on = g.list.filter(isOnline).length
+        const off = g.list.length - on
+        const shut = collapsed[g.site]
+        return (
+          <div key={g.site} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+            <div onClick={() => setCollapsed((p: any) => ({ ...p, [g.site]: !p[g.site] }))}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', cursor: 'pointer', background: shut ? C.surface2 : C.surface }}>
+              <span style={{ fontSize: 11, color: C.text3, width: 10 }}>{shut ? '▶' : '▼'}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>📍 {g.site}</span>
+              <span style={{ fontSize: 12, color: C.text2 }}>· {g.list.length} machine{g.list.length !== 1 ? 's' : ''}</span>
+              <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>· {on} online</span>
+              <span style={{ fontSize: 12, color: off > 0 ? C.red : C.text3, fontWeight: 700 }}>· {off} offline</span>
+            </div>
+            {!shut && g.list.map((m: any) => <MachineRow key={m.id} m={m} {...rest} />)}
           </div>
         )
       })}
@@ -252,7 +265,13 @@ export function MachineGroupedList({ machines, search, expandedId, setExpandedId
 export function MachinesPage({ machines, loading, fetchData }: any) {
   const [stockData, setStockData] = useState<any[]>([])
   const [search, setSearch] = useState('')
+  const [statusF, setStatusF] = useState<'all' | 'online' | 'offline' | 'unassigned'>('all')
+  const [sortBy, setSortBy] = useState<'status' | 'name' | 'seen' | 'stock'>('status')
+  const [grouped, setGrouped] = useState(false)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [limit, setLimit] = useState(PAGE)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const wide = useWide()
   useEffect(() => { fetch('/api/stock').then(r=>r.json()).then(d=>setStockData(Array.isArray(d)?d:[])).catch(()=>{}) }, [])
   const safeMachines = (machines || []).map((m: any) => {
     let st = m.state
@@ -260,6 +279,7 @@ export function MachinesPage({ machines, loading, fetchData }: any) {
     return { ...m, state: st || {} }
   })
   const fmtTime = (t: string) => { if (!t) return '--'; const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
+  const getCoords = (m: any) => { if (m.location_lat != null && m.location_lng != null) return { lat: m.location_lat, lng: m.location_lng }; return null; }
   // ─── Edit machine name + location (super_admin only) ───
   const role = getCookie('fl_role') || 'operator'
   const canEdit = role === 'super_admin'
@@ -305,54 +325,170 @@ export function MachinesPage({ machines, loading, fetchData }: any) {
     } catch (e: any) { alert('Error: ' + e.message) }
     setCmdSending(false)
   }
+
+  // Ownership is enriched server-side for super_admin only. For an operator
+  // every machine would read "unassigned" — which is not a fact about the
+  // fleet, it is a fact about their scope — so the whole notion is hidden
+  // rather than shown wrong.
+  const ownerKnown = safeMachines.some((m: any) => m.owner_id)
+  const counts = {
+    all: safeMachines.length,
+    online: safeMachines.filter(isOnline).length,
+    offline: safeMachines.filter((m: any) => !isOnline(m)).length,
+    unassigned: ownerKnown ? safeMachines.filter((m: any) => !m.owner_id).length : 0,
+  }
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let list = safeMachines.filter((m: any) => {
+      if (statusF === 'online' && !isOnline(m)) return false
+      if (statusF === 'offline' && isOnline(m)) return false
+      if (statusF === 'unassigned' && m.owner_id) return false
+      if (!q) return true
+      return (m.display_name || '').toLowerCase().includes(q) ||
+        (m.sn || '').toLowerCase().includes(q) ||
+        (m.location || '').toLowerCase().includes(q) ||
+        (m.owner_name || '').toLowerCase().includes(q)
+    })
+    const seen = (m: any) => m.last_seen ? new Date(m.last_seen).getTime() : 0
+    const stockPct = (m: any) => { const s = stockOf(stockData, m); return s?.stock_known ? s.stock_pct : 1e9 }
+    list = [...list].sort((a: any, b: any) => {
+      if (sortBy === 'name') return (a.display_name || '').localeCompare(b.display_name || '')
+      if (sortBy === 'seen') return seen(b) - seen(a)
+      if (sortBy === 'stock') return stockPct(a) - stockPct(b)
+      const r = rankOf(a, ownerKnown) - rankOf(b, ownerKnown)
+      return r !== 0 ? r : (a.display_name || '').localeCompare(b.display_name || '')
+    })
+    return list
+  }, [machines, search, statusF, sortBy, stockData, ownerKnown])
+
+  // A new filter should start at the top of its own list, not 300 rows deep.
+  useEffect(() => { setLimit(PAGE) }, [search, statusF, sortBy, grouped])
+
+  const shown = grouped ? visible : visible.slice(0, limit)
+
+  const chip = (key: typeof statusF, label: string, n: number, color: string) => {
+    const active = statusF === key
+    return (
+      <button key={key} onClick={() => setStatusF(key)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, cursor: 'pointer',
+          fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' as const,
+          background: active ? color + '18' : C.surface, color: active ? color : C.text2,
+          border: '1px solid ' + (active ? color + '60' : C.border),
+        }}>
+        {label}
+        <span style={{ fontSize: 11.5, fontWeight: 800, color: active ? color : C.text3 }}>{n}</span>
+      </button>
+    )
+  }
+
+  const listProps = {
+    wide, expandedId, setExpandedId, stockData, canEdit, openEdit, fmtTime, getCoords,
+    sendCommand, cmdMenu, setCmdMenu, cmdSending,
+  }
+
   return (
-    <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+    <div style={{ padding: wide ? '24px 28px' : '18px 14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Machine List</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>{safeMachines.length} machines · {safeMachines.filter((m: any) => m.status === 'online').length} online</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Machines</div>
+          <div style={{ fontSize: 13, color: C.text2 }}>{counts.all} machines · {counts.online} online · {counts.offline} offline</div>
         </div>
-        <button onClick={fetchData} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Refresh</button>
+        <button onClick={fetchData} style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 13, flexShrink: 0 }}>Refresh</button>
       </div>
-      <input
-        type="text" placeholder="🔍 Search by machine name or location..."
-        value={search} onChange={e => setSearch(e.target.value)}
-        style={{ width: '100%', padding: '10px 14px', fontSize: 14, border: '1px solid ' + C.border, borderRadius: 10, marginBottom: 18, boxSizing: 'border-box' as const, color: C.text, background: C.surface, outline: 'none' }}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+
+      {/* KPI strip — each card sets the status filter */}
+      <div style={{ display: 'grid', gridTemplateColumns: wide ? 'repeat(' + (ownerKnown ? 4 : 3) + ',1fr)' : '1fr 1fr', gap: 12, marginBottom: 14 }}>
         {[
-          { label: 'Total Machines', value: safeMachines.length, color: C.blue, icon: '🖥', pct: 100 },
-          { label: 'Online', value: safeMachines.filter((m: any) => m.status === 'online').length, color: C.green, icon: '📡', pct: safeMachines.length > 0 ? (safeMachines.filter((m: any) => m.status === 'online').length / safeMachines.length) * 100 : 0 },
-          { label: 'Offline', value: safeMachines.filter((m: any) => m.status !== 'online').length, color: C.red, icon: '📴', pct: safeMachines.length > 0 ? (safeMachines.filter((m: any) => m.status !== 'online').length / safeMachines.length) * 100 : 0 },
-        ].map(s => <StatCard key={s.label} {...s} sub="" />)}
+          { key: 'all' as const, label: 'Total', value: counts.all, color: C.blue, icon: '🖥', meter: 100 },
+          { key: 'online' as const, label: 'Online', value: counts.online, color: C.green, icon: '📡', meter: counts.all ? counts.online / counts.all * 100 : 0 },
+          { key: 'offline' as const, label: 'Offline', value: counts.offline, color: C.red, icon: '📴', meter: counts.all ? counts.offline / counts.all * 100 : 0, attention: counts.offline > 0 },
+          ...(ownerKnown ? [{ key: 'unassigned' as const, label: 'Unassigned', value: counts.unassigned, color: C.amber, icon: '🏷', meter: counts.all ? counts.unassigned / counts.all * 100 : 0, attention: counts.unassigned > 0 }] : []),
+        ].map(k => (
+          <div key={k.key} onClick={() => setStatusF(k.key)} role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setStatusF(k.key) }}
+            style={{ cursor: 'pointer', borderRadius: 12, outline: statusF === k.key ? '2px solid ' + k.color : 'none', outlineOffset: 1 }}>
+            <StatCard label={k.label} value={k.value} color={k.color} icon={k.icon} meter={k.meter} attention={(k as any).attention} sub={statusF === k.key ? 'Filtering by this' : ''} />
+          </div>
+        ))}
       </div>
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading machines...</div>
-      ) : (
-        <MachineGroupedList
-          machines={safeMachines}
-          search={search}
-          expandedId={expandedId}
-          setExpandedId={setExpandedId}
-          stockData={stockData}
-          role={role}
-          canEdit={canEdit}
-          openEdit={openEdit}
-          sendCommand={sendCommand}
-          cmdMenu={cmdMenu}
-          setCmdMenu={setCmdMenu}
-          cmdSending={cmdSending}
-          fmtTime={fmtTime}
-          getCoords={(m: any) => { if (m.location_lat != null && m.location_lng != null) return { lat: m.location_lat, lng: m.location_lng }; return null; }}
+
+      {/* Toolbar */}
+      <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 12, marginBottom: 14, display: 'flex', flexWrap: 'wrap' as const, gap: 10, alignItems: 'center' }}>
+        <input
+          type="text" placeholder="🔍 Search name, serial number or location…"
+          value={search} onChange={e => setSearch(e.target.value)}
+          style={{ flex: '1 1 240px', minWidth: 0, padding: '9px 12px', fontSize: 13.5, border: '1px solid ' + C.border, borderRadius: 9, boxSizing: 'border-box' as const, color: C.text, background: C.surface2, outline: 'none' }}
         />
-      )}
-      {/* Command History */}
-      <div style={{ marginTop: 24, background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid ' + C.border, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>📋 Recent Commands</div>
-          <div style={{ fontSize: 11, color: C.text3 }}>Auto-refreshes every 30s</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+          {chip('all', 'All', counts.all, C.blue)}
+          {chip('online', 'Online', counts.online, C.green)}
+          {chip('offline', 'Offline', counts.offline, C.red)}
+          {ownerKnown && chip('unassigned', 'Unassigned', counts.unassigned, C.amber)}
         </div>
-        <CommandHistory machines={safeMachines} />
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
+          style={{ padding: '8px 10px', fontSize: 12.5, fontWeight: 600, border: '1px solid ' + C.border, borderRadius: 9, background: C.surface, color: C.text, cursor: 'pointer' }}>
+          <option value="status">Sort: Status</option>
+          <option value="name">Sort: Name</option>
+          <option value="seen">Sort: Last seen</option>
+          <option value="stock">Sort: Stock (low first)</option>
+        </select>
+        <div style={{ display: 'flex', border: '1px solid ' + C.border, borderRadius: 9, overflow: 'hidden' }}>
+          {[[false, 'Flat list'], [true, 'Grouped by site']].map(([v, label]) => (
+            <button key={String(label)} onClick={() => setGrouped(v as boolean)}
+              style={{
+                padding: '8px 12px', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer',
+                background: grouped === v ? C.orangeBg : C.surface, color: grouped === v ? C.orange : C.text2,
+              }}>{label as string}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: wide ? 'grid' : 'block', gridTemplateColumns: wide ? 'minmax(0,1fr) 340px' : undefined, gap: 18, alignItems: 'start' }}>
+        <div style={{ minWidth: 0 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center' as const, padding: 60, color: C.text3 }}>Loading machines...</div>
+          ) : visible.length === 0 ? (
+            <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 40, textAlign: 'center' as const, color: C.text3, fontSize: 13.5 }}>
+              No machines match {search.trim() ? '“' + search.trim() + '”' : 'this filter'}.
+            </div>
+          ) : grouped ? (
+            <MachineGroupedList machines={shown} collapsed={collapsed} setCollapsed={setCollapsed} {...listProps} />
+          ) : wide ? (
+            <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 18px', background: C.surface2, fontSize: 10.5, fontWeight: 800, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                <div style={{ width: 78, flexShrink: 0 }}>Status</div>
+                <div style={{ width: 230, flexShrink: 0 }}>Machine</div>
+                <div style={{ flex: 1, minWidth: 0 }}>Location</div>
+                <div style={{ width: 140, flexShrink: 0 }}>Stock</div>
+                <div style={{ width: 78, flexShrink: 0, textAlign: 'right' as const }}>Last seen</div>
+                <div style={{ width: 12, flexShrink: 0 }} />
+              </div>
+              {shown.map((m: any) => <MachineRow key={m.id} m={m} {...listProps} />)}
+            </div>
+          ) : (
+            <div>{shown.map((m: any) => <MachineRow key={m.id} m={m} {...listProps} />)}</div>
+          )}
+
+          {!grouped && visible.length > shown.length && (
+            <button onClick={() => setLimit(l => l + PAGE)}
+              style={{ width: '100%', marginTop: 10, padding: '10px 0', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 12.5, fontWeight: 700, color: C.text2, cursor: 'pointer' }}>
+              Show {Math.min(PAGE, visible.length - shown.length)} more · {visible.length - shown.length} hidden
+            </button>
+          )}
+        </div>
+
+        {/* Command History — sticky rail on desktop, stacked below on mobile */}
+        <div style={{ position: wide ? 'sticky' : 'static', top: 16, marginTop: wide ? 0 : 18 }}>
+          <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid ' + C.border }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>📋 Recent Commands</div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>Auto-refreshes every 30s</div>
+            </div>
+            <CommandHistory machines={safeMachines} compact={wide} />
+          </div>
+        </div>
       </div>
 
       {editM && (
@@ -397,7 +533,7 @@ export function MachinesPage({ machines, loading, fetchData }: any) {
 }
 
 // ─── Command History (recent remote commands across all machines) ──────────
-export function CommandHistory({ machines }: { machines: any[] }) {
+export function CommandHistory({ machines, compact = false }: { machines: any[]; compact?: boolean }) {
   const [cmds, setCmds] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -430,10 +566,39 @@ export function CommandHistory({ machines }: { machines: any[] }) {
     const colors: Record<string, string> = { pending: '#F9A825', sent: '#58A6FF', executed: '#3FB950', failed: '#F85149' }
     return { background: (colors[status] || '#8B949E') + '22', color: colors[status] || '#8B949E', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, display: 'inline-block' }
   }
-  const cmdIcon: Record<string, string> = { reboot: '🔄', clear_fault: '🔧', sync_config: '📡', maintenance_on: '🚧', maintenance_off: '✅', run_cleaning: '🧹' }
+  const cmdIcon: Record<string, string> = { reboot: '🔄', reset_mcu: '⚡', clear_fault: '🔧', sync_config: '📡', maintenance_on: '🚧', maintenance_off: '✅', run_cleaning: '🧹' }
 
   if (loading && cmds.length === 0) return <div style={{ textAlign: 'center', padding: 20, color: C.text3, fontSize: 13 }}>Loading commands...</div>
   if (cmds.length === 0) return <div style={{ textAlign: 'center', padding: 20, color: C.text3, fontSize: 13 }}>No commands sent yet.</div>
+
+  // In the sticky rail the eight-column table would be a horizontal scrollbar
+  // 340px wide, so the same rows are stacked instead. Same data, same poll.
+  if (compact) {
+    return (
+      <div style={{ maxHeight: '62vh', overflowY: 'auto' as const }}>
+        {cmds.map((c: any, i: number) => (
+          <div key={c.id || i} style={{ padding: '10px 14px', borderBottom: i < cmds.length - 1 ? '1px solid ' + C.border : 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                {cmdIcon[c.command] || '⚡'} {c.command}
+              </span>
+              <span style={statusBadge(c.status)}>{c.status}</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: C.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+              {machineMap[c.machine_id] || '?'} · {fmtTime(c.created_at)}
+            </div>
+            {(c.result || c.created_by) && (
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                {c.result ? <span style={{ fontFamily: 'monospace' }}>{c.result}</span> : null}
+                {c.result && c.created_by ? ' · ' : ''}
+                {c.created_by || ''}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
