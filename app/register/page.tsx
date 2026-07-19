@@ -1,11 +1,20 @@
 'use client';
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+// See app/orders/page.tsx — createClient at module scope with an unset env var
+// throws during prerender and takes `next build` down with it. Built on demand
+// from the click handler instead.
+let _sb: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+  if (!_sb) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) throw new Error('Supabase is not configured — NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are unset.');
+    _sb = createClient(url, key);
+  }
+  return _sb;
+}
 
 function validatePassword(password: string) {
   if (password.length < 8) return 'Password must be at least 8 characters';
@@ -34,15 +43,20 @@ export default function Register() {
     setLoading(true);
     setError('');
 
-    const { data: existing } = await supabase.from('operators').select('id').eq('email', email).single();
-    if (existing) { setError('Email already registered'); setLoading(false); return; }
+    try {
+      const supabase = getSupabase();
+      const { data: existing } = await supabase.from('operators').select('id').eq('email', email).single();
+      if (existing) { setError('Email already registered'); setLoading(false); return; }
 
-    const { error: err } = await supabase.from('operators').insert({
-      name, email, password_hash: password, phone,
-    });
+      const { error: err } = await supabase.from('operators').insert({
+        name, email, password_hash: password, phone,
+      });
 
-    if (err) { setError('Registration failed: ' + err.message); setLoading(false); return; }
-    setSuccess(true);
+      if (err) { setError('Registration failed: ' + err.message); setLoading(false); return; }
+      setSuccess(true);
+    } catch (e: any) {
+      setError('Registration failed: ' + (e?.message || 'error'));
+    }
     setLoading(false);
   }
 

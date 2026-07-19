@@ -1,11 +1,24 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+// createClient throws on an empty URL, and at module scope that turned a missing
+// env var into a build failure: `next build` prerenders this page, evaluates the
+// module, and exits 1 on "supabaseUrl is required" before a line of the
+// component runs. The `|| ''` fallback did not soften that - it caused it.
+//
+// Built on demand instead, from the browser-only fetch path, so an unset env var
+// is a message on the page rather than a dead build.
+let _sb: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+  if (!_sb) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) throw new Error('Supabase is not configured — NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are unset.');
+    _sb = createClient(url, key);
+  }
+  return _sb;
+}
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -14,29 +27,37 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [err, setErr] = useState('');
 
   useEffect(() => { fetchOrders(); }, [filter, status]);
 
   async function fetchOrders() {
     setLoading(true);
-    const { data: machine } = await supabase.from('machines').select('id').eq('sn', 'C3B31F38D1C07A76').single();
-    if (!machine) { setLoading(false); return; }
+    setErr('');
+    try {
+      const supabase = getSupabase();
+      const { data: machine } = await supabase.from('machines').select('id').eq('sn', 'C3B31F38D1C07A76').single();
+      if (!machine) { setLoading(false); return; }
 
-    let from = new Date();
-    if (filter === 'today') { from.setHours(0, 0, 0, 0); }
-    else if (filter === 'week') { from.setDate(from.getDate() - 7); }
-    else if (filter === 'month') { from.setMonth(from.getMonth() - 1); }
+      let from = new Date();
+      if (filter === 'today') { from.setHours(0, 0, 0, 0); }
+      else if (filter === 'week') { from.setDate(from.getDate() - 7); }
+      else if (filter === 'month') { from.setMonth(from.getMonth() - 1); }
 
-    let query = supabase.from('orders').select('*').eq('machine_id', machine.id).gte('created_at', from.toISOString()).order('created_at', { ascending: false });
+      let query = supabase.from('orders').select('*').eq('machine_id', machine.id).gte('created_at', from.toISOString()).order('created_at', { ascending: false });
 
-    if (status === 'paid') query = query.eq('pay_state', 1);
-    if (status === 'pending') query = query.eq('pay_state', 0);
+      if (status === 'paid') query = query.eq('pay_state', 1);
+      if (status === 'pending') query = query.eq('pay_state', 0);
 
-    const { data } = await query;
-    if (data) {
-      setOrders(data);
-      setTotalCount(data.length);
-      setTotalRevenue(data.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100);
+      const { data } = await query;
+      if (data) {
+        setOrders(data);
+        setTotalCount(data.length);
+        setTotalRevenue(data.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100);
+      }
+    } catch (e: any) {
+      // An empty table here used to be indistinguishable from a quiet day.
+      setErr(e?.message || 'Could not load orders.');
     }
     setLoading(false);
   }
@@ -109,6 +130,8 @@ export default function Orders() {
           </div>
           {loading ? (
             <div className="py-8 text-center text-gray-400 text-sm">Loading...</div>
+          ) : err ? (
+            <div className="py-8 text-center text-red-600 text-sm">{err}</div>
           ) : (
             <table className="w-full text-xs">
               <thead>
