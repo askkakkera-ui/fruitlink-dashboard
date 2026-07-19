@@ -6,8 +6,8 @@ import { logAudit } from '@/lib/audit';
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
 
-// Tables only a super_admin may WRITE to (POST/PATCH/DELETE).
-const SUPER_ADMIN_WRITE_TABLES = ['operators', 'machines', 'machine_operators'];
+// Write permissions now live in WRITE_RULES below (deny-by-default allowlist);
+// operators/machines/machine_operators stay super_admin-only there.
 const SOFT_DELETE_TABLES = ['operators'];
 // Tables the browser-facing proxy must NEVER touch, for any role or method.
 // machine_credentials holds device signing secrets: service-side only.
@@ -196,8 +196,69 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Shared write guard: logged in; sensitive tables need super_admin.
-const FIELD_STAFF_WRITE_TABLES = ['visits'];
+// ── Write scoping model ───────────────────────────────────────────────
+// Deny-by-default, mirroring scopeGetPath's allowlist posture. Before this,
+// GET was allowlisted but WRITE was not: any authenticated operator /
+// sub_operator / staff could POST/PATCH/DELETE any table by arbitrary id,
+// including operator_permissions (self-grant -> privilege escalation at next
+// login). A table absent from WRITE_RULES cannot be written here by anyone.
+//
+// Derived from the writes the dashboard actually performs today - see
+// FIX2_sb_write_guard.md for the enumeration. Adding a table here opens a
+// write surface: do it only alongside a row-scope rule.
+type WriteRule = {
+  methods: string[];         // methods permitted on this table
+  roles: string[];           // roles permitted; everything else 403s
+  allowUnfiltered?: boolean; // may PATCH/DELETE without targeting specific rows
+};
+
+const WRITE_RULES: Record<string, WriteRule> = {
+  // Tenancy and fleet administration: super_admin only (unchanged).
+  // OperatorsPage Add/Edit/Del + MyStaffSection, MachinesPage edit,
+  // SettingsPage machine `state` writes, OperatorsPage machine assignment.
+  operators: { methods: ['POST', 'PATCH', 'DELETE'], roles: ['super_admin'] },
+  machines: { methods: ['POST', 'PATCH', 'DELETE'], roles: ['super_admin'] },
+  machine_operators: { methods: ['POST', 'PATCH', 'DELETE'], roles: ['super_admin'] },
+  // Ad campaigns: row scope enforced by the AD_OWNED_TABLES branch below
+  // (ownership check, SN validation, forced operator_id, no self-approval).
+  ad_campaign: { methods: ['POST', 'PATCH', 'DELETE'], roles: ['super_admin', 'operator', 'sub_operator'] },
+  // Loyalty is keyed by customer phone and has NO tenant column, so it cannot
+  // be row-scoped without a schema change. Kept writable by the roles that
+  // write it today (LoyaltyPage is reachable via can_view_console) and treated
+  // as a deliberately shared, fleet-global table. No DELETE: the page has no
+  // delete action, and an unfiltered one would empty it.
+  loyalty: { methods: ['POST', 'PATCH'], roles: ['super_admin', 'staff', 'operator', 'sub_operator'] },
+  // Danger Zone "Clear All Alerts" is an intentional whole-table purge, so it
+  // is the one write exempt from the row-filter rule - and now super_admin
+  // only. The UI already only offered it to super_admin; the server did not.
+  alerts: { methods: ['PATCH', 'DELETE'], roles: ['super_admin'], allowUnfiltered: true },
+  // Legacy: no caller in the tree (visits go through /api/visit). Kept for any
+  // untracked client, with staff_id stamped so one person cannot file another's.
+  visits: { methods: ['POST'], roles: ['super_admin', 'field_staff'] },
+};
+
+// Never writable through this browser-facing proxy, by ANY role.
+// operator_permissions is the privilege-escalation table: the only sanctioned
+// path is /api/operator-permissions, which enforces the escalation ceiling
+// (an operator cannot grant a permission they do not hold) and restricts the
+// target to their own team. A write here would bypass both.
+// ad_campaign_performance is system-written telemetry, read-only to everyone.
+const WRITE_FORBIDDEN_TABLES = ['operator_permissions', 'ad_campaign_performance'];
+
+// Does this path target specific rows, or the whole table? PostgREST treats a
+// filterless PATCH/DELETE as "every row", so an unscoped one is a table wipe.
+const PGRST_OPS = /^(eq|neq|gt|gte|lt|lte|like|ilike|match|imatch|in|is|isdistinct|fts|plfts|phfts|wfts|cs|cd|ov|sl|sr|nxr|nxl|adj|not)\./;
+function hasRowFilter(path: string): boolean {
+  const q = path.indexOf('?');
+  if (q === -1) return false;
+  const params = new URLSearchParams(path.slice(q + 1));
+  for (const [key, value] of params.entries()) {
+    if (key === 'or' || key === 'and') return true;
+    if (['select', 'order', 'limit', 'offset', 'columns', 'on_conflict'].includes(key)) continue;
+    if (PGRST_OPS.test(value)) return true;
+  }
+  return false;
+}
 
 // Resolve the SNs (not ids) a given operator is allowed to target, for ad
 // machine_sns validation. Joins machine_operators -> machines.sn server-side.
@@ -232,15 +293,42 @@ async function guardWrite(request: NextRequest, method: string) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const rawPath = pathParam(request);
   const table = tableOf(rawPath);
+  const role = String(session.role || '');
+
+  // ── Allowlist gate: table, method, role. Deny-by-default. ──
+  // Runs before every table-specific rule below, so nothing reaches PostgREST
+  // without first matching an explicit rule.
+  if (!table) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (PROXY_FORBIDDEN_TABLES.includes(table)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (WRITE_FORBIDDEN_TABLES.includes(table)) {
+    return NextResponse.json({ error: 'Forbidden: not writable through this proxy' }, { status: 403 });
+  }
+  const rule = WRITE_RULES[table];
+  if (!rule) return NextResponse.json({ error: 'Forbidden: table not writable' }, { status: 403 });
+  if (!rule.methods.includes(method)) {
+    return NextResponse.json({ error: 'Forbidden: method not allowed on ' + table }, { status: 403 });
+  }
+  if (!rule.roles.includes(role)) {
+    return NextResponse.json({ error: 'Forbidden: your role may not write ' + table }, { status: 403 });
+  }
+  // A filterless PATCH/DELETE hits every row. Only `alerts` opts into that.
+  if ((method === 'PATCH' || method === 'DELETE') && !rule.allowUnfiltered && !hasRowFilter(rawPath)) {
+    return NextResponse.json({ error: 'Forbidden: ' + method + ' must target specific rows' }, { status: 403 });
+  }
+
+  // ── visits: stamp the author, so a session cannot file someone else's visit ──
+  if (table === 'visits' && method === 'POST') {
+    let body: any = {};
+    try { body = JSON.parse(await request.clone().text() || '{}'); } catch { body = {}; }
+    const stamp = (r: any) => ({ ...r, staff_id: String(session.sub || '') });
+    const stamped = Array.isArray(body) ? body.map(stamp) : stamp(body);
+    return { rewriteBody: JSON.stringify(stamped) } as any;
+  }
 
   // ── Ad campaigns: operator-scoped writes (super_admin unrestricted) ──
-  if (PROXY_FORBIDDEN_TABLES.includes(table)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  if (AD_OWNED_TABLES.includes(table) && session.role !== 'super_admin') {
+  if (AD_OWNED_TABLES.includes(table) && role !== 'super_admin') {
     // Only operators / sub_operators with the can_manage_ads permission.
-    const role = session.role;
-    if (role !== 'operator' && role !== 'sub_operator') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // (The allowlist has already refused every other non-super_admin role.)
     const perms = session.permissions || {};
     if (perms.can_manage_ads !== true) {
       return NextResponse.json({ error: 'Forbidden: ad management not permitted' }, { status: 403 });
@@ -250,11 +338,6 @@ async function guardWrite(request: NextRequest, method: string) {
       ? String(session.owner_id || session.parent_id || '')
       : String(session.sub || '');
     if (!ownerOpId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
-    // ad_campaign_performance is read-only for operators (written by the system).
-    if (table === 'ad_campaign_performance') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
     // On edit/delete: the target campaign must belong to this operator.
     if (method === 'PATCH' || method === 'DELETE') {
@@ -290,15 +373,9 @@ async function guardWrite(request: NextRequest, method: string) {
     return null;
   }
 
-  // ── Existing rules ──
-  if (SUPER_ADMIN_WRITE_TABLES.includes(table) && session.role !== 'super_admin') {
-    return NextResponse.json({ error: 'Forbidden: super admin only' }, { status: 403 });
-  }
-  if (session.role === 'field_staff') {
-    if (method !== 'POST' || !FIELD_STAFF_WRITE_TABLES.includes(table)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-  }
+  // The allowlist above already enforced what the old trailing rules did:
+  // operators/machines/machine_operators are super_admin-only via WRITE_RULES,
+  // and field_staff appears in no rule except visits POST.
   return null;
 }
 
