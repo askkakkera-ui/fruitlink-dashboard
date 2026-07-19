@@ -552,8 +552,8 @@ export function OperatorsPage({ myId }: any) {
     setDelOp(null); fetchOperators()
   }
 
-  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue, sub_operator: '#0891b2', field_staff: C.orange }
-  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg, sub_operator: '#e0f7fa', field_staff: '#fff3ea' }
+  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue, staff: '#d97706', sub_operator: '#0891b2', field_staff: C.orange }
+  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg, staff: '#fff7ed', sub_operator: '#e0f7fa', field_staff: '#fff3ea' }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -571,6 +571,7 @@ export function OperatorsPage({ myId }: any) {
         {[
           { label: 'Total Operators', value: operators.length, color: C.blue, icon: '👥' },
           { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: '#7c3aed', icon: '👑' },
+          { label: 'Fruitlink Staff', value: operators.filter(o => o.role === 'staff').length, color: '#d97706', icon: '🏢' },
           { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.green, icon: '🧑‍💼' },
           { label: 'Sub-Operators', value: operators.filter(o => o.role === 'sub_operator').length, color: '#0891b2', icon: '🧑‍💻' },
           { label: 'Field Staff', value: operators.filter(o => o.role === 'field_staff').length, color: C.orange, icon: '👷' },
@@ -613,7 +614,7 @@ export function OperatorsPage({ myId }: any) {
                   <td style={{ padding: '13px 16px', color: C.text }}>{op.email}</td>
                   <td style={{ padding: '13px 16px' }}>
                     <Pill color={ROLE_COLOR[op.role] || C.text2} bg={ROLE_BG[op.role] || C.surface2}>
-                      {op.role === 'super_admin' ? '👑 Super Admin' : op.role === 'field_staff' ? '👷 Field Staff' : op.role === 'sub_operator' ? '🧑‍💼 Sub-Operator' : '🧑‍💼 Operator'}
+                      {op.role === 'super_admin' ? '👑 Super Admin' : op.role === 'staff' ? '🏢 Fruitlink Staff' : op.role === 'field_staff' ? '👷 Field Staff' : op.role === 'sub_operator' ? '🧑‍💼 Sub-Operator' : '🧑‍💼 Operator'}
                     </Pill>
                   </td>
                   <td style={{ padding: '13px 16px' }}>
@@ -664,6 +665,7 @@ export function OperatorsPage({ myId }: any) {
                   <option value="operator">Operator</option>
                   <option value="sub_operator">Sub-Operator</option>
                   <option value="field_staff">Field Staff</option>
+                  <option value="staff">Fruitlink Staff</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
