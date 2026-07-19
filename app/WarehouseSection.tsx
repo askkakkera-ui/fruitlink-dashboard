@@ -155,7 +155,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
           ? [['onhand', 'On hand'], ['log', 'Movement log']]
           : isSuper
           ? [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]
-          : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['sale', 'Sale'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][]).map(([k, l]) => (
+          : [['onhand', 'On hand'], ['receive', 'Receive'], ['dispatch', 'Dispatch'], ['damage', 'Damage'], ['log', 'Movement log']]) as [string, string][]).map(([k, l]) => (
           <button key={k} onClick={() => { setTab(k as any); setErr(''); setMsg(''); }}
             style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid ' + (tab === k ? C.orange : C.border), background: tab === k ? C.orange : C.surface, color: tab === k ? '#fff' : C.text2, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
         ))}
@@ -238,7 +238,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
         </div>
       )}
 
-      {!loading && tab === 'sale' && (
+      {!loading && tab === 'sale' && isSuper && (
         <div style={{ ...card, maxWidth: 560 }}>
           <div style={cardTitle}>Sell stock to an operator or buyer</div>
           <label style={lbl}>Item</label>
@@ -322,7 +322,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
           {/* Desktop: table */}
           {!isMobile && movements.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
-              <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>By</th><th style={th}>Note</th><th style={th}>Challan</th></tr></thead>
+              <thead><tr><th style={th}>When</th><th style={th}>Type</th><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>Qty</th><th style={th}>Machine</th><th style={th}>By</th><th style={th}>Note</th>{isSuper && <th style={th}>Challan</th>}</tr></thead>
               <tbody>
                 {movements.map(m => {
                   const it = itemById(m.item_id); const mac = machines.find(x => x.id === m.machine_id);
@@ -337,11 +337,11 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                       <td style={{ ...td, color: C.text2 }}>{mac ? machineLabel(mac) : '—'}</td>
                       <td style={{ ...td, color: C.text2 }}>{m.created_by_name || '—'}</td>
                       <td style={{ ...td, color: C.text2 }}>{m.note || '—'}</td>
-                      <td style={td}>{m.movement_type === 'sale' && m.challan_no
+                      {isSuper && <td style={td}>{m.movement_type === 'sale' && m.challan_no
                         ? <a href={'/api/challan?sale_id=' + m.id} target="_blank" rel="noreferrer"
                             style={{ color: C.blue, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
                             title={m.challan_no}>📄 Challan</a>
-                        : '—'}</td>
+                        : '—'}</td>}
                     </tr>
                   );
                 })}
@@ -376,7 +376,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                       <span style={{ color: C.text3 }}>By</span>
                       <span style={{ color: C.text2, textAlign: 'right' }}>{m.created_by_name || '—'}</span>
                       {m.note && <><span style={{ color: C.text3 }}>Note</span><span style={{ color: C.text2, textAlign: 'right' }}>{m.note}</span></>}
-                      {m.movement_type === 'sale' && m.challan_no && <><span style={{ color: C.text3 }}>Challan</span><span style={{ textAlign: 'right' }}><a href={'/api/challan?sale_id=' + m.id} target="_blank" rel="noreferrer" style={{ color: C.blue, fontWeight: 700, textDecoration: 'none' }}>📄 {m.challan_no}</a></span></>}
+                      {isSuper && m.movement_type === 'sale' && m.challan_no && <><span style={{ color: C.text3 }}>Challan</span><span style={{ textAlign: 'right' }}><a href={'/api/challan?sale_id=' + m.id} target="_blank" rel="noreferrer" style={{ color: C.blue, fontWeight: 700, textDecoration: 'none' }}>📄 {m.challan_no}</a></span></>}
                     </div>
                   </div>
                 </div>
