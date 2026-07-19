@@ -1,14 +1,16 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { C, SB_URL, SB_KEY, getCookie, currencySymbol, machineCurrency } from './lib/dashboard-shared'
+import { C, SB_URL, SB_KEY, getCookie, currencySymbol, machineCurrency, useCountryCurrencies } from './lib/dashboard-shared'
 
 export function MachineConfigSection({ role, SB_URL, SB_KEY, showSaved, showErr, saving, setSaving, saved }: any) {
   const canEdit = role === 'super_admin'
   const [machines, setMachines] = useState<any[]>([])
   const [config, setConfig] = useState<Record<string, any>>({})
+  // country -> currency, cached module-side and shared with every other caller.
+  const countries = useCountryCurrencies()
 
   useEffect(() => {
-    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location,state'), {
+    fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name,sn,status,location,state,country_code'), {
       headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
     }).then(r => r.json()).then(d => {
       if (Array.isArray(d)) {
@@ -88,17 +90,17 @@ export function MachineConfigSection({ role, SB_URL, SB_KEY, showSaved, showErr,
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            {/* Prices are per machine, so the symbol is the machine's, from its
-                country. This page does not load `countries`, so machineCurrency
-                returns INR — right for every machine while all are country_code
-                'IN'. Pass a country -> currency map here to make it real. */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 10 }}>Cup Pricing ({currencySymbol(machineCurrency(m))})</div>
+            {/* Prices are per machine, so the symbol is the machine's, resolved
+                from country_code through the countries table. Every machine is
+                'IN' today, so this reads ₹ throughout; a machine set to 'ZA'
+                shows R here and nowhere else. */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 10 }}>Cup Pricing ({currencySymbol(machineCurrency(m, countries))})</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
               {[['200ml', 'price_200ml'], ['250ml', 'price_250ml'], ['300ml', 'price_300ml']].map(([label, key]) => (
                 <div key={key}>
                   <label style={{ display: 'block', fontSize: 11, color: C.text2, marginBottom: 4, fontWeight: 600 }}>{label}</label>
                   <div style={{ position: 'relative' as const }}>
-                    <span style={{ position: 'absolute' as const, left: 9, top: 9, fontSize: 12, color: C.text3, fontWeight: 600 }}>{currencySymbol(machineCurrency(m))}</span>
+                    <span style={{ position: 'absolute' as const, left: 9, top: 9, fontSize: 12, color: C.text3, fontWeight: 600 }}>{currencySymbol(machineCurrency(m, countries))}</span>
                     <input type="number" value={config[m.id]?.[key] ?? ''} disabled={!canEdit} onChange={e => setConfig({ ...config, [m.id]: { ...config[m.id], [key]: +e.target.value } })}
                       style={{ width: '100%', padding: '8px 8px 8px 22px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 13, outline: 'none', color: C.text, background: canEdit ? C.surface : C.surface2, cursor: canEdit ? 'text' : 'not-allowed', boxSizing: 'border-box' as const }} />
                   </div>

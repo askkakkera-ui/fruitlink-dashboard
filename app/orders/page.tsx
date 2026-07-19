@@ -29,6 +29,12 @@ export default function Orders() {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [err, setErr] = useState('');
+  // The currency the totals below are denominated in. This page is one machine's
+  // orders, so the rows themselves are the authority and no countries lookup is
+  // needed — it talks to Supabase directly with the anon key rather than through
+  // the /api/sb proxy. Mixed currencies cannot happen for one machine; if they
+  // ever appear, summing them is meaningless, so fall back rather than pick one.
+  const [totalCur, setTotalCur] = useState('INR');
 
   useEffect(() => { fetchOrders(); }, [filter, status]);
 
@@ -55,6 +61,8 @@ export default function Orders() {
         setOrders(data);
         setTotalCount(data.length);
         setTotalRevenue(data.reduce((s, o) => s + (o.amount_paise || 0), 0) / 100);
+        const curs = Array.from(new Set(data.map((o: any) => o.currency || 'INR')));
+        setTotalCur(curs.length === 1 ? String(curs[0]) : 'INR');
       }
     } catch (e: any) {
       // An empty table here used to be indistinguishable from a quiet day.
@@ -114,16 +122,15 @@ export default function Orders() {
             <div className="text-xs text-gray-500 mb-1">Total orders</div>
             <div className="text-2xl font-medium">{totalCount}</div>
           </div>
-          {/* Totals over one machine's orders, so one currency by construction —
-              but the machine's currency is not loaded here, and totalRevenue is
-              already summed in major units. INR until countries is read. */}
+          {/* totalRevenue is already summed in major units, so it goes back to
+              minor units for formatMoney. */}
           <div className="bg-white rounded-xl p-4 border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">Total revenue</div>
-            <div className="text-2xl font-medium">{formatMoney(totalRevenue * 100, 'INR', { maxDigits: 0 })}</div>
+            <div className="text-2xl font-medium">{formatMoney(totalRevenue * 100, totalCur, { maxDigits: 0 })}</div>
           </div>
           <div className="bg-white rounded-xl p-4 border border-gray-200">
             <div className="text-xs text-gray-500 mb-1">Avg per order</div>
-            <div className="text-2xl font-medium">{formatMoney(totalCount > 0 ? (totalRevenue / totalCount) * 100 : 0, 'INR', { maxDigits: 0 })}</div>
+            <div className="text-2xl font-medium">{formatMoney(totalCount > 0 ? (totalRevenue / totalCount) * 100 : 0, totalCur, { maxDigits: 0 })}</div>
           </div>
         </div>
 

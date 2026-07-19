@@ -104,6 +104,10 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   // no per-sale currency column. Rate is typed in major units, so it is scaled
   // to minor units for formatMoney, which always shows two decimals here.
   //
+  // A second selling entity would sell in its own currency and be invoiced in
+  // it — the currency follows the entity making the sale, and is never restated
+  // into a base currency. A challan has to match the buyer's bank statement.
+  //
   // The old preview passed only minimumFractionDigits, so it inherited Intl's
   // default maximum of 3 and could read ₹12,34,567.891 for a rate typed to three
   // decimals — while POST /api/warehouse stores Math.round(rate * boxes * 100) /

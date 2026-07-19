@@ -190,8 +190,14 @@ export function AdsPage({ machines, permissions = {}, role: roleProp = '', opera
   const fmtK = (n: number) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '' + n
   // Campaign revenue and CPM rates are entered and stored in major units, so
   // they are scaled to minor units for formatMoney. Advertisers are billed in
-  // one currency per account; there is no per-campaign currency column yet, so
-  // this is the house currency and INR is the only one that exists today.
+  // one currency per account and there is no per-campaign currency column yet,
+  // so this is the house currency — INR is the only one that exists today.
+  //
+  // When campaigns do gain a currency, each campaign keeps its own and this
+  // page's totals split per currency like the Orders rollup does (MoneyBag in
+  // dashboard-shared). A ZAR advertiser's spend is never restated in rupees:
+  // there is no FX rate here and adding one would make every historical figure
+  // depend on the day it was rendered.
   const scopeCur = 'INR'
   const fmtAmt = (n: number) => formatMoney(Math.round(n) * 100, scopeCur, { maxDigits: 0 })
   const hh = (h: number) => String(h).padStart(2, '0') + ':00'

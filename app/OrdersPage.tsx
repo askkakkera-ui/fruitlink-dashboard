@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { C, SB_KEY, FL_LOGO, Pill, StatCard, sbFetchAll, netPaise, useIsMobile, formatMoney, currencySymbol } from './lib/dashboard-shared'
+import { C, SB_KEY, FL_LOGO, Pill, StatCard, sbFetchAll, netPaise, useIsMobile, formatMoney, formatMoneyBag, currencySymbol, addToBag, currenciesIn, soleCurrency, type MoneyBag } from './lib/dashboard-shared'
 
 // ─── Searchable machine picker ───────────────────────────────────────
 // Defined outside OrdersPage: a component declared inside the render body is a
@@ -160,11 +160,12 @@ export function OrdersPage() {
 
   const getMachine = (id: string) => machines.find((m: any) => (m.machine_id || m.id) === id) || {} as any
   // Whole units, ungrouped — the format this page has always shown.
-  const fmtAmt = (p: number, cur = 'INR') => formatMoney(p, cur, { maxDigits: 0, grouping: false })
-  // The currency of the page's aggregates. Every order in scope is INR today.
-  // Once machines exist outside India this must come from the selected machine's
-  // country (and a mixed-country "all machines" total stops being one number).
-  const scopeCur = 'INR'
+  const FMT = { maxDigits: 0, grouping: false } as const
+  const fmtAmt = (p: number, cur = 'INR') => formatMoney(p, cur, FMT)
+  // A total that may span currencies renders as one figure per currency
+  // ('₹5,270 · R450'), never as a sum. With one currency in scope — every scope
+  // today — this is character-for-character what fmtAmt produced.
+  const fmtBag = (bag: MoneyBag) => formatMoneyBag(bag, FMT)
   const fmtTime = (t: string) => new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   const fmtAgo = (t: string) => { const m = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (m < 60) return m + 'm ago'; if (m < 1440) return Math.floor(m/60) + 'h ago'; return Math.floor(m/1440) + 'd ago' }
 
@@ -200,35 +201,75 @@ export function OrdersPage() {
   })
 
   const paidOrders = periodOrders.filter((o: any) => o.pay_state === 1)
-  const totalRevenue = paidOrders.reduce((s: number, o: any) => s + netPaise(o), 0)
-  const grossRevenue = paidOrders.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0)
-  const refundedPaise = grossRevenue - totalRevenue
+
+  // ── Revenue, per currency, never across ──────────────────────────
+  // "All machines" is a fleet total, and a fleet can straddle countries. Money
+  // is therefore accumulated into a bag keyed by the order's own currency: an
+  // INR order and a ZAR order can never land in the same accumulator, so there
+  // is no place a conversion could hide. See MoneyBag in dashboard-shared.
+  const netBag: MoneyBag = {}
+  const grossBag: MoneyBag = {}
+  const paidCountByCur: Record<string, number> = {}
+  paidOrders.forEach((o: any) => {
+    const c = o.currency || 'INR'
+    addToBag(netBag, c, netPaise(o))
+    addToBag(grossBag, c, o.amount_paise || 0)
+    paidCountByCur[c] = (paidCountByCur[c] || 0) + 1
+  })
+  const refundBag: MoneyBag = {}
+  Object.keys(grossBag).forEach(c => { const r = grossBag[c] - (netBag[c] || 0); if (r > 0) refundBag[c] = r })
+  const avgBag: MoneyBag = {}
+  Object.keys(netBag).forEach(c => { if (paidCountByCur[c]) avgBag[c] = netBag[c] / paidCountByCur[c] })
+
+  // Ratios, rankings and bar heights compare magnitudes, and magnitudes across
+  // currencies do not compare. They are therefore all measured inside one
+  // currency: the heaviest in scope, which is the only currency in scope today.
+  // Rows in other currencies keep their own amounts and simply carry no share.
+  const scopeCurs = currenciesIn(netBag)
+  const mixedCurs = scopeCurs.length > 1
+  const viewCur = scopeCurs[0] || 'INR'
+  const totalRevenue = netBag[viewCur] || 0
+  const grossRevenue = grossBag[viewCur] || 0
+  const refundedPaise = refundBag[viewCur] || 0
+
   const totalCups = paidOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
-  const avgOrder = paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0
   const convRate = periodOrders.length > 0 ? (paidOrders.length / periodOrders.length * 100) : 0
   const periodLabel = period === 'today' ? 'today' : period === 'week' ? 'last 7 days' : period === 'custom' ? customFrom + ' to ' + customTo : 'last 30 days'
 
-  // Revenue per machine
+  // Revenue per machine. Each row carries a bag, not a number — a machine sits
+  // in exactly one country so its bag holds one currency, but building it this
+  // way means the site rollup below cannot silently add two of them together.
+  // `revenue` is the row's total in the view currency and exists only so rows
+  // can be ranked against each other; rows in another currency rank at 0 and
+  // are sorted after, never interleaved by raw magnitude.
   const machineRevenue = scopedMachines.map((m: any) => {
     const mOrders = paidOrders.filter((o: any) => o.machine_id === m.id)
-    const rev = mOrders.reduce((s: number, o: any) => s + netPaise(o), 0)
+    const bag: MoneyBag = {}
+    mOrders.forEach((o: any) => addToBag(bag, o.currency, netPaise(o)))
     const cups = mOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
-    return { ...m, revenue: rev, cups, orders: mOrders.length }
+    return { ...m, bag, revenue: bag[viewCur] || 0, cups, orders: mOrders.length }
   }).sort((a: any, b: any) => b.revenue - a.revenue)
 
-  // Roll the same numbers up per location for the "By site" view.
+  // Roll the same numbers up per location for the "By site" view. A site is a
+  // location, and one location is one country, but the bags are merged per
+  // currency regardless so a shared-name site spanning borders reports
+  // "₹X · RY" rather than a meaningless single figure.
   const siteRevenue = (() => {
-    const bag: any = {}
+    const acc: any = {}
     machineRevenue.forEach((m: any) => {
       const key = (m.location || '').trim() || 'Unassigned'
-      if (!bag[key]) bag[key] = { id: 'site:' + key, display_name: key, sn: '', location: key, revenue: 0, cups: 0, orders: 0, machines: 0 }
-      bag[key].revenue += m.revenue; bag[key].cups += m.cups; bag[key].orders += m.orders; bag[key].machines++
+      if (!acc[key]) acc[key] = { id: 'site:' + key, display_name: key, sn: '', location: key, bag: {} as MoneyBag, revenue: 0, cups: 0, orders: 0, machines: 0 }
+      Object.keys(m.bag).forEach(c => addToBag(acc[key].bag, c, m.bag[c]))
+      acc[key].cups += m.cups; acc[key].orders += m.orders; acc[key].machines++
     })
-    return Object.values(bag).sort((a: any, b: any) => b.revenue - a.revenue) as any[]
+    Object.values(acc).forEach((r: any) => { r.revenue = r.bag[viewCur] || 0 })
+    return Object.values(acc).sort((a: any, b: any) => b.revenue - a.revenue) as any[]
   })()
 
   // Concentration is measured on the full ranked list, never the filtered view —
   // "top machine = 94% of revenue" must not change because someone typed a search.
+  // Both shares are shares of the view currency's revenue only; a fleet spanning
+  // currencies gets one concentration reading per currency, not a blended one.
   const concRows = mrMode === 'site' ? siteRevenue : machineRevenue
   const topShare = totalRevenue > 0 && concRows.length > 0 ? (concRows[0].revenue / totalRevenue * 100) : 0
   const top5Share = totalRevenue > 0 ? (concRows.slice(0, 5).reduce((s: number, r: any) => s + r.revenue, 0) / totalRevenue * 100) : 0
@@ -245,9 +286,15 @@ export function OrdersPage() {
   const rangeEnd = period === 'custom' ? new Date(customTo + 'T00:00:00+05:30') : istToday
   const dayCount = Math.min(Math.max(Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1, 1), 120)
   const days = Array.from({ length: dayCount }, (_, i) => istKey(new Date(rangeStart.getTime() + i * 86400000)))
+  // A bar's height is a magnitude, so each day is measured in the view currency
+  // alone. The tooltip still shows the day's full bag, so money in another
+  // currency is disclosed rather than dropped — it is simply not drawn to a
+  // scale it does not share.
   const dailyData = days.map(day => {
     const dayOrders = scopedOrders.filter((o: any) => istKey(o.created_at) === day && o.pay_state === 1)
-    return { key: day, day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), short: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }), revenue: dayOrders.reduce((s: number, o: any) => s + netPaise(o), 0), cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
+    const bag: MoneyBag = {}
+    dayOrders.forEach((o: any) => addToBag(bag, o.currency, netPaise(o)))
+    return { key: day, day: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' }), short: new Date(day + 'T00:00:00+05:30').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }), bag, revenue: bag[viewCur] || 0, cups: dayOrders.reduce((s: number, o: any) => s + (o.cup_num || 1), 0) }
   })
   const maxRev = Math.max(...dailyData.map(d => d.revenue), 1)
   const dense = dayCount > 14
@@ -324,11 +371,16 @@ const filtered = scopedOrders.filter((o: any) => {
     try {
       const rows = await fetchRange()
       if (rows.length === 0) { alert('No orders returned for that range.'); setExporting(''); return }
-      const head = ['Order Code', 'Machine', 'Location', 'Amount (INR)', 'Payment', 'Delivery', 'Cups', 'Created (IST)', 'Paid (IST)', 'Delivered (IST)', 'PayU ID']
+      // Amount stays a bare number so spreadsheets can sum it, but a bare number
+      // is only meaningful next to its unit: the header no longer claims INR,
+      // and each row carries the currency it was actually taken in. Summing the
+      // Amount column across currencies is now visibly the reader's error to
+      // make, not one the file quietly invites.
+      const head = ['Order Code', 'Machine', 'Location', 'Amount', 'Currency', 'Payment', 'Delivery', 'Cups', 'Created (IST)', 'Paid (IST)', 'Delivered (IST)', 'PayU ID']
       const lines = [head.join(',')]
       rows.filter((o: any) => o.pay_state === 1).forEach((o: any) => {
         const m = getMachine(o.machine_id)
-        lines.push([o.order_code, m.display_name || '', m.location || '', ((o.amount_paise || 0) / 100).toFixed(2), _payLabel(o.pay_state), _delLabel(o.delivery_state), o.cup_num || 1, _istLabel(o.created_at), _istLabel(o.paid_at), _istLabel(o.delivered_at), o.mihpayid || ''].map(_esc).join(','))
+        lines.push([o.order_code, m.display_name || '', m.location || '', ((o.amount_paise || 0) / 100).toFixed(2), o.currency || 'INR', _payLabel(o.pay_state), _delLabel(o.delivery_state), o.cup_num || 1, _istLabel(o.created_at), _istLabel(o.paid_at), _istLabel(o.delivered_at), o.mihpayid || ''].map(_esc).join(','))
       })
       _download('\uFEFF' + lines.join('\n'), 'Fruitlink_Orders_' + exFrom + '_to_' + exTo + '.csv', 'text/csv;charset=utf-8;')
     } catch (e: any) { alert('Export failed: ' + (e?.message || e)) }
@@ -353,20 +405,32 @@ const filtered = scopedOrders.filter((o: any) => {
       const lib = await _loadJsPDF()
       const doc = new lib.jsPDF({ unit: 'mm', format: 'a4' })
       const paid = rows.filter((o: any) => o.pay_state === 1)
-      const revenue = paid.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0) / 100
       const cups = paid.reduce((s: number, o: any) => s + (o.cup_num || 1), 0)
       const conv = rows.length ? (paid.length / rows.length * 100) : 0
-      const avg = paid.length ? revenue / paid.length : 0
       const _isTest = (n: string) => /test/i.test(n || '')
-      const refDone = rows.filter((o: any) => o.refund_state === 1)
-      const refGenuine = refDone.filter((o: any) => !_isTest(o.refund_note))
-      const refTest = refDone.filter((o: any) => _isTest(o.refund_note))
-      const refFailed = rows.filter((o: any) => o.refund_state === 2)
       const sumP = (a: any[]) => a.reduce((s: number, o: any) => s + (o.amount_paise || 0), 0) / 100
-      const refGenuineAmt = sumP(refGenuine)
-      const refTestAmt = sumP(refTest)
-      const refFailedAmt = sumP(refFailed)
-      const netRevenue = revenue - refGenuineAmt
+
+      // jsPDF's built-in Helvetica is Latin-1 and cannot draw ₹, so money here
+      // is written with an ASCII tag: the familiar "Rs" for INR, the ISO code
+      // for anything else. A report is read months later by someone who cannot
+      // ask what unit it was in, so every figure states its own.
+      const _cur = (o: any) => o.currency || 'INR'
+      const _pdfMoney = (major: number, cur: string) => (cur === 'INR' ? 'Rs ' : cur + ' ') + major.toFixed(0)
+      const _statsFor = (cur: string) => {
+        const p = paid.filter((o: any) => _cur(o) === cur)
+        const inCur = rows.filter((o: any) => _cur(o) === cur)
+        const refDone = inCur.filter((o: any) => o.refund_state === 1)
+        const refGenuine = refDone.filter((o: any) => !_isTest(o.refund_note))
+        const refTest = refDone.filter((o: any) => _isTest(o.refund_note))
+        const refFailed = inCur.filter((o: any) => o.refund_state === 2)
+        const revenue = sumP(p)
+        const refGenuineAmt = sumP(refGenuine)
+        return { revenue, refGenuine, refGenuineAmt, refTest, refTestAmt: sumP(refTest), refFailed, refFailedAmt: sumP(refFailed), netRevenue: revenue - refGenuineAmt, avg: p.length ? revenue / p.length : 0 }
+      }
+      // Heaviest currency first. One currency - every export today - reproduces
+      // the previous report line for line.
+      const pdfCurs = Array.from(new Set(rows.map(_cur))).sort((a: any, b: any) => sumP(paid.filter((o: any) => _cur(o) === b)) - sumP(paid.filter((o: any) => _cur(o) === a)))
+      const multiCur = pdfCurs.length > 1
       doc.addImage(FL_LOGO, 'JPEG', 14, 8, 50, 21.4)
       doc.setTextColor(28, 35, 51); doc.setFont('helvetica', 'bold'); doc.setFontSize(15)
       doc.text('Revenue & Orders Report', 196, 16, { align: 'right' })
@@ -381,9 +445,23 @@ const filtered = scopedOrders.filter((o: any) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
       doc.text('Summary', 14, y); y += 8
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40)
-      const kpis = [['Gross Revenue (paid)', 'Rs ' + revenue.toFixed(0)], ['Less: Refunds (genuine)', '- Rs ' + refGenuineAmt.toFixed(0) + '  (' + refGenuine.length + ' orders)'], ['Net Revenue', 'Rs ' + netRevenue.toFixed(0)], ['Paid Orders', String(paid.length)], ['Orders Placed', String(rows.length)], ['Conversion', conv.toFixed(0) + '%'], ['Cups Served', String(cups)], ['Avg Order Value', 'Rs ' + avg.toFixed(0)]]
-      if (refTest.length > 0) kpis.push(['Test refunds (excl.)', 'Rs ' + refTestAmt.toFixed(0) + '  (' + refTest.length + ' orders)'])
-      if (refFailed.length > 0) kpis.push(['FAILED refunds - owed', 'Rs ' + refFailedAmt.toFixed(0) + '  (' + refFailed.length + ' customers)'])
+      // Money lines repeat per currency and are never combined; the counts below
+      // them are counts of orders and cups, which cross borders happily.
+      const kpis: string[][] = []
+      const _tag = (cur: string) => multiCur ? ' (' + cur + ')' : ''
+      pdfCurs.forEach((cur: string) => {
+        const s = _statsFor(cur)
+        kpis.push(['Gross Revenue (paid)' + _tag(cur), _pdfMoney(s.revenue, cur)])
+        kpis.push(['Less: Refunds (genuine)' + _tag(cur), '- ' + _pdfMoney(s.refGenuineAmt, cur) + '  (' + s.refGenuine.length + ' orders)'])
+        kpis.push(['Net Revenue' + _tag(cur), _pdfMoney(s.netRevenue, cur)])
+      })
+      kpis.push(['Paid Orders', String(paid.length)], ['Orders Placed', String(rows.length)], ['Conversion', conv.toFixed(0) + '%'], ['Cups Served', String(cups)])
+      pdfCurs.forEach((cur: string) => kpis.push(['Avg Order Value' + _tag(cur), _pdfMoney(_statsFor(cur).avg, cur)]))
+      pdfCurs.forEach((cur: string) => {
+        const s = _statsFor(cur)
+        if (s.refTest.length > 0) kpis.push(['Test refunds (excl.)' + _tag(cur), _pdfMoney(s.refTestAmt, cur) + '  (' + s.refTest.length + ' orders)'])
+        if (s.refFailed.length > 0) kpis.push(['FAILED refunds - owed' + _tag(cur), _pdfMoney(s.refFailedAmt, cur) + '  (' + s.refFailed.length + ' customers)'])
+      })
       kpis.forEach(k => { doc.text(k[0] + ':', 16, y); doc.setFont('helvetica', 'bold'); doc.text(k[1], 80, y); doc.setFont('helvetica', 'normal'); y += 6 })
       y += 8
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
@@ -392,8 +470,10 @@ const filtered = scopedOrders.filter((o: any) => {
       doc.text('Machine', 16, y); doc.text('Placed', 74, y); doc.text('Paid', 94, y); doc.text('Cups', 112, y); doc.text('Gross', 130, y); doc.text('Refunds', 152, y); doc.text('Net', 178, y); y += 5
       doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
       const byM: any = {}
-      rows.forEach((o: any) => { const id = o.machine_id; if (!byM[id]) byM[id] = { placed: 0, paid: 0, cups: 0, rev: 0, net: 0 }; byM[id].placed++; if (o.pay_state === 1) { byM[id].paid++; byM[id].cups += (o.cup_num || 1); byM[id].rev += (o.amount_paise || 0) / 100; byM[id].net += netPaise(o) / 100 } })
-      Object.keys(byM).forEach(id => { const m = getMachine(id); const r = byM[id]; const ref = r.rev - r.net; doc.text(String(m.display_name || id.slice(0, 8)).slice(0, 24), 16, y); doc.text(String(r.placed), 74, y); doc.text(String(r.paid), 94, y); doc.text(String(r.cups), 112, y); doc.text('Rs ' + r.rev.toFixed(0), 130, y); doc.text(ref > 0 ? '- Rs ' + ref.toFixed(0) : '-', 152, y); doc.text('Rs ' + r.net.toFixed(0), 178, y); y += 5; if (y > 270) { doc.addPage(); y = 20 } })
+      // A machine sits in one country, so its row has one currency: the row
+      // labels itself and nothing is added across.
+      rows.forEach((o: any) => { const id = o.machine_id; if (!byM[id]) byM[id] = { placed: 0, paid: 0, cups: 0, rev: 0, net: 0, cur: _cur(o) }; byM[id].placed++; if (o.pay_state === 1) { byM[id].paid++; byM[id].cups += (o.cup_num || 1); byM[id].rev += (o.amount_paise || 0) / 100; byM[id].net += netPaise(o) / 100 } })
+      Object.keys(byM).forEach(id => { const m = getMachine(id); const r = byM[id]; const ref = r.rev - r.net; doc.text(String(m.display_name || id.slice(0, 8)).slice(0, 24), 16, y); doc.text(String(r.placed), 74, y); doc.text(String(r.paid), 94, y); doc.text(String(r.cups), 112, y); doc.text(_pdfMoney(r.rev, r.cur), 130, y); doc.text(ref > 0 ? '- ' + _pdfMoney(ref, r.cur) : '-', 152, y); doc.text(_pdfMoney(r.net, r.cur), 178, y); y += 5; if (y > 270) { doc.addPage(); y = 20 } })
       y += 8
       if (y > 250) { doc.addPage(); y = 20 }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(28, 35, 51)
@@ -402,8 +482,11 @@ const filtered = scopedOrders.filter((o: any) => {
       doc.text('Date', 16, y); doc.text('Paid', 76, y); doc.text('Cups', 100, y); doc.text('Gross', 126, y); doc.text('Refunds', 150, y); doc.text('Net', 178, y); y += 5
       doc.setTextColor(40, 40, 40); doc.setFont('helvetica', 'normal')
       const byD: any = {}
-      paid.forEach((o: any) => { const key = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); if (!byD[key]) byD[key] = { paid: 0, cups: 0, rev: 0, net: 0 }; byD[key].paid++; byD[key].cups += (o.cup_num || 1); byD[key].rev += (o.amount_paise || 0) / 100; byD[key].net += netPaise(o) / 100 })
-      Object.keys(byD).sort().forEach(key => { const r = byD[key]; const ref = r.rev - r.net; doc.text(key, 16, y); doc.text(String(r.paid), 76, y); doc.text(String(r.cups), 100, y); doc.text('Rs ' + r.rev.toFixed(0), 126, y); doc.text(ref > 0 ? '- Rs ' + ref.toFixed(0) : '-', 150, y); doc.text('Rs ' + r.net.toFixed(0), 178, y); y += 5; if (y > 280) { doc.addPage(); y = 20 } })
+      // A day can span countries, so a day is one line per currency rather than
+      // one line hiding a sum. With a single currency the keys collapse back to
+      // plain dates and the table is exactly as it was.
+      paid.forEach((o: any) => { const day = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); const cur = _cur(o); const key = day + '|' + cur; if (!byD[key]) byD[key] = { day, cur, paid: 0, cups: 0, rev: 0, net: 0 }; byD[key].paid++; byD[key].cups += (o.cup_num || 1); byD[key].rev += (o.amount_paise || 0) / 100; byD[key].net += netPaise(o) / 100 })
+      Object.keys(byD).sort().forEach(key => { const r = byD[key]; const ref = r.rev - r.net; doc.text(multiCur ? r.day + '  ' + r.cur : r.day, 16, y); doc.text(String(r.paid), 76, y); doc.text(String(r.cups), 100, y); doc.text(_pdfMoney(r.rev, r.cur), 126, y); doc.text(ref > 0 ? '- ' + _pdfMoney(ref, r.cur) : '-', 150, y); doc.text(_pdfMoney(r.net, r.cur), 178, y); y += 5; if (y > 280) { doc.addPage(); y = 20 } })
 
       // ── Full transaction list (all orders: paid + failed + refunded) ──
       doc.addPage(); y = 20
@@ -441,7 +524,7 @@ const filtered = scopedOrders.filter((o: any) => {
         const midShort = String(o.machine_id || '').slice(0, 8)
         const mName = (m.display_name || '').slice(0, 14)
         const store = (m.location || '').slice(0, 22)
-        const amt = 'Rs ' + ((o.amount_paise || 0) / 100).toFixed(0)
+        const amt = _pdfMoney((o.amount_paise || 0) / 100, _cur(o))
         const status = _txnStatus(o)
         doc.setTextColor(40, 40, 40)
         doc.text(dateStr, 12, y)
@@ -526,9 +609,9 @@ const filtered = scopedOrders.filter((o: any) => {
         <div>
           {/* ── KPI strip ──────────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: isMobile ? 10 : 14, marginBottom: 18 }}>
-            <StatCard label="Total Revenue" value={fmtAmt(totalRevenue, scopeCur)} sub={refundedPaise > 0 ? periodLabel + ' · net of ' + fmtAmt(refundedPaise, scopeCur) + ' refunds' : periodLabel} color={C.green} icon={currencySymbol(scopeCur)} meter={grossRevenue > 0 ? (totalRevenue / grossRevenue) * 100 : 0} />
+            <StatCard label="Total Revenue" value={fmtBag(netBag)} sub={currenciesIn(refundBag).length > 0 ? periodLabel + ' · net of ' + fmtBag(refundBag) + ' refunds' : periodLabel} color={C.green} icon={currencySymbol(viewCur)} meter={grossRevenue > 0 ? (totalRevenue / grossRevenue) * 100 : 0} />
             <StatCard label="Paid Orders" value={paidOrders.length.toString()} sub={periodOrders.length + ' placed · ' + convRate.toFixed(0) + '% paid'} color={C.blue} icon="✅" meter={convRate} />
-            <StatCard label="Avg Order Value" value={fmtAmt(avgOrder, scopeCur)} sub="per paid transaction" color={C.orange} icon="📈" />
+            <StatCard label="Avg Order Value" value={fmtBag(avgBag)} sub={mixedCurs ? 'per paid transaction, each currency' : 'per paid transaction'} color={C.orange} icon="📈" />
             <StatCard label="Cups Served" value={totalCups.toString()} sub={paidOrders.length > 0 ? (totalCups / paidOrders.length).toFixed(2) + ' cups per order' : 'juice cups'} color={C.amber} icon="🥤" />
           </div>
 
@@ -537,19 +620,19 @@ const filtered = scopedOrders.filter((o: any) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap' as const, gap: 8, marginBottom: 18 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>Daily Revenue</div>
-                <div style={{ fontSize: 12, color: C.text3 }}>Paid orders only · {dayCount === 1 ? 'today' : dayCount + ' days'}</div>
+                <div style={{ fontSize: 12, color: C.text3 }}>Paid orders only · {dayCount === 1 ? 'today' : dayCount + ' days'}{mixedCurs ? ' · bars in ' + viewCur : ''}</div>
               </div>
-              <div style={{ fontSize: 12, color: C.text3 }}>Peak day <b style={{ color: C.text2 }}>{fmtAmt(maxRev)}</b></div>
+              <div style={{ fontSize: 12, color: C.text3 }}>Peak day <b style={{ color: C.text2 }}>{fmtAmt(maxRev, viewCur)}</b></div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: dense ? 2 : 8, height: 180, overflowX: 'auto' }}>
               {dailyData.map((d, i) => {
                 const h = Math.max((d.revenue / maxRev) * 130, d.revenue > 0 ? 6 : 0)
                 const showLabel = !dense || i % labelEvery === 0 || i === dailyData.length - 1
                 return (
-                  <div key={d.key} title={d.short + ' — ' + fmtAmt(d.revenue) + ' · ' + d.cups + ' cups'} style={{ flex: 1, minWidth: dense ? 6 : 18, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'flex-end', gap: 5, height: '100%' }}>
+                  <div key={d.key} title={d.short + ' — ' + fmtBag(d.bag) + ' · ' + d.cups + ' cups'} style={{ flex: 1, minWidth: dense ? 6 : 18, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'flex-end', gap: 5, height: '100%' }}>
                     {!dense && d.revenue > 0 && (
                       <div style={{ textAlign: 'center' as const, lineHeight: 1.25 }}>
-                        <div style={{ fontSize: 11, color: C.text2, fontWeight: 700 }}>{fmtAmt(d.revenue)}</div>
+                        <div style={{ fontSize: 11, color: C.text2, fontWeight: 700 }}>{fmtAmt(d.revenue, viewCur)}</div>
                         {d.cups > 0 && <div style={{ fontSize: 10, color: C.orange, fontWeight: 700 }}>{d.cups}🥤</div>}
                       </div>
                     )}
@@ -566,7 +649,7 @@ const filtered = scopedOrders.filter((o: any) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 10, marginBottom: 14 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>Revenue by {mrMode === 'site' ? 'Site' : 'Machine'}</div>
-                <div style={{ fontSize: 12, color: C.text3 }}>{concRows.length} {mrMode === 'site' ? 'sites' : 'machines'} · {periodLabel}</div>
+                <div style={{ fontSize: 12, color: C.text3 }}>{concRows.length} {mrMode === 'site' ? 'sites' : 'machines'} · {periodLabel}{mixedCurs ? ' · ranked within ' + viewCur : ''}</div>
               </div>
               <Seg options={[['machine', 'By machine'], ['site', 'By site']]} value={mrMode} onChange={(m: any) => { setMrMode(m); setShowAllMachines(false) }} />
             </div>
@@ -578,12 +661,12 @@ const filtered = scopedOrders.filter((o: any) => {
                 <div style={{ flex: 1, minWidth: 200, background: topShare >= 60 ? C.amberBg : C.surface2, border: '1px solid ' + (topShare >= 60 ? C.amber + '55' : C.border), borderRadius: 10, padding: '10px 14px' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>Top {mrMode === 'site' ? 'site' : 'machine'}</div>
                   <div style={{ fontSize: 13.5, color: C.text }}>
-                    <b>{topShare.toFixed(0)}%</b> of all revenue — <span style={{ color: C.text2 }}>{concRows[0].display_name}</span>
+                    <b>{topShare.toFixed(0)}%</b> of {mixedCurs ? viewCur + ' revenue' : 'all revenue'} — <span style={{ color: C.text2 }}>{concRows[0].display_name}</span>
                   </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 200, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 14px' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>Top 5 combined</div>
-                  <div style={{ fontSize: 13.5, color: C.text }}><b>{top5Share.toFixed(0)}%</b> of all revenue</div>
+                  <div style={{ fontSize: 13.5, color: C.text }}><b>{top5Share.toFixed(0)}%</b> of {mixedCurs ? viewCur + ' revenue' : 'all revenue'}</div>
                 </div>
               </div>
             )}
@@ -597,7 +680,14 @@ const filtered = scopedOrders.filter((o: any) => {
               <div style={{ color: C.text3, fontSize: 13, padding: '12px 0' }}>{mrq ? 'Nothing matches "' + mrQuery + '"' : 'No revenue data for this period'}</div>
             ) : mrVisible.map((m: any, i: number) => {
               const rank = concRows.indexOf(m) + 1
-              const pct = totalRevenue > 0 ? (m.revenue / totalRevenue * 100) : 0
+              // A row's share is measured against its own currency's total, which
+              // is well defined for any single-currency row even in a mixed fleet
+              // ("40% of the ZAR revenue"). A site straddling currencies has no
+              // single share to state, so it states none rather than a wrong one.
+              const rowCur = soleCurrency(m.bag)
+              const rowTotal = rowCur ? (netBag[rowCur] || 0) : 0
+              const pct = rowTotal > 0 ? ((m.bag[rowCur!] || 0) / rowTotal * 100) : 0
+              const shareLabel = !rowCur ? 'mixed currencies' : mixedCurs ? pct.toFixed(1) + '% of ' + rowCur : pct.toFixed(1) + '% of total'
               return (
                 <div key={m.id} style={{ marginBottom: i < mrVisible.length - 1 ? 16 : 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -615,8 +705,8 @@ const filtered = scopedOrders.filter((o: any) => {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
-                      <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: C.green }}>{fmtAmt(m.revenue)}</div>
-                      <div style={{ fontSize: 12, color: C.text3 }}>{pct.toFixed(1)}% of total</div>
+                      <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: C.green }}>{fmtBag(m.bag)}</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>{shareLabel}</div>
                     </div>
                   </div>
                   <div style={{ height: 6, background: C.border, borderRadius: 3 }}>

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { C, SB_KEY, useIsMobile, Dot, Pill, StatCard, MachineCard, sbFetchAll, netPaise, formatMoney, currencySymbol } from './lib/dashboard-shared'
+import { C, SB_KEY, useIsMobile, Dot, Pill, StatCard, MachineCard, sbFetchAll, netPaise, formatMoney, formatMoneyBag, currencySymbol, addToBag, currenciesIn, type MoneyBag } from './lib/dashboard-shared'
 
 // ─── Console Insights: live sales, scale runway, peak hours, smart restock ───
 export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineSel, stockData }: any) {
@@ -71,7 +71,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
         // above the cap is a request, not a promise. F4 alone did 632 paid orders
         // in 16 days - this 35-day window crosses 1,000 within a month, and the
         // chart would then under-report silently, exactly as the Console did.
-        const path = '/rest/v1/orders?select=created_at,amount_paise,cup_num,pay_state,refund_state,refund_note&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc'
+        const path = '/rest/v1/orders?select=created_at,amount_paise,currency,cup_num,pay_state,refund_state,refund_note&pay_state=eq.1&created_at=gte.' + since + machineFilter + '&order=created_at.desc'
         const d = await sbFetchAll(path, h)
         if (alive) { setOrders(d); setLoading(false) }
       } catch (e: any) {
@@ -87,14 +87,21 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
   const dKey = (t: any) => new Intl.DateTimeFormat('en-CA', { timeZone: IST }).format(new Date(t))
   const dHour = (t: any) => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: IST, hour: '2-digit', hourCycle: 'h23' }).format(new Date(t)), 10)
   const wdayOfKey = (k: string) => new Date(k + 'T12:00:00+05:30').getDay()
-  // Every figure on this page is a sum or mean over the selected scope, and the
-  // orders query does not select `currency`. All of it is INR today; when it is
-  // not, this must follow the selected machine's country and an all-machines
-  // total across currencies has to be split rather than added.
-  const scopeCur = 'INR'
+  // "All machines" on this page can span countries, so revenue is kept per
+  // currency and never totalled across. Money in another currency is shown
+  // beside, not converted into, the leading one: 'R450' is R450 in Cape Town
+  // and there is no exchange rate in this codebase that could make it anything
+  // else. Bar heights and the trend maths below compare magnitudes, so they run
+  // on the heaviest currency alone - the only currency in scope today.
+  const revBagAll: MoneyBag = {}
+  orders.forEach(o => addToBag(revBagAll, o.currency, netPaise(o)))
+  const scopeCurs = currenciesIn(revBagAll)
+  const mixedCurs = scopeCurs.length > 1
+  const viewCur = scopeCurs[0] || 'INR'
   // These aggregates arrive in major units already (netPaise / 100), so they go
   // back to minor units for formatMoney. Whole units, grouped — as before.
-  const fmt = (rs: number) => formatMoney(rs * 100, scopeCur, { maxDigits: 0 })
+  const fmt = (rs: number, cur = viewCur) => formatMoney(rs * 100, cur, { maxDigits: 0 })
+  const fmtBag = (bag: MoneyBag) => formatMoneyBag(bag, { maxDigits: 0 })
   const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length
   const sd = (a: number[]) => { const m = mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, a.length - 1)) }
   const wmean = (a: number[]) => { let n = 0, d = 0; a.forEach((x, i) => { const w = i + 1; n += x * w; d += w }); return d ? n / d : 0 }
@@ -104,8 +111,17 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
   const todayKey = dKey(now)
   const nowHour = dHour(now) + (parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: IST, minute: '2-digit' }).format(now), 10) || 0) / 60
 
+  // dailyRev is the view currency's revenue per day — the series the chart and
+  // the forecasts are drawn from. dailyBag keeps the full per-currency picture
+  // so a day's label can disclose money the bars cannot represent.
   const dailyCups: Record<string, number> = {}, dailyRev: Record<string, number> = {}
-  orders.forEach(o => { const k = dKey(o.created_at); dailyCups[k] = (dailyCups[k] || 0) + (o.cup_num || 1); dailyRev[k] = (dailyRev[k] || 0) + netPaise(o) / 100 })
+  const dailyBag: Record<string, MoneyBag> = {}
+  orders.forEach(o => {
+    const k = dKey(o.created_at)
+    dailyCups[k] = (dailyCups[k] || 0) + (o.cup_num || 1)
+    addToBag(dailyBag[k] || (dailyBag[k] = {}), o.currency, netPaise(o))
+    if ((o.currency || 'INR') === viewCur) dailyRev[k] = (dailyRev[k] || 0) + netPaise(o) / 100
+  })
 
   const week = Array.from({ length: 7 }, (_, i) => {
     const k = dKey(new Date(now.getTime() - (6 - i) * 86400000))
@@ -229,7 +245,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
                   <span>Today's Sales</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', color: C.green, background: C.greenBg, border: '1px solid rgba(25,135,84,.25)', borderRadius: 20, padding: '2px 8px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'fl-pulse 1.8s infinite' }} />LIVE</span>
                 </div>
-                <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1 }}>{fmt(revToday)}</div>
+                <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1 }}>{fmtBag(dailyBag[todayKey] || {})}</div>
                 {paceDelta != null && (
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, borderRadius: 20, padding: '3px 10px', marginTop: 10, background: paceDelta >= 0 ? C.greenBg : C.redBg, color: paceDelta >= 0 ? C.green : C.red }}>{(paceDelta >= 0 ? '▲ ' : '▼ ') + Math.abs(paceDelta) + '% vs a typical ' + wdayName}</div>
                 )}
@@ -240,12 +256,12 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machineSel === 'all' ? 'All machines' : machine.display_name} · revenue, last 7 days</div>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.text3, marginBottom: 12 }}>{machineSel === 'all' ? 'All machines' : machine.display_name} · revenue, last 7 days{mixedCurs ? ' · ' + viewCur : ''}</div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 9, minHeight: 104 }}>
                   {week.map((d, i) => {
                     const h = Math.max(Math.round(d.v / maxV * 88), d.v > 0 ? 6 : 3)
                     return <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text2 }}>{d.v > 0 ? currencySymbol(scopeCur) + (d.v / 1000).toFixed(1) + 'k' : ''}</div>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text2 }}>{d.v > 0 ? currencySymbol(viewCur) + (d.v / 1000).toFixed(1) + 'k' : ''}</div>
                       <div style={{ width: '100%', height: h, borderRadius: '5px 5px 0 0', background: d.today ? C.orange : '#d9d6f0', transition: 'height .5s' }} />
                       <div style={{ fontSize: 10.5, fontWeight: d.today ? 800 : 600, color: d.today ? C.orange : C.text3 }}>{d.day}</div>
                     </div>

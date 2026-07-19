@@ -19,7 +19,11 @@ const MACHINE_SCOPED_TABLES = ['orders', 'alerts', 'telemetry', 'stock_events', 
 // Tables scoped to the operator's own machine rows (by the machines.id column).
 const MACHINE_ID_TABLES = ['machines'];
 // Tables an operator may read fully (non-sensitive shared/reference data).
-const OPERATOR_READABLE_ALL = ['ads', 'ad_impression', 'loyalty', 'machine_config', 'role_permissions'];
+// `countries` is the country -> currency/timezone/tax lookup behind machineCurrency():
+// four rows of public reference data, no tenant column, nothing to scope. Without it
+// here the allowlist posture 403s every non-super-admin and every machine silently
+// renders as INR, which is invisible today and wrong the day a ZA machine exists.
+const OPERATOR_READABLE_ALL = ['ads', 'ad_impression', 'loyalty', 'machine_config', 'role_permissions', 'countries'];
 // Ad tables are operator-scoped by ad_campaign.operator_id (see scopeGetPath / guardWrite).
 const AD_OWNED_TABLES = ['ad_campaign', 'ad_campaign_performance'];
 // Tables where a plain operator may only see their own row(s).
@@ -84,7 +88,7 @@ async function scopeGetPath(request: NextRequest, session: any): Promise<{ path?
   // They service/inspect the whole fleet. Page-level permissions gate WHICH sections
   // they can open; here we grant read on the data those sections need.
   if (role === 'staff') {
-    const STAFF_READABLE = ['machines', 'orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'machine_commands', 'ad_machine_state', 'machine_config', 'operators', 'visits', 'attendance', 'ads', 'ad_campaign', 'ad_campaign_performance', 'ad_impression', 'loyalty', 'role_permissions'];
+    const STAFF_READABLE = ['machines', 'orders', 'alerts', 'telemetry', 'stock_events', 'faults', 'fault_events', 'serial_logs', 'machine_commands', 'ad_machine_state', 'machine_config', 'operators', 'visits', 'attendance', 'ads', 'ad_campaign', 'ad_campaign_performance', 'ad_impression', 'loyalty', 'role_permissions', 'countries'];
     if (!STAFF_READABLE.includes(table)) return { block: true };
     // operators: never show soft-deleted staff
     return { path: withDeletedFilter(rawPath) };

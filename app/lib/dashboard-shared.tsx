@@ -188,12 +188,103 @@ export function formatMoney(
 export const currencySymbol = (currency = 'INR') =>
   (CURRENCY_META[currency] || CURRENCY_META.INR).symbol
 
-// A machine's currency lives one hop away: machines.country_code -> countries
-// .currency_code. Callers that have not loaded `countries` pass nothing and get
-// INR, which is correct for every machine today (all country_code = 'IN').
+// ─── Money that spans currencies ─────────────────────────────────
+// Each country's money stays in its own currency. R50 taken in South Africa is
+// R50, not "about ₹250" - there is no FX rate anywhere in this codebase and
+// there must not be one, because a converted figure is a guess that ages badly
+// and cannot be reconciled against a bank statement in either country.
+//
+// The consequence is that a fleet-wide revenue total is not a number. It is a
+// number per currency. MoneyBag makes that the only representable shape: you
+// cannot accidentally add ZAR to INR because there is no single accumulator to
+// add them into. A scope with one currency - every scope today - formats to
+// exactly the string it always did.
+//
+// The INR default is a fallback for a machine or order with no country, never a
+// conversion. It labels unknown money; it does not move it.
+export type MoneyBag = Record<string, number>
+
+export function addToBag(bag: MoneyBag, currency: string | null | undefined, amountMinor: number): MoneyBag {
+  const c = currency || 'INR'
+  bag[c] = (bag[c] || 0) + amountMinor
+  return bag
+}
+
+// Currencies present, heaviest first, so the dominant one leads the display and
+// the order is stable across renders.
+export function currenciesIn(bag: MoneyBag): string[] {
+  return Object.keys(bag)
+    .filter(c => bag[c] !== 0)
+    .sort((a, b) => (bag[b] - bag[a]) || a.localeCompare(b))
+}
+
+// The one currency in this bag, or null if it holds several (or none). Callers
+// use this to decide whether a ratio, a ranking or a bar height means anything:
+// those compare magnitudes, and magnitudes across currencies do not compare.
+export function soleCurrency(bag: MoneyBag): string | null {
+  const cs = Object.keys(bag).filter(c => bag[c] !== 0)
+  return cs.length === 1 ? cs[0] : null
+}
+
+// '₹5,270' for one currency, '₹5,270 · R450' for several. Never a sum.
+export function formatMoneyBag(bag: MoneyBag, opts: { minDigits?: number; maxDigits?: number; grouping?: boolean } = {}, sep = ' · '): string {
+  const cs = currenciesIn(bag)
+  if (cs.length === 0) return formatMoney(0, 'INR', opts)
+  return cs.map(c => formatMoney(bag[c], c, opts)).join(sep)
+}
+
+// A machine's currency lives one hop away: machines.country_code -> countries.
+// Callers that have not loaded the map pass nothing and get INR, which is
+// correct for every machine today (all country_code = 'IN').
 export function machineCurrency(machine: any, countries?: Record<string, string>): string {
   const cc = machine?.country_code
   return (cc && countries?.[cc]) || 'INR'
+}
+
+// ─── Countries -> currency ───────────────────────────────────────
+// Reference data: a handful of rows that change about never, read by any page
+// that prices something per machine. Cached at module scope for the life of the
+// tab and de-duplicated while in flight, so ten machine cards mounting at once
+// make one request, not ten.
+let _ccCache: Record<string, string> | null = null
+let _ccInFlight: Promise<Record<string, string>> | null = null
+
+export async function fetchCountryCurrencies(): Promise<Record<string, string>> {
+  if (_ccCache) return _ccCache
+  if (_ccInFlight) return _ccInFlight
+  _ccInFlight = (async () => {
+    try {
+      const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/countries?select=code,currency'))
+      if (!res.ok) throw new Error('countries: HTTP ' + res.status)
+      const rows = await res.json()
+      if (!Array.isArray(rows)) throw new Error('countries: non-array response')
+      const map: Record<string, string> = {}
+      for (const r of rows) {
+        if (r?.code && r?.currency) map[String(r.code)] = String(r.currency)
+      }
+      _ccCache = map
+      return map
+    } catch {
+      // Never fail a page over reference data. An unreadable countries table
+      // leaves every machine on the INR default - exactly what these screens
+      // showed before any of this existed. Deliberately not cached, so the
+      // next mount retries rather than freezing the failure into the tab.
+      return {}
+    } finally {
+      _ccInFlight = null
+    }
+  })()
+  return _ccInFlight
+}
+
+export function useCountryCurrencies(): Record<string, string> {
+  const [map, setMap] = useState<Record<string, string>>(() => _ccCache || {})
+  useEffect(() => {
+    let alive = true
+    fetchCountryCurrencies().then(m => { if (alive) setMap(m) })
+    return () => { alive = false }
+  }, [])
+  return map
 }
 
 export function StatCard({ label, value, sub, color, icon, pct, meter, attention }: any) {
