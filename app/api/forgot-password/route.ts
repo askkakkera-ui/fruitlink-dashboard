@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 
 export const runtime = 'nodejs';
+
+// Same response for every email, whether or not an account exists — never leak
+// which addresses are registered.
+const GENERIC = { success: true, message: 'If an account exists with that email, a reset link has been sent.' };
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,24 +20,29 @@ export async function POST(req: NextRequest) {
     });
     const operators = await opRes.json();
     if (!operators || operators.length === 0) {
-      return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
+      return NextResponse.json(GENERIC);
     }
     const operator = operators[0];
 
-    const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const token = crypto.randomBytes(32).toString('hex');
     const expires_at = new Date(Date.now() + 3600000).toISOString();
 
-    await fetch(SUPABASE_URL + '/rest/v1/password_reset_tokens', {
+    const insRes = await fetch(SUPABASE_URL + '/rest/v1/password_reset_tokens', {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ operator_id: operator.id, token, expires_at })
     });
+    if (!insRes.ok) {
+      // Don't mail a link we failed to store — it could never be redeemed.
+      console.error('Forgot password: token insert failed:', insRes.status, await insRes.text());
+      return NextResponse.json(GENERIC);
+    }
 
     const resetLink = 'https://www.fruitlinktech.in/reset-password?token=' + token;
 
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer re_S867dxa9_Kr4q4RsK7NEuQfYWQ5mP86KS', 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: 'alerts@resend.dev',
         to: email,
@@ -41,10 +51,12 @@ export async function POST(req: NextRequest) {
       })
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(GENERIC);
 
   } catch(e: any) {
+    // Log server-side, but keep the client response identical so failures can't
+    // be used to probe for registered addresses.
     console.error('Forgot password error:', e.message);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json(GENERIC);
   }
 }
