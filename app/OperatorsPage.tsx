@@ -393,12 +393,23 @@ export function LocationsModal({ op, onClose }: any) {
 }
 
 // ─── My Team (operator manages their own sub-operators & field staff) ───
+// Field-staff add/edit/delete appears only when the operator's PLAN says so and
+// they are under their effective seat limit — both read from /api/my-team, both
+// re-checked server-side on every write. Nothing here is a number in code: an
+// unlimited plan (limit === null) simply never blocks.
 export function MyTeamPage() {
   const [team, setTeam] = useState<any[]>([])
   const [myPerms, setMyPerms] = useState<any>(null)
+  const [ent, setEnt] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [permsFor, setPermsFor] = useState<any>(null)
   const [err, setErr] = useState('')
+  // Add / edit field staff
+  const [showForm, setShowForm] = useState(false)
+  const [editStaff, setEditStaff] = useState<any>(null)
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
+  const [saving, setSaving] = useState(false)
+  const [formMsg, setFormMsg] = useState('')
 
   const load = async () => {
     setLoading(true); setErr('')
@@ -406,7 +417,11 @@ export function MyTeamPage() {
       const r = await fetch('/api/my-team')
       const d = await r.json()
       if (!r.ok || d.error) { setErr(d.error || 'Failed to load team'); setTeam([]) }
-      else { setTeam(Array.isArray(d.team) ? d.team : []); setMyPerms(d.my_permissions || null) }
+      else {
+        setTeam(Array.isArray(d.team) ? d.team : [])
+        setMyPerms(d.my_permissions || null)
+        setEnt(d.entitlements || null)
+      }
     } catch (e: any) { setErr(e.message) }
     setLoading(false)
   }
@@ -414,6 +429,55 @@ export function MyTeamPage() {
 
   const subOps = team.filter((t: any) => t.role === 'sub_operator')
   const staff = team.filter((t: any) => t.role === 'field_staff')
+
+  const canManageStaff = ent?.has_team_management === true
+  const staffLimit: number | null = ent && ent.field_staff_limit != null ? Number(ent.field_staff_limit) : null
+  const staffAtLimit = staffLimit !== null && staff.length >= staffLimit
+
+  const openAddStaff = () => {
+    setEditStaff(null); setForm({ name: '', email: '', phone: '', password: '' })
+    setFormMsg(''); setShowForm(true)
+  }
+  const openEditStaff = (m: any) => {
+    setEditStaff(m); setForm({ name: m.name || '', email: m.email || '', phone: m.phone || '', password: '' })
+    setFormMsg(''); setShowForm(true)
+  }
+
+  const saveStaff = async () => {
+    if (!form.name.trim()) { setFormMsg('Name is required'); return }
+    if (!editStaff && !form.email.trim()) { setFormMsg('Email is required'); return }
+    if (!editStaff && !form.password.trim()) { setFormMsg('A password is required'); return }
+    setSaving(true); setFormMsg('')
+    try {
+      const body: any = { name: form.name.trim(), phone: form.phone.trim() }
+      if (!editStaff) body.email = form.email.trim()
+      if (form.password.trim()) {
+        const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: form.password }) })
+        if (!hashRes.ok) { setFormMsg('Error: could not hash password'); setSaving(false); return }
+        const { hash } = await hashRes.json()
+        body.password_hash = hash
+      }
+      const r = editStaff
+        ? await fetch('/api/my-team?id=' + encodeURIComponent(editStaff.id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        : await fetch('/api/my-team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { setFormMsg('Error: ' + (d.error || r.status)); setSaving(false); return }
+      setFormMsg('✓ Saved')
+      await load()
+      setTimeout(() => { setShowForm(false); setFormMsg('') }, 700)
+    } catch (e: any) { setFormMsg('Error: ' + e.message) }
+    setSaving(false)
+  }
+
+  const deleteStaff = async (m: any) => {
+    if (!confirm('Remove ' + (m.name || m.email) + ' from your field staff?')) return
+    try {
+      const r = await fetch('/api/my-team?id=' + encodeURIComponent(m.id), { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) { setErr(d.error || 'Could not remove field staff'); return }
+      setErr(''); load()
+    } catch (e: any) { setErr(e.message) }
+  }
 
   const Row = ({ m }: any) => {
     const granted = m.permissions ? Object.keys(m.permissions).filter((k) => k.startsWith('can_') && m.permissions[k] === true).length : 0
@@ -437,20 +501,53 @@ export function MyTeamPage() {
             🔐 Perms
           </button>
         )}
+        {!isSub && canManageStaff && (
+          <>
+            <button onClick={() => openEditStaff(m)}
+              style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.text2, cursor: 'pointer', flexShrink: 0 }}>
+              ✏️ Edit
+            </button>
+            <button onClick={() => deleteStaff(m)}
+              style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.red, cursor: 'pointer', flexShrink: 0 }}>
+              🗑
+            </button>
+          </>
+        )}
       </div>
     )
   }
 
-  const Section = ({ title, rows, empty }: any) => (
+  const Section = ({ title, rows, empty, action, note }: any) => (
     <div style={{ border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', marginBottom: 18 }}>
-      <div style={{ padding: '11px 18px', background: C.surface2, fontSize: 12, fontWeight: 800, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
-        {title} <span style={{ color: C.text3, fontWeight: 600 }}>· {rows.length}</span>
+      <div style={{ padding: '11px 18px', background: C.surface2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+          {title} <span style={{ color: C.text3, fontWeight: 600 }}>· {rows.length}</span>
+        </div>
+        {action}
       </div>
+      {note}
       {rows.length === 0
         ? <div style={{ padding: 26, textAlign: 'center' as const, color: C.text3, fontSize: 13, background: C.surface }}>{empty}</div>
         : rows.map((m: any) => <Row key={m.id} m={m} />)}
     </div>
   )
+
+  // Shown in the Field Staff header: the add button, or — once the plan's seat
+  // limit is reached — the sentence that tells them why it is gone.
+  const staffAction = canManageStaff && !staffAtLimit ? (
+    <button onClick={openAddStaff}
+      style={{ background: C.orange, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+      + Add Field Staff
+    </button>
+  ) : null
+
+  const staffNote = canManageStaff && staffAtLimit ? (
+    <div style={{ padding: '10px 18px', background: C.amberBg, color: C.amber, fontSize: 12.5, fontWeight: 600, borderTop: '1px solid ' + C.border }}>
+      You&rsquo;ve reached your field staff limit ({staffLimit}). Contact Fruitlink to increase it.
+    </div>
+  ) : null
+
+  const inp: Record<string, any> = { width: '100%', padding: '9px 12px', borderRadius: 9, border: '1px solid ' + C.border, fontSize: 14, color: C.text, background: C.surface, outline: 'none', boxSizing: 'border-box' as const }
 
   return (
     <div>
@@ -468,11 +565,58 @@ export function MyTeamPage() {
       ) : (
         <>
           <Section title="Sub-Operators" rows={subOps} empty="No sub-operators yet. Ask Fruitlink to add one under your account." />
-          <Section title="Field Staff" rows={staff} empty="No field staff yet." />
+          <Section
+            title="Field Staff"
+            rows={staff}
+            action={staffAction}
+            note={staffNote}
+            empty={canManageStaff
+              ? (staffAtLimit ? 'No field staff yet.' : 'No field staff yet. Add your first one above.')
+              : 'No field staff yet. Ask Fruitlink to add one under your account.'}
+          />
           <div style={{ fontSize: 12, color: C.text3, padding: '0 2px' }}>
             🔒 A permission you don&rsquo;t hold yourself is locked and cannot be granted.
           </div>
         </>
+      )}
+
+      {/* Add / edit field staff */}
+      {showForm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.surface, borderRadius: 18, padding: 26, width: 420, maxWidth: '100%', boxShadow: '0 20px 60px #00000030' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 3 }}>{editStaff ? 'Edit Field Staff' : 'Add Field Staff'}</div>
+            <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+              {editStaff ? 'Update their details or set a new password.' : 'They will be able to log in and record machine visits for you.'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Name *</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Full name" style={inp} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Email *</label>
+                <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="name@example.com"
+                  disabled={!!editStaff} style={{ ...inp, background: editStaff ? C.surface2 : C.surface }} />
+                {editStaff && <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>Email is their login and cannot be changed here.</div>}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Phone</label>
+                <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91…" style={inp} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>{editStaff ? 'New Password (blank = keep)' : 'Password *'}</label>
+                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" style={inp} />
+              </div>
+            </div>
+            {formMsg && <div style={{ marginTop: 14, padding: '8px 12px', borderRadius: 8, background: formMsg.startsWith('✓') ? C.greenBg : C.redBg, color: formMsg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{formMsg}</div>}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
+              <button onClick={() => setShowForm(false)} style={{ padding: '9px 18px', borderRadius: 9, border: '1px solid ' + C.border, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+              <button onClick={saveStaff} disabled={saving} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.orange, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14, opacity: saving ? 0.7 : 1 }}>
+                {saving ? 'Saving…' : editStaff ? 'Update' : 'Add Field Staff'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {permsFor && <PermissionsModal op={permsFor} limitTo={myPerms || {}} onClose={() => { setPermsFor(null); load() }} />}
@@ -489,7 +633,8 @@ export function OperatorsPage({ myId }: any) {
   const [assignOp, setAssignOp] = useState<any>(null)
   const [permissionsOp, setPermissionsOp] = useState<any>(null)
   const [locationsOp, setLocationsOp] = useState<any>(null)
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '' })
+  const [plans, setPlans] = useState<any[]>([])
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '', plan: '', max_field_staff_override: '', max_sub_operators_override: '' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const J = { 'Content-Type': 'application/json' }
@@ -497,16 +642,31 @@ export function OperatorsPage({ myId }: any) {
   const NEEDS_PARENT = ['sub_operator', 'field_staff']
   // Only true operators can be a parent
   const parentOperators = operators.filter((o: any) => o.role === 'operator')
+  // Plan catalogue (read-only reference data from /api/plans). Every limit shown
+  // below comes from here or from the operator's own override — never from a
+  // constant in this file.
+  const planByCode: Record<string, any> = {}
+  plans.forEach((p: any) => { planByCode[p.code] = p })
+  const selectedPlan = planByCode[form.plan] || null
+  const limitLabel = (v: any) => (v === null || v === undefined ? 'unlimited' : String(v))
   const fetchOperators = async () => {
     setLoading(true)
-    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,pincode,phone,created_at&order=created_at.desc'))
+    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,pincode,phone,plan,max_field_staff_override,max_sub_operators_override,created_at&order=created_at.desc'))
     const data = await res.json()
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
   useEffect(() => { fetchOperators() }, [])
-  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
-  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '', company_name: op.company_name || '', billing_address: op.billing_address || '', gstin: op.gstin || '', pincode: op.pincode || '', phone: op.phone || '' }); setEditOp(op); setShowAdd(true); setMsg('') }
+  useEffect(() => {
+    fetch('/api/plans')
+      .then(r => r.json())
+      .then(d => setPlans(Array.isArray(d) ? d : []))
+      .catch(() => setPlans([]))
+  }, [])
+  // A new operator starts on the lowest-ranked plan the catalogue offers.
+  const defaultPlan = () => (plans[0]?.code || '')
+  const openAdd = () => { setForm({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '', plan: defaultPlan(), max_field_staff_override: '', max_sub_operators_override: '' }); setEditOp(null); setShowAdd(true); setMsg('') }
+  const openEdit = (op: any) => { setForm({ name: op.name || '', email: op.email, password: '', role: op.role, state: op.state || '', country: op.country || 'India', owner_id: op.owner_id || '', company_name: op.company_name || '', billing_address: op.billing_address || '', gstin: op.gstin || '', pincode: op.pincode || '', phone: op.phone || '', plan: op.plan || '', max_field_staff_override: op.max_field_staff_override != null ? String(op.max_field_staff_override) : '', max_sub_operators_override: op.max_sub_operators_override != null ? String(op.max_sub_operators_override) : '' }); setEditOp(op); setShowAdd(true); setMsg('') }
   const saveOperator = async () => {
     if (NEEDS_PARENT.includes(form.role) && !form.owner_id) {
       setMsg('Please select the parent operator for this role'); return
@@ -517,10 +677,29 @@ export function OperatorsPage({ myId }: any) {
       if (!form.pincode.trim()) { setMsg('Pincode is required for an operator'); return }
       if (!form.phone.trim()) { setMsg('Phone is required for an operator'); return }
     }
+    // Blank override = "use the plan default", which is null in the column, NOT
+    // zero — zero is a real limit meaning nobody may be added.
+    const parseOverride = (raw: string): number | null | undefined => {
+      const s = raw.trim()
+      if (!s) return null
+      const n = Number(s)
+      if (!Number.isInteger(n) || n < 0) return undefined // signals invalid
+      return n
+    }
+    const fsOverride = parseOverride(form.max_field_staff_override)
+    const soOverride = parseOverride(form.max_sub_operators_override)
+    if (form.role === 'operator' && (fsOverride === undefined || soOverride === undefined)) {
+      setMsg('Limits must be a whole number of seats, or blank for the plan default'); return
+    }
+    // Plan and overrides belong to a tenant operator only; other roles inherit
+    // their parent's entitlements, so we never stamp these onto their rows.
+    const planFields = form.role === 'operator'
+      ? { plan: form.plan || null, max_field_staff_override: fsOverride ?? null, max_sub_operators_override: soOverride ?? null }
+      : {}
     setSaving(true); setMsg('')
     try {
       if (editOp) {
-        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null, pincode: form.pincode.trim() || null, phone: form.phone.trim() || null }
+        const body: any = { name: form.name, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null, pincode: form.pincode.trim() || null, phone: form.phone.trim() || null, ...planFields }
         if (form.password) {
           const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
           if (hashRes.ok) { const { hash } = await hashRes.json(); body.password_hash = hash }
@@ -531,7 +710,7 @@ export function OperatorsPage({ myId }: any) {
       } else {
         const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: J, body: JSON.stringify({ password: form.password }) })
         const { hash } = await hashRes.json()
-        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null, pincode: form.pincode.trim() || null, phone: form.phone.trim() || null }) })
+        const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators'), { method: 'POST', headers: { ...J, Prefer: 'return=minimal' }, body: JSON.stringify({ name: form.name, email: form.email, password_hash: hash, role: form.role, state: form.state, country: form.country, owner_id: NEEDS_PARENT.includes(form.role) ? (form.owner_id || null) : null, company_name: form.company_name.trim() || null, billing_address: form.billing_address.trim() || null, gstin: form.gstin.trim().toUpperCase() || null, pincode: form.pincode.trim() || null, phone: form.phone.trim() || null, ...planFields }) })
         if (!r.ok) { const t = await r.text().catch(() => ''); setMsg('Error: ' + (t || r.status)); setSaving(false); return }
         setMsg('✓ Added')
       }
@@ -701,6 +880,51 @@ export function OperatorsPage({ myId }: any) {
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Phone *</label>
                   <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 90000 00000"
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+                </div>
+              </div>
+              {/* ── Plan & seat limits ────────────────────────────────
+                  The plan sets the defaults; an override is the per-operator
+                  exception. Blank means "whatever the plan says", so the plan
+                  can be changed later and this operator follows it. */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Plan</label>
+                <select value={form.plan} onChange={e => setForm({ ...form, plan: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', background: C.surface, color: C.text }}>
+                  <option value="">— No plan —</option>
+                  {plans.map((p: any) => (
+                    <option key={p.code} value={p.code}>{p.code.charAt(0).toUpperCase() + p.code.slice(1)}</option>
+                  ))}
+                </select>
+                {selectedPlan && (
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>
+                    Field staff: {limitLabel(selectedPlan.max_field_staff)} · Sub-operators: {limitLabel(selectedPlan.max_sub_operators)}
+                    {' · '}
+                    {[
+                      selectedPlan.has_team_management && 'team management',
+                      selectedPlan.has_ad_manager && 'ad manager',
+                      selectedPlan.has_loyalty && 'loyalty',
+                      selectedPlan.has_rest_api && 'REST API',
+                      selectedPlan.has_sso && 'SSO',
+                    ].filter(Boolean).join(', ') || 'no add-on features'}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Field Staff Limit</label>
+                  <input value={form.max_field_staff_override} onChange={e => setForm({ ...form, max_field_staff_override: e.target.value })} type="number" min={0} placeholder="—"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>
+                    blank = plan default ({selectedPlan ? limitLabel(selectedPlan.max_field_staff) : 'unlimited'})
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.text2, marginBottom: 5, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Sub-Operator Limit</label>
+                  <input value={form.max_sub_operators_override} onChange={e => setForm({ ...form, max_sub_operators_override: e.target.value })} type="number" min={0} placeholder="—"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.border}`, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: C.text }} />
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>
+                    blank = plan default ({selectedPlan ? limitLabel(selectedPlan.max_sub_operators) : 'unlimited'})
+                  </div>
                 </div>
               </div>
             </>)}
