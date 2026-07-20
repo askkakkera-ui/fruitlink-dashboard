@@ -710,8 +710,9 @@ function PermSummary({ perms }: any) {
 // Actions. Machines + Locations are operator-level concerns (keyed by the tenant
 // owner), so they appear only on the operator row — not on sub_operator /
 // field_staff rows, where they'd open an empty owner_id. Perms/Edit/Del on all.
-function OpActionBtns({ person, onAction }: any) {
+function OpActionBtns({ person, onAction, canRemove }: any) {
   const isOp = person.role === 'operator'
+  const delOk = !canRemove || canRemove(person)
   const btn = (key: string, label: string, color: string, bg: string) => (
     <button key={key} onClick={() => onAction(key, person)} style={{ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bg ? 'none' : '1px solid ' + C.border2, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg || C.surface, whiteSpace: 'nowrap' as const }}>{label}</button>
   )
@@ -721,11 +722,13 @@ function OpActionBtns({ person, onAction }: any) {
       {btn('perms', '🔐 Perms', PURPLE, PURPLEBG)}
       {isOp && btn('locations', '📍 Locations', C.green, C.greenBg)}
       {btn('edit', '✏️ Edit', C.text2, C.surface2)}
-      {btn('del', '🗑 Del', C.red, C.redBg)}
+      {delOk
+        ? btn('del', '🗑 Del', C.red, C.redBg)
+        : <button key="del" disabled title="Protected: you can't remove your own account or the last remaining Super Admin" style={{ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'not-allowed', color: C.text3, background: C.surface2, whiteSpace: 'nowrap' as const, opacity: 0.6 }}>🔒 Del</button>}
     </div>
   )
 }
-function PersonRow({ person, onAction, isMobile }: any) {
+function PersonRow({ person, onAction, isMobile, canRemove }: any) {
   if (isMobile) {
     return (
       <div style={{ borderTop: '1px solid ' + C.border, padding: '13px 15px', background: C.surface, display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
@@ -741,7 +744,7 @@ function PersonRow({ person, onAction, isMobile }: any) {
           <PermSummary perms={person.permissions} />
           <span style={{ fontSize: 11, color: C.text3, fontWeight: 600 }}>Joined {joinedStr(person.created_at)}</span>
         </div>
-        <OpActionBtns person={person} onAction={onAction} />
+        <OpActionBtns person={person} onAction={onAction} canRemove={canRemove} />
       </div>
     )
   }
@@ -757,7 +760,7 @@ function PersonRow({ person, onAction, isMobile }: any) {
       <div><OpRoleBadge role={person.role} /></div>
       <PermSummary perms={person.permissions} />
       <span style={{ fontSize: 12, color: C.text3, fontWeight: 600 }}>{joinedStr(person.created_at)}</span>
-      <div style={{ justifySelf: 'end' as const }}><OpActionBtns person={person} onAction={onAction} /></div>
+      <div style={{ justifySelf: 'end' as const }}><OpActionBtns person={person} onAction={onAction} canRemove={canRemove} /></div>
     </div>
   )
 }
@@ -765,7 +768,7 @@ const opPill = (c: string) => ({ display: 'inline-flex', alignItems: 'center', g
 
 // Pinned Fruitlink-internal card (super_admin + staff). No operator_code — a
 // code belongs to a tenant, and internal staff are not one.
-function FruitlinkCard({ internal, onAction, isMobile }: any) {
+function FruitlinkCard({ internal, onAction, isMobile, canRemove }: any) {
   const supers = internal.filter((p: any) => p.role === 'super_admin')
   const staff = internal.filter((p: any) => p.role === 'staff')
   const people = [...supers, ...staff]
@@ -783,7 +786,7 @@ function FruitlinkCard({ internal, onAction, isMobile }: any) {
         </div>
       </div>
       <div style={{ background: C.surface }}>
-        {people.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} />)}
+        {people.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
       </div>
     </div>
   )
@@ -792,7 +795,7 @@ function FruitlinkCard({ internal, onAction, isMobile }: any) {
 // Collapsible tenant card. Header carries operator_code + payment_verified — the
 // one place they show (never on nested rows). Nested people sit below the
 // operator identity strip.
-function TenantCard({ group, open, onToggle, onAction, isMobile }: any) {
+function TenantCard({ group, open, onToggle, onAction, isMobile, canRemove }: any) {
   const tenant = group.tenant
   const staffCount = group.sub_operators.length + group.field_staff.length
   const people = [...group.sub_operators, ...group.field_staff]
@@ -836,14 +839,14 @@ function TenantCard({ group, open, onToggle, onAction, isMobile }: any) {
             </div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' as const }}>
               <PermSummary perms={tenant.permissions} />
-              <OpActionBtns person={tenant} onAction={onAction} />
+              <OpActionBtns person={tenant} onAction={onAction} canRemove={canRemove} />
             </div>
           </div>
           {staffCount === 0
             ? <div style={{ borderTop: '1px solid ' + C.border, padding: '18px', textAlign: 'center' as const, fontSize: 12.5, color: C.text3, background: C.surface }}>No sub-operators or field staff under this tenant yet.</div>
             : <div style={{ borderTop: '1px solid ' + C.border, paddingLeft: isMobile ? 0 : 22, background: C.surface2 }}>
                 <div style={{ background: C.surface, borderLeft: isMobile ? 'none' : '3px solid ' + C.border }}>
-                  {people.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} />)}
+                  {people.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
                 </div>
               </div>}
         </div>
@@ -854,7 +857,7 @@ function TenantCard({ group, open, onToggle, onAction, isMobile }: any) {
 
 // Orphan card — children whose owner_id points at no live operator. Surfaced so
 // a dangling row is visible, never silently dropped.
-function OrphanCard({ orphans, onAction, isMobile }: any) {
+function OrphanCard({ orphans, onAction, isMobile, canRemove }: any) {
   if (!orphans || orphans.length === 0) return null
   return (
     <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: SHADOW_CARD, border: '1px solid ' + C.amber, marginBottom: 14, background: C.surface }}>
@@ -864,7 +867,7 @@ function OrphanCard({ orphans, onAction, isMobile }: any) {
           <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text2, marginLeft: 8 }}>owner not a live operator — check data</span>
         </div>
       </div>
-      {orphans.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} />)}
+      {orphans.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
     </div>
   )
 }
@@ -1022,6 +1025,12 @@ export function OperatorsPage({ myId }: any) {
   const toggle = (id: string) => setOpenMap((m) => ({ ...m, [id]: !(m[id] != null ? m[id] : ql.length > 0) }))
   const setAll = (val: boolean) => { const m: Record<string, boolean> = {}; filteredTenants.forEach((g) => { m[g.tenant.id] = val }); setOpenMap(m) }
 
+  // First-line UI guard mirroring the server rule: no self-removal, and the last
+  // super_admin is protected. The /api/sb DELETE path enforces the same thing
+  // server-side, so this only stops the button from opening the modal.
+  const superAdminCount = operators.filter((o) => o.role === 'super_admin').length
+  const canRemove = (p: any) => !(String(p.id) === String(myId || '') || (p.role === 'super_admin' && superAdminCount <= 1))
+
   // Wire the ported card actions to the EXISTING modals — behaviour unchanged.
   const onAction = (key: string, person: any) => {
     if (key === 'perms') setPermissionsOp(person)
@@ -1092,13 +1101,13 @@ export function OperatorsPage({ myId }: any) {
           </div>
 
           {/* Pinned Fruitlink-internal card */}
-          <FruitlinkCard internal={grouped.internal} onAction={onAction} isMobile={isMobile} />
+          <FruitlinkCard internal={grouped.internal} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />
 
           {/* Tenant list */}
           <div style={{ fontSize: 11.5, fontWeight: 800, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '.07em', margin: '4px 2px 12px' }}>Operator Tenants · {filteredTenants.length}</div>
           {filteredTenants.length === 0
             ? <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, textAlign: 'center', padding: '44px 20px' }}><div style={{ fontSize: 26, marginBottom: 10 }}>🔍</div><div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>No tenants match</div><div style={{ fontSize: 13, color: C.text3, marginTop: 6 }}>Try a different search or region.</div></div>
-            : shownTenants.map(g => <TenantCard key={g.tenant.id} group={g} open={isOpen(g.tenant.id)} onToggle={() => toggle(g.tenant.id)} onAction={onAction} isMobile={isMobile} />)}
+            : shownTenants.map(g => <TenantCard key={g.tenant.id} group={g} open={isOpen(g.tenant.id)} onToggle={() => toggle(g.tenant.id)} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
 
           {visible < filteredTenants.length && (
             <div style={{ textAlign: 'center', marginTop: 8 }}>
@@ -1107,7 +1116,7 @@ export function OperatorsPage({ myId }: any) {
           )}
 
           {/* Data-integrity surface: children with a dead owner_id, never hidden */}
-          <OrphanCard orphans={grouped.orphans} onAction={onAction} isMobile={isMobile} />
+          <OrphanCard orphans={grouped.orphans} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />
         </>
       )}
 
