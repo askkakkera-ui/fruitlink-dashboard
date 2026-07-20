@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Fruitlink <alerts@fruitlinktech.in>',
+        from: 'Fruitlink <alerts@mail.fruitlinktech.in>',
         to: email,
         subject: 'Fruitlink — Reset your password',
         html: '<h2>Password Reset</h2><p>Hello ' + operator.name + ',</p><p>Click below to reset your password. Expires in 1 hour.</p><p><a href="' + resetLink + '" style="background:#d97706;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin:10px 0;">Reset Password</a></p><p>Or copy this link:<br>' + resetLink + '</p><p>Fruitlink Technologies</p>'
