@@ -399,6 +399,7 @@ export function LocationsModal({ op, onClose }: any) {
 // re-checked server-side on every write. Nothing here is a number in code: an
 // unlimited plan (limit === null) simply never blocks.
 export function MyTeamPage() {
+  const isMobile = useIsMobile()
   const [team, setTeam] = useState<any[]>([])
   const [myPerms, setMyPerms] = useState<any>(null)
   const [ent, setEnt] = useState<any>(null)
@@ -482,42 +483,25 @@ export function MyTeamPage() {
     } catch (e: any) { setErr(e.message) }
   }
 
+  // Same visual as OperatorsPage rows (shared PersonRow), but MyTeamPage's own
+  // action set: sub-operators get Perms (bounded by the grantor's own ceiling
+  // via limitTo); field staff get Edit/Del only when the plan allows it.
   const Row = ({ m }: any) => {
-    const granted = m.permissions ? Object.keys(m.permissions).filter((k) => k.startsWith('can_') && m.permissions[k] === true).length : 0
     const isSub = m.role === 'sub_operator'
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderTop: '1px solid ' + C.border, background: C.surface }}>
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSub ? '#e0f7fa' : '#fff3ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: isSub ? '#0891b2' : C.orange, flexShrink: 0 }}>
-          {(m.name || m.email || '?').charAt(0).toUpperCase()}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.name || '—'}</div>
-          <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>{m.email}</div>
-        </div>
-        <Pill color={isSub ? '#0891b2' : C.orange} bg={isSub ? '#e0f7fa' : '#fff3ea'}>
-          {isSub ? '🧑‍💼 Sub-Operator' : '👷 Field Staff'}
-        </Pill>
-        <span style={{ fontSize: 12, color: C.text3, minWidth: 92, textAlign: 'right' as const }}>{granted} permission{granted !== 1 ? 's' : ''}</span>
-        {isSub && (
-          <button onClick={() => setPermsFor(m)}
-            style={{ background: '#f5f3ff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#7c3aed', cursor: 'pointer', flexShrink: 0 }}>
-            🔐 Perms
-          </button>
-        )}
-        {!isSub && canManageStaff && (
-          <>
-            <button onClick={() => openEditStaff(m)}
-              style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.text2, cursor: 'pointer', flexShrink: 0 }}>
-              ✏️ Edit
-            </button>
-            <button onClick={() => deleteStaff(m)}
-              style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.red, cursor: 'pointer', flexShrink: 0 }}>
-              🗑
-            </button>
-          </>
-        )}
+    const bs = (color: string, bg: string, bordered?: boolean) => ({ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bordered ? '1px solid ' + C.border2 : 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg, whiteSpace: 'nowrap' as const })
+    const actions = isSub ? (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+        <button onClick={() => setPermsFor(m)} style={bs('#7c3aed', '#f5f3ff')}>🔐 Perms</button>
       </div>
+    ) : canManageStaff ? (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+        <button onClick={() => openEditStaff(m)} style={bs(C.text2, C.surface2, true)}>✏️ Edit</button>
+        <button onClick={() => deleteStaff(m)} style={bs(C.red, C.redBg)}>🗑 Del</button>
+      </div>
+    ) : (
+      <span style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' as const }}>Managed by Fruitlink</span>
     )
+    return <PersonRow person={m} actions={actions} isMobile={isMobile} />
   }
 
   const Section = ({ title, rows, empty, action, note }: any) => (
@@ -728,7 +712,11 @@ function OpActionBtns({ person, onAction, canRemove }: any) {
     </div>
   )
 }
-function PersonRow({ person, onAction, isMobile, canRemove }: any) {
+// Shared row. By default it renders the OperatorsPage action set; pass `actions`
+// to supply a page-specific one (MyTeamPage uses this) while keeping the same
+// avatar / name / role-badge / capability-chip visual.
+function PersonRow({ person, onAction, isMobile, canRemove, actions }: any) {
+  const actionNode = actions !== undefined ? actions : <OpActionBtns person={person} onAction={onAction} canRemove={canRemove} />
   if (isMobile) {
     return (
       <div style={{ borderTop: '1px solid ' + C.border, padding: '13px 15px', background: C.surface, display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
@@ -744,7 +732,7 @@ function PersonRow({ person, onAction, isMobile, canRemove }: any) {
           <PermSummary perms={person.permissions} />
           <span style={{ fontSize: 11, color: C.text3, fontWeight: 600 }}>Joined {joinedStr(person.created_at)}</span>
         </div>
-        <OpActionBtns person={person} onAction={onAction} canRemove={canRemove} />
+        {actionNode}
       </div>
     )
   }
@@ -760,7 +748,7 @@ function PersonRow({ person, onAction, isMobile, canRemove }: any) {
       <div><OpRoleBadge role={person.role} /></div>
       <PermSummary perms={person.permissions} />
       <span style={{ fontSize: 12, color: C.text3, fontWeight: 600 }}>{joinedStr(person.created_at)}</span>
-      <div style={{ justifySelf: 'end' as const }}><OpActionBtns person={person} onAction={onAction} canRemove={canRemove} /></div>
+      <div style={{ justifySelf: 'end' as const }}>{actionNode}</div>
     </div>
   )
 }
