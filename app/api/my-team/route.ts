@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Bulk fetch: team members + my own permissions (the grant ceiling) + plan
-    // entitlements, in parallel
-    const [teamRes, myPermRes, ent] = await Promise.all([
+    // entitlements + the operator's own identity row, in parallel
+    const [teamRes, myPermRes, ent, selfRes] = await Promise.all([
       fetch(
         SB_URL + '/rest/v1/operators?select=id,name,email,phone,role,state,country,created_at' +
         '&owner_id=eq.' + encodeURIComponent(parentId) + '&deleted_at=is.null&order=created_at.desc',
@@ -47,11 +47,21 @@ export async function GET(request: NextRequest) {
         { headers: sbH() }
       ),
       loadEntitlements(parentId),
+      // The company's own code/name, so MyTeamPage can show the operator the
+      // reference their invoices carry. payment_verified rides along for the
+      // badge; it gates nothing today (see the operator card in OperatorsPage).
+      fetch(
+        SB_URL + '/rest/v1/operators?select=id,name,company_name,operator_code,payment_verified' +
+        '&id=eq.' + encodeURIComponent(parentId) + '&limit=1',
+        { headers: sbH() }
+      ),
     ]);
 
     const team = await teamRes.json();
     const myPermRows = await myPermRes.json();
     const myPermissions = Array.isArray(myPermRows) && myPermRows[0] ? myPermRows[0] : null;
+    const selfRows = await selfRes.json();
+    const operator = Array.isArray(selfRows) && selfRows[0] ? selfRows[0] : null;
 
     const list = Array.isArray(team) ? team : [];
     // Usage is counted from the rows we just read, so the number the UI gates on
@@ -63,7 +73,7 @@ export async function GET(request: NextRequest) {
     const entitlements = ent ? ent.entitlements : null;
 
     if (list.length === 0) {
-      return NextResponse.json({ team: [], my_permissions: myPermissions, entitlements, usage }, { headers: NO_STORE });
+      return NextResponse.json({ team: [], my_permissions: myPermissions, entitlements, usage, operator }, { headers: NO_STORE });
     }
 
     // One bulk query for every team member's permissions — no N+1
@@ -79,7 +89,7 @@ export async function GET(request: NextRequest) {
 
     const enriched = list.map((t: any) => ({ ...t, permissions: permByOp[t.id] || null }));
 
-    return NextResponse.json({ team: enriched, my_permissions: myPermissions, entitlements, usage }, { headers: NO_STORE });
+    return NextResponse.json({ team: enriched, my_permissions: myPermissions, entitlements, usage, operator }, { headers: NO_STORE });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }

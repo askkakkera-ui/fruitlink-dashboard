@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
+import { generateOperatorCode, bumpOperatorCodeSequence, existingOperatorCode, operatorCompanyName, isOperatorCodeCollision, sequenceOf } from '@/lib/operator-code';
+
+// Refused at the two minting points only (POST role=operator, PATCH promoting a
+// codeless row). A code built from a personal display name would be wrong on an
+// invoice and is unfixable afterwards, so minting without a company name is not
+// allowed to happen quietly.
+const COMPANY_NAME_REQUIRED = 'Registered Company Name required to create/promote an operator';
 
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
@@ -373,10 +380,92 @@ async function guardWrite(request: NextRequest, method: string) {
     return null;
   }
 
+  // ── operators: stamp operator_code server-side ──
+  // Reached only by super_admin (WRITE_RULES above). Two jobs:
+  //   1. strip any client-supplied operator_code — the code is ours to issue,
+  //      and it is the reference a future payment integration will verify
+  //      against, so a client must never be able to name or change it;
+  //   2. issue one for role='operator' rows that have none, both at creation
+  //      and at the pending -> operator promotion (approving a signup is just a
+  //      role edit through this same PATCH — there is no separate approve route).
+  // Team members (sub_operator / field_staff / staff) never get a code.
+  if (table === 'operators' && (method === 'POST' || method === 'PATCH')) {
+    let body: any = {};
+    try { body = JSON.parse(await request.clone().text() || '{}'); } catch { body = {}; }
+
+    const rows: any[] = Array.isArray(body) ? body : [body];
+    let issued = 0; // keeps a multi-row insert from reusing one sequence
+
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      delete row.operator_code;
+
+      if (method === 'POST') {
+        if (row.role === 'operator') {
+          const company = String(row.company_name || '').trim();
+          if (!company) return NextResponse.json({ error: COMPANY_NAME_REQUIRED }, { status: 422 });
+          row.operator_code = await generateOperatorCode(company, issued);
+          issued = sequenceOf(row.operator_code);
+        }
+        continue;
+      }
+
+      // PATCH: only act when this edit lands the row on role='operator'. A body
+      // without `role` isn't a promotion, so it's left alone.
+      if (row.role !== 'operator') continue;
+      const targetId = idEqOf(rawPath);
+      if (!targetId) continue;
+      // Never overwrite a code that already exists — it may already be printed
+      // on an invoice.
+      if (await existingOperatorCode(targetId)) continue;
+      // Past this point the row has no code, so this PATCH is a minting event.
+      // (A row that already has one returned above: codes are frozen once
+      // issued, and a later edit must not re-derive or re-check anything.)
+      //
+      // Prefer what this edit is setting — approving a signup is the super_admin
+      // filling in the company name on the same form that flips the role, so the
+      // body holds the newer value; otherwise use the stored one.
+      const company = String(row.company_name || '').trim() || (await operatorCompanyName(targetId)).trim();
+      if (!company) return NextResponse.json({ error: COMPANY_NAME_REQUIRED }, { status: 422 });
+      row.operator_code = await generateOperatorCode(company, issued);
+      issued = sequenceOf(row.operator_code);
+    }
+
+    return { rewriteBody: JSON.stringify(body) } as any;
+  }
+
   // The allowlist above already enforced what the old trailing rules did:
   // operators/machines/machine_operators are super_admin-only via WRITE_RULES,
   // and field_staff appears in no rule except visits POST.
   return null;
+}
+
+// A racing insert can take the sequence we just picked; the unique constraint
+// catches it. Re-generate above the taken number and retry.
+const CODE_RETRIES = 3;
+async function sendWithCodeRetry(
+  url: string, method: 'POST' | 'PATCH', headers: Record<string, string>, body: string, table: string,
+): Promise<{ res: Response; text: string }> {
+  let res = await fetch(url, { method, headers, body });
+  let text = await res.text();
+  if (table !== 'operators') return { res, text };
+
+  for (let i = 0; i < CODE_RETRIES && isOperatorCodeCollision(res.status, text); i++) {
+    let parsed: any;
+    try { parsed = JSON.parse(body); } catch { break; }
+    const rows: any[] = Array.isArray(parsed) ? parsed : [parsed];
+    let bumped = false;
+    for (const row of rows) {
+      if (!row || !row.operator_code) continue;
+      row.operator_code = await bumpOperatorCodeSequence(row.operator_code);
+      bumped = true;
+    }
+    if (!bumped) break;
+    body = JSON.stringify(parsed);
+    res = await fetch(url, { method, headers, body });
+    text = await res.text();
+  }
+  return { res, text };
 }
 
 export async function POST(request: NextRequest) {
@@ -388,8 +477,9 @@ export async function POST(request: NextRequest) {
     const table = tableOf(path);
     const url = SB_URL + path;
     const body = (g && (g as any).rewriteBody) ? (g as any).rewriteBody : await request.text();
-    const res = await fetch(url, { method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }), body });
-    const data = await res.json();
+    const { res, text } = await sendWithCodeRetry(url, 'POST', sbHeaders({ Prefer: 'return=representation' }), body, table);
+    let data: any;
+    try { data = JSON.parse(text); } catch { data = null; }
     if (res.ok && session) {
       const created = Array.isArray(data) ? data[0] : data;
       await logAudit({ session, action: 'create', module: table, entity_table: table, entity_id: created && created.id ? String(created.id) : null, old_value: null, new_value: created ?? null, req: request });
@@ -409,8 +499,7 @@ export async function PATCH(request: NextRequest) {
     const body = (g && (g as any).rewriteBody) ? (g as any).rewriteBody : await request.text();
     let before: any = null;
     try { const br = await fetch(SB_URL + path, { headers: sbHeaders() }); if (br.ok) { before = await br.json(); } } catch { /* best-effort */ }
-    const res = await fetch(url, { method: 'PATCH', headers: sbHeaders({ Prefer: 'return=representation' }), body });
-    const text = await res.text();
+    const { res, text } = await sendWithCodeRetry(url, 'PATCH', sbHeaders({ Prefer: 'return=representation' }), body, table);
     if (res.ok && session) {
       let after: any = null;
       try { after = JSON.parse(text); } catch { after = null; }

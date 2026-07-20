@@ -401,6 +401,7 @@ export function MyTeamPage() {
   const [team, setTeam] = useState<any[]>([])
   const [myPerms, setMyPerms] = useState<any>(null)
   const [ent, setEnt] = useState<any>(null)
+  const [me, setMe] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [permsFor, setPermsFor] = useState<any>(null)
   const [err, setErr] = useState('')
@@ -421,6 +422,7 @@ export function MyTeamPage() {
         setTeam(Array.isArray(d.team) ? d.team : [])
         setMyPerms(d.my_permissions || null)
         setEnt(d.entitlements || null)
+        setMe(d.operator || null)
       }
     } catch (e: any) { setErr(e.message) }
     setLoading(false)
@@ -556,6 +558,20 @@ export function MyTeamPage() {
         <div style={{ fontSize: 13, color: C.text2, marginTop: 3 }}>
           People who work under your account. You can grant sub-operators any permission you hold yourself.
         </div>
+        {/* The company's own code. Everyone listed below belongs to it via
+            owner_id — they don't carry codes of their own. */}
+        {me?.operator_code && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '9px 14px', borderRadius: 12, background: C.surface2, border: '1px solid ' + C.border }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Operator Code</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: C.text, fontFamily: 'monospace' }}>{me.operator_code}</span>
+            {/* Display only — payment verification against this code is a
+                future integration and gates nothing today. */}
+            <span title="Payment verification is a future integration — this flag gates nothing today"
+              style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, color: me.payment_verified ? C.green : C.text3, background: me.payment_verified ? C.greenBg : C.surface }}>
+              {me.payment_verified ? '✓ Payment verified' : 'Payment unverified'}
+            </span>
+          </div>
+        )}
       </div>
 
       {err && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 9, background: C.redBg, color: C.red, fontSize: 13, fontWeight: 600 }}>{err}</div>}
@@ -651,7 +667,7 @@ export function OperatorsPage({ myId }: any) {
   const limitLabel = (v: any) => (v === null || v === undefined ? 'unlimited' : String(v))
   const fetchOperators = async () => {
     setLoading(true)
-    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,pincode,phone,plan,max_field_staff_override,max_sub_operators_override,created_at&order=created_at.desc'))
+    const res = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,state,country,owner_id,company_name,billing_address,gstin,pincode,phone,plan,max_field_staff_override,max_sub_operators_override,operator_code,payment_verified,created_at&order=created_at.desc'))
     const data = await res.json()
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
@@ -787,6 +803,23 @@ export function OperatorsPage({ myId }: any) {
                       <div>
                         <div style={{ fontWeight: 600, color: C.text }}>{op.name || '—'}</div>
                         <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace' }}>{op.id.slice(0, 8)}...</div>
+                        {/* Company code — operators only; team members reference
+                            their operator's code through owner_id. */}
+                        {op.operator_code && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                            <span style={{ fontSize: 12, color: C.text, fontFamily: 'monospace', fontWeight: 700 }}>
+                              Code: {op.operator_code}
+                            </span>
+                            {/* Inert badge. payment_verified is written by nothing
+                                today and gates nothing — a future payment
+                                integration will verify against operator_code and
+                                set it. Until then it is display only. */}
+                            <span title="Payment verification is a future integration — this flag gates nothing today"
+                              style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: op.payment_verified ? C.green : C.text3, background: op.payment_verified ? C.greenBg : C.surface2 }}>
+                              {op.payment_verified ? '✓ Paid' : 'Unverified'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
