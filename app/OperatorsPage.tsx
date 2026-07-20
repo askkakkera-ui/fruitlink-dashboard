@@ -1247,7 +1247,7 @@ export function OperatorsPage({ myId }: any) {
       )}
 
       {assignOp && <AssignMachinesModal op={assignOp} onClose={() => setAssignOp(null)} />}
-      {permissionsOp && <PermissionsModal op={permissionsOp} onClose={() => setPermissionsOp(null)} />}
+      {permissionsOp && <PermissionsModal op={permissionsOp} onClose={() => { setPermissionsOp(null); fetchPerms() }} />}
       {locationsOp && <LocationsModal op={locationsOp} onClose={() => setLocationsOp(null)} />}
 
       {delOp && (
