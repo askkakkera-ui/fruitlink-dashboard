@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { C, Pill } from './lib/dashboard-shared'
+import { C, Pill, useIsMobile } from './lib/dashboard-shared'
+import { groupOperatorsByTenant } from './lib/operator-grouping'
 
 // ─── Operators Page (super_admin only) ───────────────────────────
 export function AssignMachinesModal({ op, onClose }: any) {
@@ -398,6 +399,7 @@ export function LocationsModal({ op, onClose }: any) {
 // re-checked server-side on every write. Nothing here is a number in code: an
 // unlimited plan (limit === null) simply never blocks.
 export function MyTeamPage() {
+  const isMobile = useIsMobile()
   const [team, setTeam] = useState<any[]>([])
   const [myPerms, setMyPerms] = useState<any>(null)
   const [ent, setEnt] = useState<any>(null)
@@ -481,42 +483,25 @@ export function MyTeamPage() {
     } catch (e: any) { setErr(e.message) }
   }
 
+  // Same visual as OperatorsPage rows (shared PersonRow), but MyTeamPage's own
+  // action set: sub-operators get Perms (bounded by the grantor's own ceiling
+  // via limitTo); field staff get Edit/Del only when the plan allows it.
   const Row = ({ m }: any) => {
-    const granted = m.permissions ? Object.keys(m.permissions).filter((k) => k.startsWith('can_') && m.permissions[k] === true).length : 0
     const isSub = m.role === 'sub_operator'
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderTop: '1px solid ' + C.border, background: C.surface }}>
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: isSub ? '#e0f7fa' : '#fff3ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: isSub ? '#0891b2' : C.orange, flexShrink: 0 }}>
-          {(m.name || m.email || '?').charAt(0).toUpperCase()}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.name || '—'}</div>
-          <div style={{ fontSize: 12, color: C.text2, marginTop: 1 }}>{m.email}</div>
-        </div>
-        <Pill color={isSub ? '#0891b2' : C.orange} bg={isSub ? '#e0f7fa' : '#fff3ea'}>
-          {isSub ? '🧑‍💼 Sub-Operator' : '👷 Field Staff'}
-        </Pill>
-        <span style={{ fontSize: 12, color: C.text3, minWidth: 92, textAlign: 'right' as const }}>{granted} permission{granted !== 1 ? 's' : ''}</span>
-        {isSub && (
-          <button onClick={() => setPermsFor(m)}
-            style={{ background: '#f5f3ff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#7c3aed', cursor: 'pointer', flexShrink: 0 }}>
-            🔐 Perms
-          </button>
-        )}
-        {!isSub && canManageStaff && (
-          <>
-            <button onClick={() => openEditStaff(m)}
-              style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.text2, cursor: 'pointer', flexShrink: 0 }}>
-              ✏️ Edit
-            </button>
-            <button onClick={() => deleteStaff(m)}
-              style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: C.red, cursor: 'pointer', flexShrink: 0 }}>
-              🗑
-            </button>
-          </>
-        )}
+    const bs = (color: string, bg: string, bordered?: boolean) => ({ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bordered ? '1px solid ' + C.border2 : 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg, whiteSpace: 'nowrap' as const })
+    const actions = isSub ? (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+        <button onClick={() => setPermsFor(m)} style={bs('#7c3aed', '#f5f3ff')}>🔐 Perms</button>
       </div>
+    ) : canManageStaff ? (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+        <button onClick={() => openEditStaff(m)} style={bs(C.text2, C.surface2, true)}>✏️ Edit</button>
+        <button onClick={() => deleteStaff(m)} style={bs(C.red, C.redBg)}>🗑 Del</button>
+      </div>
+    ) : (
+      <span style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' as const }}>Managed by Fruitlink</span>
     )
+    return <PersonRow person={m} actions={actions} isMobile={isMobile} />
   }
 
   const Section = ({ title, rows, empty, action, note }: any) => (
@@ -640,6 +625,241 @@ export function MyTeamPage() {
   )
 }
 
+// ─── Shared card / person-row design system (ported from fl-operators.jsx) ───
+// Design tokens come from the live `C` object (colors.css declares C the ground
+// truth). The prototype's CSS-var / color-mix references are replaced with the
+// concrete equivalents below so nothing depends on a stylesheet the app doesn't
+// load. Roles carry concrete hex (not var()) so `color + alpha` tints work.
+const IND = '#423A8E', INDBG = '#efeefc', PURPLE = '#7c3aed', PURPLEBG = '#f5f3ff'
+const SHADOW_CARD = '0 1px 3px rgba(0,0,0,0.06)'
+const SHADOW_BRAND = '0 2px 8px #f9731640'
+const a22 = (hex: string) => hex + '38' // ~22% alpha on a 6-digit hex
+
+const OP_ROLES: Record<string, { label: string; icon: string; color: string; bg: string }> = {
+  super_admin: { label: 'Super Admin', icon: '👑', color: PURPLE, bg: PURPLEBG },
+  staff: { label: 'Fruitlink Staff', icon: '🏢', color: '#d97706', bg: '#fff7ed' },
+  operator: { label: 'Operator', icon: '🧑‍💼', color: C.blue, bg: C.blueBg },
+  sub_operator: { label: 'Sub-Operator', icon: '🧑‍💻', color: '#0891b2', bg: '#e0f7fa' },
+  field_staff: { label: 'Field Staff', icon: '👷', color: C.orange, bg: C.orangeBg },
+}
+// Capability chips (what a person can DO) vs menu visibility (sidebar only).
+// Same key sets the PermissionsModal / operator-permissions route enforce.
+const CAP_PERMS: [string, string][] = [
+  ['can_edit_machine_config', 'Machine config'],
+  ['can_manage_field_staff', 'Field staff'],
+  ['can_manage_locations', 'Locations'],
+  ['can_manage_warehouse', 'Warehouse'],
+  ['can_edit_office_location', 'Office pin'],
+  ['can_export_data', 'Export'],
+  ['can_manage_ads', 'Ads'],
+]
+const VIEW_KEYS = [
+  'can_view_console', 'can_view_orders', 'can_view_alerts', 'can_view_fleet_map',
+  'can_view_warehouse', 'can_view_reports', 'can_view_field_staff', 'can_view_attendance',
+  'can_view_notify_config', 'can_view_comm_log', 'can_view_ad_manager',
+]
+const opInitial = (s: string) => (s || '?').charAt(0).toUpperCase()
+const joinedStr = (t: string) => t ? new Date(t).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+const viewCount = (p: any) => VIEW_KEYS.filter((k) => p && p[k]).length
+const enforcedCaps = (p: any) => CAP_PERMS.filter(([k]) => p && p[k]).map(([k]) => k)
+
+function OpRoleBadge({ role }: any) {
+  const r = OP_ROLES[role] || OP_ROLES.operator
+  return <Pill color={r.color} bg={r.bg}>{r.icon} {r.label}</Pill>
+}
+function OpAvatar({ person }: any) {
+  const r = OP_ROLES[person.role] || OP_ROLES.operator
+  return (
+    <div style={{ width: 38, height: 38, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: r.color, background: r.bg, border: '1px solid ' + a22(r.color) }}>
+      {opInitial(person.name || person.email)}
+    </div>
+  )
+}
+// Capability summary — chips for what they can DO, plus a "menus" count. When we
+// have no permission row for a person, we say "View-only" rather than invent.
+function PermSummary({ perms }: any) {
+  const caps = enforcedCaps(perms)
+  const vc = viewCount(perms)
+  const capLabel: Record<string, string> = Object.fromEntries(CAP_PERMS)
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5, alignItems: 'center' }}>
+      {caps.length === 0
+        ? <span style={{ fontSize: 11, color: C.text3, fontWeight: 600, fontStyle: 'italic' as const }}>View-only</span>
+        : caps.slice(0, 4).map((k) => <span key={k} style={{ fontSize: 10.5, fontWeight: 700, color: IND, background: INDBG, border: '1px solid ' + a22(IND), borderRadius: 20, padding: '2px 8px' }}>⚡ {capLabel[k]}</span>)}
+      {caps.length > 4 && <span style={{ fontSize: 10.5, fontWeight: 700, color: C.text3 }}>+{caps.length - 4}</span>}
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: C.text3, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 20, padding: '2px 8px' }}>👁 {vc} menus</span>
+    </div>
+  )
+}
+// Actions. Machines + Locations are operator-level concerns (keyed by the tenant
+// owner), so they appear only on the operator row — not on sub_operator /
+// field_staff rows, where they'd open an empty owner_id. Perms/Edit/Del on all.
+function OpActionBtns({ person, onAction, canRemove }: any) {
+  const isOp = person.role === 'operator'
+  const delOk = !canRemove || canRemove(person)
+  const btn = (key: string, label: string, color: string, bg: string) => (
+    <button key={key} onClick={() => onAction(key, person)} style={{ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bg ? 'none' : '1px solid ' + C.border2, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg || C.surface, whiteSpace: 'nowrap' as const }}>{label}</button>
+  )
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+      {isOp && btn('machines', '🖥 Machines', C.blue, C.blueBg)}
+      {btn('perms', '🔐 Perms', PURPLE, PURPLEBG)}
+      {isOp && btn('locations', '📍 Locations', C.green, C.greenBg)}
+      {btn('edit', '✏️ Edit', C.text2, C.surface2)}
+      {delOk
+        ? btn('del', '🗑 Del', C.red, C.redBg)
+        : <button key="del" disabled title="Protected: you can't remove your own account or the last remaining Super Admin" style={{ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'not-allowed', color: C.text3, background: C.surface2, whiteSpace: 'nowrap' as const, opacity: 0.6 }}>🔒 Del</button>}
+    </div>
+  )
+}
+// Shared row. By default it renders the OperatorsPage action set; pass `actions`
+// to supply a page-specific one (MyTeamPage uses this) while keeping the same
+// avatar / name / role-badge / capability-chip visual.
+function PersonRow({ person, onAction, isMobile, canRemove, actions }: any) {
+  const actionNode = actions !== undefined ? actions : <OpActionBtns person={person} onAction={onAction} canRemove={canRemove} />
+  if (isMobile) {
+    return (
+      <div style={{ borderTop: '1px solid ' + C.border, padding: '13px 15px', background: C.surface, display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+        <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+          <OpAvatar person={person} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{person.name || '—'}</div>
+            <div style={{ fontSize: 12, color: C.text2, wordBreak: 'break-all' as const }}>{person.email}</div>
+            <div style={{ marginTop: 6 }}><OpRoleBadge role={person.role} /></div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+          <PermSummary perms={person.permissions} />
+          <span style={{ fontSize: 11, color: C.text3, fontWeight: 600 }}>Joined {joinedStr(person.created_at)}</span>
+        </div>
+        {actionNode}
+      </div>
+    )
+  }
+  return (
+    <div style={{ borderTop: '1px solid ' + C.border, padding: '12px 18px', background: C.surface, display: 'grid', gridTemplateColumns: 'minmax(180px,1.4fr) 150px minmax(200px,1.6fr) 110px auto', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 11, alignItems: 'center', minWidth: 0 }}>
+        <OpAvatar person={person} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' as const }}>{person.name || '—'}</div>
+          <div style={{ fontSize: 12, color: C.text2, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' as const }}>{person.email}</div>
+        </div>
+      </div>
+      <div><OpRoleBadge role={person.role} /></div>
+      <PermSummary perms={person.permissions} />
+      <span style={{ fontSize: 12, color: C.text3, fontWeight: 600 }}>{joinedStr(person.created_at)}</span>
+      <div style={{ justifySelf: 'end' as const }}>{actionNode}</div>
+    </div>
+  )
+}
+const opPill = (c: string) => ({ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: c, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 20, padding: '4px 10px', whiteSpace: 'nowrap' as const })
+
+// Pinned Fruitlink-internal card (super_admin + staff). No operator_code — a
+// code belongs to a tenant, and internal staff are not one.
+function FruitlinkCard({ internal, onAction, isMobile, canRemove }: any) {
+  const supers = internal.filter((p: any) => p.role === 'super_admin')
+  const staff = internal.filter((p: any) => p.role === 'staff')
+  const people = [...supers, ...staff]
+  if (people.length === 0) return null
+  return (
+    <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: SHADOW_CARD, border: '1.5px solid ' + IND, marginBottom: 18 }}>
+      <div style={{ background: 'linear-gradient(100deg,' + IND + ',#5a4fb0)', color: '#fff', padding: isMobile ? '14px 16px' : '16px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 22, boxShadow: '0 3px 10px rgba(0,0,0,.25)' }}>F</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 16.5, fontWeight: 800, letterSpacing: '.01em', display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' as const }}>
+            Fruitlink Technologies
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', background: 'rgba(255,255,255,.22)', border: '1px solid rgba(255,255,255,.4)', borderRadius: 20, padding: '2px 9px' }}>PLATFORM OWNER</span>
+          </div>
+          <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3, fontWeight: 600 }}>Internal team · {supers.length} super admin{supers.length !== 1 ? 's' : ''} · {staff.length} staff</div>
+        </div>
+      </div>
+      <div style={{ background: C.surface }}>
+        {people.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
+      </div>
+    </div>
+  )
+}
+
+// Collapsible tenant card. Header carries operator_code + payment_verified — the
+// one place they show (never on nested rows). Nested people sit below the
+// operator identity strip.
+function TenantCard({ group, open, onToggle, onAction, isMobile, canRemove }: any) {
+  const tenant = group.tenant
+  const staffCount = group.sub_operators.length + group.field_staff.length
+  const people = [...group.sub_operators, ...group.field_staff]
+  const title = tenant.company_name || tenant.name || tenant.email
+  const region = [tenant.state, tenant.country].filter(Boolean).join(', ')
+  return (
+    <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: SHADOW_CARD, border: '1px solid ' + (open ? C.border2 : C.border), marginBottom: 14, background: C.surface }}>
+      <div onClick={onToggle} style={{ padding: isMobile ? '13px 15px' : '15px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, background: open ? '#fffaf6' : C.surface, flexWrap: 'wrap' as const }}>
+        <span style={{ fontSize: 13, color: C.text3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}>▸</span>
+        <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: OP_ROLES.operator.color, background: OP_ROLES.operator.bg, border: '1px solid ' + a22(OP_ROLES.operator.color) }}>{opInitial(title)}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' as const }}>{title}</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+            <span style={{ fontWeight: 700 }}>{tenant.name || tenant.email}</span>
+            {region && <span style={{ color: C.text3 }}>{region}</span>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
+          {tenant.operator_code && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: C.text, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontFamily: 'monospace', whiteSpace: 'nowrap' as const }}>{tenant.operator_code}</span>
+          )}
+          {/* Display-only. payment_verified is written by nothing today and gates
+              nothing — a future payment integration verifies against the code. */}
+          <span title="Payment verification is a future integration — this flag gates nothing today"
+            style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 999, color: tenant.payment_verified ? C.green : C.text3, background: tenant.payment_verified ? C.greenBg : C.surface2, border: '1px solid ' + C.border, whiteSpace: 'nowrap' as const }}>
+            {tenant.payment_verified ? '✓ Paid' : 'Unverified'}
+          </span>
+          <span style={opPill(C.text2)}>👥 {staffCount + 1}</span>
+        </div>
+      </div>
+      {open && (
+        <div>
+          {/* Operator identity strip — the tenant owner + operator actions */}
+          <div style={{ borderTop: '1px solid ' + C.border, background: C.surface2, padding: isMobile ? '12px 15px' : '13px 18px', display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const }}>
+            <div style={{ display: 'flex', gap: 11, alignItems: 'center', minWidth: 0 }}>
+              <OpRoleBadge role="operator" />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>{tenant.name || '—'} <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text3 }}>· tenant owner</span></div>
+                <div style={{ fontSize: 12, color: C.text2, wordBreak: 'break-all' as const }}>{tenant.email}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' as const }}>
+              <PermSummary perms={tenant.permissions} />
+              <OpActionBtns person={tenant} onAction={onAction} canRemove={canRemove} />
+            </div>
+          </div>
+          {staffCount === 0
+            ? <div style={{ borderTop: '1px solid ' + C.border, padding: '18px', textAlign: 'center' as const, fontSize: 12.5, color: C.text3, background: C.surface }}>No sub-operators or field staff under this tenant yet.</div>
+            : <div style={{ borderTop: '1px solid ' + C.border, paddingLeft: isMobile ? 0 : 22, background: C.surface2 }}>
+                <div style={{ background: C.surface, borderLeft: isMobile ? 'none' : '3px solid ' + C.border }}>
+                  {people.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
+                </div>
+              </div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Orphan card — children whose owner_id points at no live operator. Surfaced so
+// a dangling row is visible, never silently dropped.
+function OrphanCard({ orphans, onAction, isMobile, canRemove }: any) {
+  if (!orphans || orphans.length === 0) return null
+  return (
+    <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: SHADOW_CARD, border: '1px solid ' + C.amber, marginBottom: 14, background: C.surface }}>
+      <div style={{ padding: isMobile ? '12px 15px' : '13px 20px', background: C.amberBg, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 16 }}>⚠️</span>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>Unassigned · {orphans.length}
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text2, marginLeft: 8 }}>owner not a live operator — check data</span>
+        </div>
+      </div>
+      {orphans.map((p: any) => <PersonRow key={p.id} person={p} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
+    </div>
+  )
+}
+
 export function OperatorsPage({ myId }: any) {
   const [operators, setOperators] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -650,6 +870,16 @@ export function OperatorsPage({ myId }: any) {
   const [permissionsOp, setPermissionsOp] = useState<any>(null)
   const [locationsOp, setLocationsOp] = useState<any>(null)
   const [plans, setPlans] = useState<any[]>([])
+  // Capability chips need each person's permission row. super_admin has a
+  // sanctioned unrestricted read of operator_permissions through /api/sb; we
+  // pull the whole table once and index by operator_id. Chips degrade to
+  // "View-only" when a person has no row — never invented.
+  const [permsByOp, setPermsByOp] = useState<Record<string, any>>({})
+  const isMobile = useIsMobile()
+  const [q, setQ] = useState('')
+  const [regionFilter, setRegionFilter] = useState('all')
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({})
+  const [visible, setVisible] = useState(8)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'operator', state: 'Telangana', country: 'India', owner_id: '', company_name: '', billing_address: '', gstin: '', pincode: '', phone: '', plan: '', max_field_staff_override: '', max_sub_operators_override: '' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -672,7 +902,20 @@ export function OperatorsPage({ myId }: any) {
     setOperators(Array.isArray(data) ? data : [])
     setLoading(false)
   }
-  useEffect(() => { fetchOperators() }, [])
+  // Bulk permission rows for the capability chips. Best-effort: a failure just
+  // leaves everyone showing "View-only", never blocks the page.
+  const fetchPerms = async () => {
+    try {
+      const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operator_permissions?select=*'))
+      const d = await r.json()
+      const map: Record<string, any> = {}
+      if (Array.isArray(d)) d.forEach((p: any) => { if (p && p.operator_id) map[p.operator_id] = p })
+      setPermsByOp(map)
+    } catch { setPermsByOp({}) }
+  }
+  useEffect(() => { fetchOperators(); fetchPerms() }, [])
+  // Reset the "load more" window whenever the filter changes.
+  useEffect(() => { setVisible(8) }, [q, regionFilter])
   useEffect(() => {
     fetch('/api/plans')
       .then(r => r.json())
@@ -747,35 +990,78 @@ export function OperatorsPage({ myId }: any) {
     setDelOp(null); fetchOperators()
   }
 
-  const ROLE_COLOR: any = { super_admin: '#7c3aed', operator: C.blue, staff: '#d97706', sub_operator: '#0891b2', field_staff: C.orange }
-  const ROLE_BG: any = { super_admin: '#f5f3ff', operator: C.blueBg, staff: '#fff7ed', sub_operator: '#e0f7fa', field_staff: '#fff3ea' }
+  // Attach each person's permission row, then group the flat list by owner_id
+  // (Tier 1 transform). super_admin reads the full list, so this is the whole org.
+  const withPerms = operators.map((o) => ({ ...o, permissions: permsByOp[o.id] || null }))
+  const grouped = groupOperatorsByTenant(withPerms)
+
+  const ql = q.trim().toLowerCase()
+  const matchPerson = (p: any) => (p.name || '').toLowerCase().includes(ql) || (p.email || '').toLowerCase().includes(ql)
+  // Region options come from the real tenant rows, not a hard-coded list.
+  const regions = Array.from(new Set(grouped.tenants.map((g) => g.tenant.country).filter(Boolean))) as string[]
+  const filteredTenants = grouped.tenants.filter((g) => {
+    const t = g.tenant
+    if (regionFilter !== 'all' && (t.country || '') !== regionFilter) return false
+    if (!ql) return true
+    const title = String(t.company_name || t.name || '')
+    return title.toLowerCase().includes(ql) || matchPerson(t) || g.sub_operators.some(matchPerson) || g.field_staff.some(matchPerson)
+  })
+  const shownTenants = filteredTenants.slice(0, visible)
+
+  // Searching auto-opens matching tenants; otherwise honour the per-card toggle.
+  const isOpen = (id: string) => (openMap[id] != null ? openMap[id] : ql.length > 0)
+  const toggle = (id: string) => setOpenMap((m) => ({ ...m, [id]: !(m[id] != null ? m[id] : ql.length > 0) }))
+  const setAll = (val: boolean) => { const m: Record<string, boolean> = {}; filteredTenants.forEach((g) => { m[g.tenant.id] = val }); setOpenMap(m) }
+
+  // First-line UI guard mirroring the server rule: no self-removal, and the last
+  // super_admin is protected. The /api/sb DELETE path enforces the same thing
+  // server-side, so this only stops the button from opening the modal.
+  const superAdminCount = operators.filter((o) => o.role === 'super_admin').length
+  const canRemove = (p: any) => !(String(p.id) === String(myId || '') || (p.role === 'super_admin' && superAdminCount <= 1))
+
+  // Wire the ported card actions to the EXISTING modals — behaviour unchanged.
+  const onAction = (key: string, person: any) => {
+    if (key === 'perms') setPermissionsOp(person)
+    else if (key === 'edit') openEdit(person)
+    else if (key === 'del') { setMsg(''); setDelOp(person) }
+    else if (key === 'locations') setLocationsOp(person)
+    else if (key === 'machines') setAssignOp(person)
+  }
+
+  const kpis = [
+    { label: 'Total People', value: operators.length, color: IND, icon: '👥' },
+    { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: PURPLE, icon: '👑' },
+    { label: 'Fruitlink Staff', value: operators.filter(o => o.role === 'staff').length, color: '#d97706', icon: '🏢' },
+    { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.blue, icon: '🧑‍💼' },
+    { label: 'Sub-Operators', value: operators.filter(o => o.role === 'sub_operator').length, color: '#0891b2', icon: '🧑‍💻' },
+    { label: 'Field Staff', value: operators.filter(o => o.role === 'field_staff').length, color: C.orange, icon: '👷' },
+  ]
+  const ctlBtn = { font: 'inherit', fontSize: 12.5, fontWeight: 700, color: C.text2, background: C.surface, border: '1.5px solid ' + C.border2, borderRadius: 9, padding: '9px 13px', cursor: 'pointer', whiteSpace: 'nowrap' as const }
 
   return (
-    <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+    <div style={{ padding: isMobile ? '18px 16px 40px' : '24px 28px 48px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Operators</div>
-          <div style={{ fontSize: 13, color: C.text2 }}>{operators.length} operator{operators.length !== 1 ? 's' : ''} registered</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>Operators &amp; Team</div>
+          <div style={{ fontSize: 13, color: C.text2, marginTop: 4, fontWeight: 600 }}>{grouped.counts.tenants} tenant{grouped.counts.tenants !== 1 ? 's' : ''} · Fruitlink internal team pinned on top</div>
         </div>
-        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13, boxShadow: '0 2px 8px #f9731640' }}>
+        <button onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.orange, color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontWeight: 800, cursor: 'pointer', fontSize: 13.5, boxShadow: SHADOW_BRAND }}>
           + Add Operator
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
-        {[
-          { label: 'Total Operators', value: operators.length, color: C.blue, icon: '👥' },
-          { label: 'Super Admins', value: operators.filter(o => o.role === 'super_admin').length, color: '#7c3aed', icon: '👑' },
-          { label: 'Fruitlink Staff', value: operators.filter(o => o.role === 'staff').length, color: '#d97706', icon: '🏢' },
-          { label: 'Operators', value: operators.filter(o => o.role === 'operator').length, color: C.green, icon: '🧑‍💼' },
-          { label: 'Sub-Operators', value: operators.filter(o => o.role === 'sub_operator').length, color: '#0891b2', icon: '🧑‍💻' },
-          { label: 'Field Staff', value: operators.filter(o => o.role === 'field_staff').length, color: C.orange, icon: '👷' },
-        ].map(s => (
-<div key={s.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 22 }}>{s.icon}</span>
-              <span style={{ fontSize: 28, fontWeight: 800, color: s.color }}>{s.value}</span>
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(6,1fr)', gap: 12, marginBottom: 18 }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, boxShadow: SHADOW_CARD, overflow: 'hidden' }}>
+            <div style={{ height: 3, background: k.color }} />
+            <div style={{ padding: '13px 15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 20 }}>{k.icon}</span>
+                <span style={{ fontSize: 26, fontWeight: 800, color: k.color, letterSpacing: '-.02em' }}>{k.value}</span>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: C.text2, fontWeight: 700 }}>{k.label}</div>
             </div>
-            <div style={{ marginTop: 8, fontSize: 13, color: C.text2, fontWeight: 600 }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -783,73 +1069,43 @@ export function OperatorsPage({ myId }: any) {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading...</div>
       ) : (
-        <div style={{ background: C.surface, borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-          <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: C.surface2, borderBottom: `2px solid ${C.border}` }}>
-                {['Operator', 'Email', 'Role', 'Region', 'Joined', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: C.text3, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.09em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {operators.map((op, i) => (
-                <tr key={op.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.surface : C.surface2 }}>
-                  <td style={{ padding: '13px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.orange, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
-                        {(op.name || op.email).charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 600, color: C.text }}>{op.name || '—'}</div>
-                        <div style={{ fontSize: 12, color: C.text2, fontFamily: 'monospace' }}>{op.id.slice(0, 8)}...</div>
-                        {/* Company code — operators only; team members reference
-                            their operator's code through owner_id. */}
-                        {op.operator_code && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                            <span style={{ fontSize: 12, color: C.text, fontFamily: 'monospace', fontWeight: 700 }}>
-                              Code: {op.operator_code}
-                            </span>
-                            {/* Inert badge. payment_verified is written by nothing
-                                today and gates nothing — a future payment
-                                integration will verify against operator_code and
-                                set it. Until then it is display only. */}
-                            <span title="Payment verification is a future integration — this flag gates nothing today"
-                              style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: op.payment_verified ? C.green : C.text3, background: op.payment_verified ? C.greenBg : C.surface2 }}>
-                              {op.payment_verified ? '✓ Paid' : 'Unverified'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '13px 16px', color: C.text }}>{op.email}</td>
-                  <td style={{ padding: '13px 16px' }}>
-                    <Pill color={ROLE_COLOR[op.role] || C.text2} bg={ROLE_BG[op.role] || C.surface2}>
-                      {op.role === 'super_admin' ? '👑 Super Admin' : op.role === 'staff' ? '🏢 Fruitlink Staff' : op.role === 'field_staff' ? '👷 Field Staff' : op.role === 'sub_operator' ? '🧑‍💼 Sub-Operator' : '🧑‍💼 Operator'}
-                    </Pill>
-                  </td>
-                  <td style={{ padding: '13px 16px' }}>
-                    <div style={{ fontSize: 13, color: C.text }}>{op.state || '—'}</div>
-                    <div style={{ fontSize: 12, color: C.text3 }}>{op.country}</div>
-                  </td>
-                  <td style={{ padding: '13px 16px', color: C.text3, fontSize: 12 }}>
-                    {op.created_at ? new Date(op.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </td>
-                  <td style={{ padding: '13px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {op.role === 'operator' && <button onClick={() => setAssignOp(op)} style={{ background: C.blueBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.blue, cursor: 'pointer' }}>🖥 Machines</button>}
-                      <button onClick={() => setPermissionsOp(op)} style={{ background: '#f5f3ff', border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: '#7c3aed', cursor: 'pointer' }}>🔐 Perms</button>
-                      <button onClick={() => setLocationsOp(op)} style={{ background: C.greenBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.green, cursor: 'pointer' }}>📍 Locations</button>
-                      <button onClick={() => openEdit(op)} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.text2, cursor: 'pointer' }}>✏️ Edit</button>
-                      <button onClick={() => { setMsg(''); setDelOp(op) }} style={{ background: C.redBg, border: 'none', borderRadius: 7, padding: '5px 11px', fontSize: 11, fontWeight: 600, color: C.red, cursor: 'pointer' }}>🗑 Del</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Controls */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center', background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: 12, boxShadow: SHADOW_CARD }}>
+            <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 190 }}>
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: C.text3 }}>🔍</span>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search people by name or email…" style={{ width: '100%', font: 'inherit', fontSize: 13.5, fontWeight: 600, border: '1.5px solid ' + C.border2, borderRadius: 10, padding: '9px 12px 9px 34px', outline: 'none', background: C.surface, color: C.text, boxSizing: 'border-box' }} />
+            </div>
+            {regions.length > 0 && (
+              <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={{ font: 'inherit', fontSize: 13, fontWeight: 700, border: '1.5px solid ' + C.border2, borderRadius: 10, padding: '9px 13px', color: C.text2, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+                <option value="all">🌐 All regions</option>
+                {regions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setAll(true)} style={ctlBtn}>Expand all</button>
+              <button onClick={() => setAll(false)} style={ctlBtn}>Collapse all</button>
+            </div>
+          </div>
+
+          {/* Pinned Fruitlink-internal card */}
+          <FruitlinkCard internal={grouped.internal} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />
+
+          {/* Tenant list */}
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '.07em', margin: '4px 2px 12px' }}>Operator Tenants · {filteredTenants.length}</div>
+          {filteredTenants.length === 0
+            ? <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, textAlign: 'center', padding: '44px 20px' }}><div style={{ fontSize: 26, marginBottom: 10 }}>🔍</div><div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>No tenants match</div><div style={{ fontSize: 13, color: C.text3, marginTop: 6 }}>Try a different search or region.</div></div>
+            : shownTenants.map(g => <TenantCard key={g.tenant.id} group={g} open={isOpen(g.tenant.id)} onToggle={() => toggle(g.tenant.id)} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />)}
+
+          {visible < filteredTenants.length && (
+            <div style={{ textAlign: 'center', marginTop: 8 }}>
+              <button onClick={() => setVisible(v => v + 8)} style={{ font: 'inherit', fontSize: 13.5, fontWeight: 800, color: IND, background: INDBG, border: '1px solid ' + a22(IND), borderRadius: 10, padding: '11px 22px', cursor: 'pointer' }}>Load more · {filteredTenants.length - visible} tenants left</button>
+            </div>
+          )}
+
+          {/* Data-integrity surface: children with a dead owner_id, never hidden */}
+          <OrphanCard orphans={grouped.orphans} onAction={onAction} isMobile={isMobile} canRemove={canRemove} />
+        </>
       )}
 
       {/* Add/Edit Modal */}
@@ -988,19 +1244,26 @@ export function OperatorsPage({ myId }: any) {
       )}
 
       {assignOp && <AssignMachinesModal op={assignOp} onClose={() => setAssignOp(null)} />}
-      {permissionsOp && <PermissionsModal op={permissionsOp} onClose={() => setPermissionsOp(null)} />}
+      {permissionsOp && <PermissionsModal op={permissionsOp} onClose={() => { setPermissionsOp(null); fetchPerms() }} />}
       {locationsOp && <LocationsModal op={locationsOp} onClose={() => setLocationsOp(null)} />}
 
       {delOp && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: C.surface, borderRadius: 20, padding: 30, width: 360, textAlign: 'center', boxShadow: '0 20px 60px #00000030' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Delete Operator?</div>
-            <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Permanently delete <b>{delOp.name || delOp.email}</b>. Cannot be undone.</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Remove Operator?</div>
+            {/* Del is a soft-delete: the /api/sb DELETE handler PATCHes deleted_at
+                for the operators table, and the page hides deleted_at rows. The
+                record is retained and can be restored — copy must not claim
+                "permanent / cannot be undone". */}
+            <div style={{ fontSize: 13, color: C.text2, marginBottom: 22, lineHeight: 1.55 }}>
+              Remove <b>{delOp.name || delOp.email}</b> from the operators list? This is a soft-delete — the record is retained and can be restored later, not permanently erased.
+              {delOp.role === 'operator' && <><br /><span style={{ color: C.text3 }}>Their sub-operators and field staff stay in the database but will show as unassigned until moved to another operator.</span></>}
+            </div>
             {msg && <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: C.redBg, color: C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setDelOp(null)} style={{ padding: '9px 22px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={deleteOperator} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.red, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+              <button onClick={deleteOperator} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.red, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Remove</button>
             </div>
           </div>
         </div>

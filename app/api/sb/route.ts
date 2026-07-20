@@ -434,6 +434,35 @@ async function guardWrite(request: NextRequest, method: string) {
     return { rewriteBody: JSON.stringify(body) } as any;
   }
 
+  // ── operators DELETE: protect self + the last super_admin (server-enforced) ──
+  // These invariants must hold even for a hand-crafted request, not just when the
+  // UI hides the button. Evaluate the rows this DELETE actually matches (same
+  // filter, non-deleted), never trusting the client. Reached only by super_admin
+  // (WRITE_RULES) and only with a row filter (unfiltered DELETE already blocked).
+  if (table === 'operators' && method === 'DELETE') {
+    const listUrl = SB_URL + rawPath + (rawPath.includes('?') ? '&' : '?') + 'select=id,role&deleted_at=is.null';
+    let targets: any[] = [];
+    try { const tr = await fetch(listUrl, { headers: sbHeaders() }); if (tr.ok) targets = await tr.json(); } catch { targets = []; }
+    if (!Array.isArray(targets)) targets = [];
+    // 1) Never remove your own account while logged in.
+    if (targets.some((r: any) => String(r.id) === String(session.sub || ''))) {
+      return NextResponse.json({ error: 'You cannot remove your own account while logged in.' }, { status: 403 });
+    }
+    // 2) At least one super_admin must always remain.
+    const deletingSupers = targets.filter((r: any) => String(r.role) === 'super_admin').length;
+    if (deletingSupers > 0) {
+      let liveSupers = 0;
+      try {
+        const cr = await fetch(SB_URL + '/rest/v1/operators?select=id&role=eq.super_admin&deleted_at=is.null', { headers: sbHeaders() });
+        if (cr.ok) { const rows = await cr.json(); liveSupers = Array.isArray(rows) ? rows.length : 0; }
+      } catch { liveSupers = 0; }
+      if (liveSupers - deletingSupers < 1) {
+        return NextResponse.json({ error: 'Cannot remove the last Super Admin — at least one must remain.' }, { status: 403 });
+      }
+    }
+    return null;
+  }
+
   // The allowlist above already enforced what the old trailing rules did:
   // operators/machines/machine_operators are super_admin-only via WRITE_RULES,
   // and field_staff appears in no rule except visits POST.
