@@ -22,7 +22,18 @@ export async function POST(req: NextRequest) {
     const valid = await bcrypt.compare(password, operator.password_hash);
     if (!valid) return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
 
-    const role = operator.role || 'operator';
+    // Fail closed on the role. This was `operator.role || 'operator'`, so a row
+    // with no role — which is exactly what the old client-side signup created —
+    // authenticated as a full operator. Self-service signups now land as
+    // 'pending' (see /api/register) and stay locked out until a super_admin
+    // gives them a real role; a missing role is treated the same way rather than
+    // granting one. Verified 2026-07-20 that no account has a null role, so this
+    // locks out nobody. Checked after the bcrypt compare so it never becomes an
+    // account-existence oracle.
+    const role = String(operator.role || '');
+    if (!role || role === 'pending') {
+      return NextResponse.json({ error: 'Your account is awaiting approval.' }, { status: 403 });
+    }
 
     // Fetch permissions for operators (not super_admin or field_staff)
     let permissions: Record<string, boolean> = {};

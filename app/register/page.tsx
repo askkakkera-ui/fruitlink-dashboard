@@ -1,20 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// See app/orders/page.tsx — createClient at module scope with an unset env var
-// throws during prerender and takes `next build` down with it. Built on demand
-// from the click handler instead.
-let _sb: SupabaseClient | null = null;
-function getSupabase(): SupabaseClient {
-  if (!_sb) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) throw new Error('Supabase is not configured — NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are unset.');
-    _sb = createClient(url, key);
-  }
-  return _sb;
-}
+// The page no longer talks to Supabase at all — signup goes through
+// /api/register, which holds the service key server-side.
 
 function validatePassword(password: string) {
   if (password.length < 8) return 'Password must be at least 8 characters';
@@ -44,24 +32,17 @@ export default function Register() {
     setError('');
 
     try {
-      const supabase = getSupabase();
-      const { data: existing } = await supabase.from('operators').select('id').eq('email', email).single();
-      if (existing) { setError('Email already registered'); setLoading(false); return; }
-
-      // password_hash used to receive the raw password. The column name was the
-      // only thing hashing it. Every other path that writes this column -
-      // OperatorsPage, MyStaffSection - bcrypts through /api/hash-password
-      // first, and login verifies with bcrypt.compare, so a plaintext row could
-      // never log in either: it was both a breach and a broken signup.
-      const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
-      if (!hashRes.ok) { setError('Registration failed: could not hash password'); setLoading(false); return; }
-      const { hash } = await hashRes.json();
-
-      const { error: err } = await supabase.from('operators').insert({
-        name, email, password_hash: hash, phone,
+      // Duplicate check, bcrypt and the operators INSERT all happen in
+      // /api/register now. Doing them here meant the browser picked the columns
+      // it wrote (role included) over the anon key, and needed a world-readable
+      // /api/hash-password to do it.
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, phone }),
       });
-
-      if (err) { setError('Registration failed: ' + err.message); setLoading(false); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || 'Registration failed'); setLoading(false); return; }
       setSuccess(true);
     } catch (e: any) {
       setError('Registration failed: ' + (e?.message || 'error'));
