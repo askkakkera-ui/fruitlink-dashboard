@@ -1254,12 +1254,19 @@ export function OperatorsPage({ myId }: any) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(31,37,51,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: C.surface, borderRadius: 20, padding: 30, width: 360, textAlign: 'center', boxShadow: '0 20px 60px #00000030' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🗑️</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Delete Operator?</div>
-            <div style={{ fontSize: 13, color: C.text2, marginBottom: 22 }}>Permanently delete <b>{delOp.name || delOp.email}</b>. Cannot be undone.</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>Remove Operator?</div>
+            {/* Del is a soft-delete: the /api/sb DELETE handler PATCHes deleted_at
+                for the operators table, and the page hides deleted_at rows. The
+                record is retained and can be restored — copy must not claim
+                "permanent / cannot be undone". */}
+            <div style={{ fontSize: 13, color: C.text2, marginBottom: 22, lineHeight: 1.55 }}>
+              Remove <b>{delOp.name || delOp.email}</b> from the operators list? This is a soft-delete — the record is retained and can be restored later, not permanently erased.
+              {delOp.role === 'operator' && <><br /><span style={{ color: C.text3 }}>Their sub-operators and field staff stay in the database but will show as unassigned until moved to another operator.</span></>}
+            </div>
             {msg && <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: C.redBg, color: C.red, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setDelOp(null)} style={{ padding: '9px 22px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.surface, color: C.text2, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={deleteOperator} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.red, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+              <button onClick={deleteOperator} style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: C.red, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Remove</button>
             </div>
           </div>
         </div>
