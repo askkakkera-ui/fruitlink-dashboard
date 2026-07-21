@@ -489,17 +489,22 @@ export function MyTeamPage() {
   const Row = ({ m }: any) => {
     const isSub = m.role === 'sub_operator'
     const bs = (color: string, bg: string, bordered?: boolean) => ({ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bordered ? '1px solid ' + C.border2 : 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg, whiteSpace: 'nowrap' as const })
-    const actions = isSub ? (
+    // Perms opens the shared, ceiling-bounded PermissionsModal (limitTo={myPerms}),
+    // so an operator can never grant a field_staff/sub_operator beyond what they hold
+    // — the server (operator-permissions PUT) re-checks the same. Field staff also
+    // keep Edit/Del when the plan allows managing staff.
+    const actions = (
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
         <button onClick={() => setPermsFor(m)} style={bs('#7c3aed', '#f5f3ff')}>🔐 Perms</button>
+        {!isSub && (canManageStaff ? (
+          <>
+            <button onClick={() => openEditStaff(m)} style={bs(C.text2, C.surface2, true)}>✏️ Edit</button>
+            <button onClick={() => deleteStaff(m)} style={bs(C.red, C.redBg)}>🗑 Del</button>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' as const }}>Managed by Fruitlink</span>
+        ))}
       </div>
-    ) : canManageStaff ? (
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-        <button onClick={() => openEditStaff(m)} style={bs(C.text2, C.surface2, true)}>✏️ Edit</button>
-        <button onClick={() => deleteStaff(m)} style={bs(C.red, C.redBg)}>🗑 Del</button>
-      </div>
-    ) : (
-      <span style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' as const }}>Managed by Fruitlink</span>
     )
     return <PersonRow person={m} actions={actions} isMobile={isMobile} />
   }

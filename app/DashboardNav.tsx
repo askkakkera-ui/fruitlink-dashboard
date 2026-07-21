@@ -35,7 +35,7 @@ export function Sidebar({ active, setActive, role, name, alertCount, onLogout, p
     // Fruitlink staff with no permission key on an item = hide it (purely permission-driven).
     if (role === 'staff' && !item.permission) return
     // permission key = check operator/sub-operator/staff permissions
-    if (item.permission && (role === 'operator' || role === 'sub_operator' || role === 'staff')) {
+    if (item.permission && (role === 'operator' || role === 'sub_operator' || role === 'staff' || role === 'field_staff')) {
       if (!permissions[item.permission]) return
     }
     // legacy superAdmin flag = hide from non-super-admins unless they have explicit permission
