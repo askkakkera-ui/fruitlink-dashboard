@@ -11,6 +11,80 @@ async function getSession(request: NextRequest) {
   return await verifySession(token);
 }
 
+// Great-circle distance in metres between two WGS84 points (mirrors verify-gps).
+function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // mean Earth radius, metres
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
+
+// Resolve which of the tenant's machines the staff physically checked in at,
+// from the GPS fix — so machine_id is reliable regardless of what the client
+// sent. The field-staff flow (LOCATION → CHECK IN → MACHINE) picks the machine
+// AFTER check-in, so it always sends machine_id:null; the only thing that used
+// to populate it was the visit-log backfill, which is why identical-GPS rows
+// intermittently landed as "Office". This is TENANT-SCOPED via machine_operators
+// — never another tenant's machine. A machine is accepted only when the fix sits
+// within its location's geofence (accuracy-aware, mirroring verify-gps):
+// distance - accuracy <= radius, with a 150m fallback when the location has no
+// radius. Returns null when nothing qualifies — which correctly leaves "Office".
+async function resolveMachineByGps(
+  tenantId: string, lat: number, lng: number, accuracy: number,
+): Promise<{ machine_id: string; location_id: string | null } | null> {
+  // 1. The tenant's own machines (authoritative join), with coordinates.
+  const moRes = await fetch(
+    SB_URL + '/rest/v1/machine_operators?select=machine_id&operator_id=eq.' + encodeURIComponent(tenantId),
+    { headers: sbHeaders() },
+  );
+  if (!moRes.ok) return null;
+  const moRows = await moRes.json();
+  const ids = Array.isArray(moRows) ? moRows.map((r: any) => r.machine_id).filter(Boolean) : [];
+  if (ids.length === 0) return null;
+  const mInList = '(' + ids.map(encodeURIComponent).join(',') + ')';
+  const mRes = await fetch(
+    SB_URL + '/rest/v1/machines?select=id,location_id,location_lat,location_lng&id=in.' + mInList,
+    { headers: sbHeaders() },
+  );
+  if (!mRes.ok) return null;
+  const machines = await mRes.json();
+  const withCoords = (Array.isArray(machines) ? machines : []).filter(
+    (m: any) => m.location_lat != null && m.location_lng != null,
+  );
+  if (withCoords.length === 0) return null;
+
+  // 2. Per-location geofence radius (150m fallback), one query for all locations.
+  const locIds = Array.from(new Set(withCoords.map((m: any) => m.location_id).filter(Boolean)));
+  const radiusById: Record<string, number> = {};
+  if (locIds.length) {
+    const lRes = await fetch(
+      SB_URL + '/rest/v1/locations?select=id,geofence_radius_m&id=in.(' + locIds.map(encodeURIComponent).join(',') + ')',
+      { headers: sbHeaders() },
+    );
+    if (lRes.ok) {
+      const locs = await lRes.json();
+      (Array.isArray(locs) ? locs : []).forEach((l: any) => { radiusById[l.id] = Number(l.geofence_radius_m) || 150; });
+    }
+  }
+
+  // 3. Nearest machine whose geofence the fix falls inside (accuracy-aware).
+  const acc = Math.max(0, accuracy || 0);
+  let best: { machine_id: string; location_id: string | null; distance: number } | null = null;
+  for (const m of withCoords) {
+    const distance = haversineMetres(lat, lng, Number(m.location_lat), Number(m.location_lng));
+    const radius = (m.location_id && radiusById[m.location_id]) || 150;
+    if (distance - acc > radius) continue; // fix sits outside this machine's geofence
+    if (!best || distance < best.distance) {
+      best = { machine_id: String(m.id), location_id: m.location_id ? String(m.location_id) : null, distance };
+    }
+  }
+  return best ? { machine_id: best.machine_id, location_id: best.location_id } : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession(request);
@@ -136,21 +210,44 @@ export async function POST(request: NextRequest) {
     const VALID_VERDICTS = ['inside', 'outside', 'uncertain', 'unknown'];
     const verdict = VALID_VERDICTS.includes(String(body.geofence_verdict)) ? String(body.geofence_verdict) : null;
 
+    // Tenant, not parent: a top-level operator has owner_id null and is its own
+    // tenant. Stamping null here would orphan the row from every read filter.
+    const tenantId = session.owner_id ? String(session.owner_id) : String(session.sub || '');
+    const visitMode = (body.visit_mode === 'office' || body.visit_mode === 'machine') ? body.visit_mode : null;
+    const checkInLat = body.lat != null ? parseFloat(body.lat) : null;
+    const checkInLng = body.lng != null ? parseFloat(body.lng) : null;
+    const gpsAccuracy = (body.gps_accuracy_m != null && !isNaN(parseInt(body.gps_accuracy_m))) ? parseInt(body.gps_accuracy_m) : null;
+
+    // machine_id: an explicit client selection wins; otherwise resolve it from the
+    // check-in GPS against the tenant's machine geofences. Skipped for an explicit
+    // 'office' check-in and when there's no usable fix. Non-blocking: any failure
+    // just leaves machine_id null (→ "Office"), never breaks the check-in.
+    let machineId: string | null = body.machine_id ? String(body.machine_id) : null;
+    let locationId: string | null = body.location_id ? String(body.location_id) : null;
+    if (!machineId && visitMode !== 'office' && tenantId
+        && Number.isFinite(checkInLat as number) && Number.isFinite(checkInLng as number)) {
+      try {
+        const resolved = await resolveMachineByGps(tenantId, checkInLat as number, checkInLng as number, gpsAccuracy ?? 0);
+        if (resolved) {
+          machineId = resolved.machine_id;
+          if (!locationId) locationId = resolved.location_id; // adopt the machine's location when none was sent
+        }
+      } catch { /* resolution is best-effort; never fail the check-in on it */ }
+    }
+
     const row = {
       staff_id: staffId,
-      // Tenant, not parent: a top-level operator has owner_id null and is its own
-      // tenant. Stamping null here would orphan the row from every read filter.
-      owner_id: session.owner_id ? String(session.owner_id) : String(session.sub || ''),
-      machine_id: body.machine_id ? String(body.machine_id) : null,
-      location_id: body.location_id ? String(body.location_id) : null,
-      visit_mode: (body.visit_mode === 'office' || body.visit_mode === 'machine') ? body.visit_mode : null,
+      owner_id: tenantId,
+      machine_id: machineId,
+      location_id: locationId,
+      visit_mode: visitMode,
       check_in_at: new Date().toISOString(),
-      check_in_lat: body.lat != null ? parseFloat(body.lat) : null,
-      check_in_lng: body.lng != null ? parseFloat(body.lng) : null,
+      check_in_lat: checkInLat,
+      check_in_lng: checkInLng,
       check_in_address: body.address ? String(body.address).slice(0, 500) : null,
       check_in_photo: body.photo_url ? String(body.photo_url) : null,
       // Geofence is evidence, not a gate: we record what we saw and move on.
-      gps_accuracy_m: (body.gps_accuracy_m != null && !isNaN(parseInt(body.gps_accuracy_m))) ? parseInt(body.gps_accuracy_m) : null,
+      gps_accuracy_m: gpsAccuracy,
       distance_meters: (body.distance_meters != null && !isNaN(parseInt(body.distance_meters))) ? parseInt(body.distance_meters) : null,
       geofence_verdict: verdict,
       override_reason: body.override_reason ? String(body.override_reason).slice(0, 500) : null,
