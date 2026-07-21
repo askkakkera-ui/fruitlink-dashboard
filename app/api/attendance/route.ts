@@ -64,16 +64,23 @@ export async function GET(request: NextRequest) {
       let mnames: Record<string, string> = {};
       let staffMeta: Record<string, { role: string; designation: string; employee_id?: string; staff_type?: string; owner_id?: string }> = {};
       let ownerNames: Record<string, string> = {};
+      let ownerTz: Record<string, string> = {};
       if (staffIds.length) {
         const inList = '(' + staffIds.map(encodeURIComponent).join(',') + ')';
         const nr = await fetch(SB_URL + '/rest/v1/operators?select=id,name,email,role,designation,employee_id,staff_type,owner_id&id=in.' + inList, { headers: sbHeaders() }).then(r => r.json());
         (Array.isArray(nr) ? nr : []).forEach((o: any) => { names[o.id] = o.name || o.email || String(o.id).slice(0, 6); staffMeta[o.id] = { role: o.role, designation: o.designation, employee_id: o.employee_id, staff_type: o.staff_type, owner_id: o.owner_id }; });
         // Resolve the entity/team name for each person (their owner's company name)
-        const ownerIds = Array.from(new Set((Array.isArray(nr) ? nr : []).map((o: any) => o.owner_id).filter(Boolean)));
+        // Gather owner ids from both the staff rows and the attendance rows
+        // themselves, so every row's owner_id resolves to a timezone even if the
+        // two ever drift. (Read-only — no scoping filter changes.)
+        const ownerIds = Array.from(new Set([
+          ...(Array.isArray(nr) ? nr : []).map((o: any) => o.owner_id),
+          ...rows.map((r: any) => r.owner_id),
+        ].filter(Boolean)));
         if (ownerIds.length) {
           const oInList = '(' + ownerIds.map(encodeURIComponent).join(',') + ')';
-          const or = await fetch(SB_URL + '/rest/v1/operators?select=id,name,role&id=in.' + oInList, { headers: sbHeaders() }).then(r => r.json());
-          (Array.isArray(or) ? or : []).forEach((o: any) => { ownerNames[o.id] = o.name || String(o.id).slice(0, 6); });
+          const or = await fetch(SB_URL + '/rest/v1/operators?select=id,name,role,timezone&id=in.' + oInList, { headers: sbHeaders() }).then(r => r.json());
+          (Array.isArray(or) ? or : []).forEach((o: any) => { ownerNames[o.id] = o.name || String(o.id).slice(0, 6); ownerTz[o.id] = o.timezone || 'Asia/Kolkata'; });
         }
       }
       if (machineIds.length) {
@@ -90,6 +97,12 @@ export async function GET(request: NextRequest) {
         staff_type: staffMeta[r.staff_id]?.staff_type || '',
         team_name: (staffMeta[r.staff_id]?.role === 'staff') ? 'Fruitlink' : (staffMeta[r.staff_id]?.owner_id ? (ownerNames[staffMeta[r.staff_id]!.owner_id!] || 'Operator') : '—'),
         machine_name: r.machine_id ? (mnames[r.machine_id] || '—') : 'Office',
+        // Display timezone for this row. Fruitlink-internal (staff) rows always
+        // render in IST; tenant rows use their operator's stored timezone; anything
+        // unresolved falls back to Asia/Kolkata. Purely additive — scoping untouched.
+        tenant_timezone: (staffMeta[r.staff_id]?.role === 'staff')
+          ? 'Asia/Kolkata'
+          : (ownerTz[r.owner_id] || 'Asia/Kolkata'),
       }));
       return NextResponse.json(withNames, { headers: NO_STORE });
     }

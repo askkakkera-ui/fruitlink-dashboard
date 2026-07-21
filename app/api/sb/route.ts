@@ -10,6 +10,15 @@ import { generateOperatorCode, bumpOperatorCodeSequence, existingOperatorCode, o
 // allowed to happen quietly.
 const COMPANY_NAME_REQUIRED = 'Registered Company Name required to create/promote an operator';
 
+// Tenant timezone is derived from country at the SAME server-side minting point
+// as operator_code — the client never chooses it. Mirrors the Step A backfill:
+// South Africa → Africa/Johannesburg; India, blank and every unknown → Asia/Kolkata.
+function countryToTz(country?: unknown): string {
+  const c = String(country || '').trim().toLowerCase();
+  if (c === 'south africa' || c === 'za' || c === 'rsa') return 'Africa/Johannesburg';
+  return 'Asia/Kolkata';
+}
+
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
 
@@ -399,6 +408,8 @@ async function guardWrite(request: NextRequest, method: string) {
     for (const row of rows) {
       if (!row || typeof row !== 'object') continue;
       delete row.operator_code;
+      // timezone is derived server-side (below), so a client value is never trusted.
+      delete row.timezone;
 
       if (method === 'POST') {
         if (row.role === 'operator') {
@@ -406,6 +417,7 @@ async function guardWrite(request: NextRequest, method: string) {
           if (!company) return NextResponse.json({ error: COMPANY_NAME_REQUIRED }, { status: 422 });
           row.operator_code = await generateOperatorCode(company, issued);
           issued = sequenceOf(row.operator_code);
+          row.timezone = countryToTz(row.country);
         }
         continue;
       }
@@ -429,6 +441,7 @@ async function guardWrite(request: NextRequest, method: string) {
       if (!company) return NextResponse.json({ error: COMPANY_NAME_REQUIRED }, { status: 422 });
       row.operator_code = await generateOperatorCode(company, issued);
       issued = sequenceOf(row.operator_code);
+      row.timezone = countryToTz(row.country);
     }
 
     return { rewriteBody: JSON.stringify(body) } as any;
