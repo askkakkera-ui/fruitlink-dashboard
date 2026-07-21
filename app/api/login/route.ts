@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch permissions for operators (not super_admin or field_staff)
     let permissions: Record<string, boolean> = {};
-    if (role === 'operator' || role === 'sub_operator' || role === 'staff') {
+    if (role === 'operator' || role === 'sub_operator' || role === 'staff' || role === 'field_staff') {
       try {
         const permRes = await fetch(SUPABASE_URL + '/rest/v1/operator_permissions?operator_id=eq.' + encodeURIComponent(operator.id) + '&limit=1', { headers });
         const permData = await permRes.json();

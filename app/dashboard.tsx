@@ -18,7 +18,7 @@ import { CommLogPage } from './CommLogPage'
 import { FaultLogPage } from './FaultLogPage'
 import { LoyaltyPage } from './LoyaltyPage'
 import { FleetMapPage } from './FleetMapPage'
-import { Sidebar, TopBar } from './DashboardNav'
+import { Sidebar, TopBar, NAV_ITEMS } from './DashboardNav'
 
 
 
@@ -155,7 +155,7 @@ export default function Dashboard() {
     }
     // Refresh permissions live from the server so super-admin changes apply without re-login
     const r = getCookie('fl_role') || ''
-    if (r === 'operator' || r === 'sub_operator' || r === 'staff') {
+    if (r === 'operator' || r === 'sub_operator' || r === 'staff' || r === 'field_staff') {
       fetch('/api/operator-permissions?my=1', { cache: 'no-store' })
         .then(res => res.ok ? res.json() : null)
         .then(fresh => {
@@ -168,6 +168,19 @@ export default function Dashboard() {
         .catch(() => {})
     }
   }, [])
+
+  // Field staff reach the shell only when granted >=1 dashboard section (middleware
+  // enforces this on the signed session). The default `active` is 'console', which
+  // is NOT permission-gated in `pages`, so once their permissions resolve, move them
+  // to the first section they actually hold. The Sidebar hides every ungranted
+  // section, so this default landing is the only unguarded entry point.
+  useEffect(() => {
+    if (role !== 'field_staff') return
+    if (active === 'console' && permissions.can_view_console !== true) {
+      const first = NAV_ITEMS.find((n: any) => n.permission && permissions[n.permission] === true && !n.superAdminOnly && !n.operatorOnly)
+      if (first) setActive(first.key)
+    }
+  }, [role, permissions])
 
   const fetchData = useCallback(async () => {
     setLoading(true)

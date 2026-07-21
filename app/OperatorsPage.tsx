@@ -80,12 +80,16 @@ export function AssignMachinesModal({ op, onClose }: any) {
 }
 
 // ─── Permissions Modal ───────────────────────────────────────────
-export function PermissionsModal({ op, onClose, limitTo = null }: any) {
+export function PermissionsModal({ op, onClose, limitTo = null, seed = undefined }: any) {
   // limitTo: when provided (operator managing their own team), a permission can only
   // be granted if the grantor holds it. Revoking is always allowed.
   const canGrant = (key: string) => !limitTo || limitTo[key] === true
-  const [perms, setPerms] = useState<Record<string, boolean>>({})
-  const [loading, setLoading] = useState(true)
+  // seed: MyTeamPage passes the member's permissions already enriched in the
+  // /api/my-team payload. Initialise toggles from it and SKIP the GET below — that
+  // GET is super_admin-only and 403s for operators, which blanked the modal.
+  // super_admin passes no seed and keeps loading via the GET (unchanged).
+  const [perms, setPerms] = useState<Record<string, boolean>>(seed && typeof seed === 'object' ? { ...seed } : {})
+  const [loading, setLoading] = useState(seed === undefined)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -125,6 +129,9 @@ export function PermissionsModal({ op, onClose, limitTo = null }: any) {
   ]
 
   useEffect(() => {
+    // Seeded (operator via MyTeamPage): toggles already came from the my-team
+    // payload; the operator-scoped GET would 403 for a non-super_admin, so skip it.
+    if (seed !== undefined) return
     fetch('/api/operator-permissions?operator_id=' + op.id)
       .then(r => r.json())
       .then(d => {
@@ -141,11 +148,21 @@ export function PermissionsModal({ op, onClose, limitTo = null }: any) {
 
   const save = async () => {
     setSaving(true); setMsg('')
+    // Build from the ACTUAL current perms (seeded live), not an empty object, so a
+    // re-save preserves prior grants. Send only can_* keys the grantor may control;
+    // keys above an operator's ceiling are omitted — the server leaves absent columns
+    // untouched, preserving any super_admin grant and avoiding a false escalation 403.
+    const payload: Record<string, boolean> = {}
+    for (const k of Object.keys(perms)) {
+      if (!k.startsWith('can_')) continue
+      if (!canGrant(k)) continue
+      payload[k] = perms[k] === true
+    }
     try {
       const r = await fetch('/api/operator-permissions', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operator_id: op.id, permissions: perms }),
+        body: JSON.stringify({ operator_id: op.id, permissions: payload }),
       })
       const d = await r.json()
       if (!r.ok || d.error) { setMsg('Error: ' + (d.error || r.status)); setSaving(false); return }
@@ -489,17 +506,22 @@ export function MyTeamPage() {
   const Row = ({ m }: any) => {
     const isSub = m.role === 'sub_operator'
     const bs = (color: string, bg: string, bordered?: boolean) => ({ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bordered ? '1px solid ' + C.border2 : 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg, whiteSpace: 'nowrap' as const })
-    const actions = isSub ? (
+    // Perms opens the shared, ceiling-bounded PermissionsModal (limitTo={myPerms}),
+    // so an operator can never grant a field_staff/sub_operator beyond what they hold
+    // — the server (operator-permissions PUT) re-checks the same. Field staff also
+    // keep Edit/Del when the plan allows managing staff.
+    const actions = (
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
         <button onClick={() => setPermsFor(m)} style={bs('#7c3aed', '#f5f3ff')}>🔐 Perms</button>
+        {!isSub && (canManageStaff ? (
+          <>
+            <button onClick={() => openEditStaff(m)} style={bs(C.text2, C.surface2, true)}>✏️ Edit</button>
+            <button onClick={() => deleteStaff(m)} style={bs(C.red, C.redBg)}>🗑 Del</button>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' as const }}>Managed by Fruitlink</span>
+        ))}
       </div>
-    ) : canManageStaff ? (
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-        <button onClick={() => openEditStaff(m)} style={bs(C.text2, C.surface2, true)}>✏️ Edit</button>
-        <button onClick={() => deleteStaff(m)} style={bs(C.red, C.redBg)}>🗑 Del</button>
-      </div>
-    ) : (
-      <span style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' as const }}>Managed by Fruitlink</span>
     )
     return <PersonRow person={m} actions={actions} isMobile={isMobile} />
   }
@@ -620,7 +642,7 @@ export function MyTeamPage() {
         </div>
       )}
 
-      {permsFor && <PermissionsModal op={permsFor} limitTo={myPerms || {}} onClose={() => { setPermsFor(null); load() }} />}
+      {permsFor && <PermissionsModal op={permsFor} limitTo={myPerms || {}} seed={permsFor.permissions || {}} onClose={() => { setPermsFor(null); load() }} />}
     </div>
   )
 }

@@ -57,7 +57,11 @@ export default function Login() {
       if (data.permissions && Object.keys(data.permissions).length > 0) {
         document.cookie = 'fl_permissions=' + encodeURIComponent(JSON.stringify(data.permissions)) + '; path=/; max-age=' + maxAge;
       }
-      window.location.href = data.role === 'field_staff' ? '/visit' : '/';
+      // Field staff with no dashboard grant land on /visit as before; a granted one
+      // goes to the dashboard. Middleware re-checks the signed session either way.
+      const hasDash = data.permissions && Object.keys(data.permissions).some(
+        (k) => k.startsWith('can_view_') && data.permissions[k] === true);
+      window.location.href = (data.role === 'field_staff' && !hasDash) ? '/visit' : '/';
     } catch (e) {
       setError('Login failed. Please try again.');
       setLoading(false);

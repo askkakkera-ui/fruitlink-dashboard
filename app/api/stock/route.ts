@@ -21,6 +21,12 @@ export async function GET(req: NextRequest) {
     const session = await getSession(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
 
+    // field_staff get no console/warehouse stock. This route is under /api/*
+    // (middleware-exempt), so it must self-enforce: without this, the owner_id
+    // scope below returns the field_staff's PARENT operator's stock. Mirrors
+    // /api/machines, which returns [] for field_staff.
+    if (session.role === 'field_staff') return NextResponse.json([], { headers: NO_STORE });
+
     // Call VPS stock endpoint (handles ALL machines — JW + NewSaier, cumulative loads)
     if (!MACHINE_KEY) return NextResponse.json({ error: 'MACHINE_KEY not configured' }, { status: 500, headers: NO_STORE });
     const res = await fetch(MACHINE_API + '/api/machine/stock', {
