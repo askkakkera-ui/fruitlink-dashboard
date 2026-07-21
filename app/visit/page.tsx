@@ -259,6 +259,29 @@ export default function VisitPage() {
     );
   }, [fetchLocations]);
 
+  // One-shot fresh fix for CHECK-OUT. Unlike getGps() (a watchPosition loop
+  // wired into component state + the location list), check-out only needs a
+  // single reading of where the staff member is as they leave. Resolves null
+  // on denial/timeout/no-GPS — a missing location is a recorded gap, never a
+  // locked door that traps someone on-site.
+  const getFixOnce = (): Promise<Gps | null> => new Promise((resolve) => {
+    if (!('geolocation' in navigator)) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      async (p) => {
+        const lat = p.coords.latitude, lng = p.coords.longitude;
+        let addr = lat.toFixed(4) + 'N ' + lng.toFixed(4) + 'E';
+        try {
+          const r = await fetch('https://api.fruitlinktech.in/rest/app/geocode?lat=' + lat + '&lng=' + lng, { cache: 'no-store' });
+          const d = await r.json();
+          if (d && d.addr) addr = d.addr;
+        } catch { /* address is a nicety, not a requirement */ }
+        resolve({ lat, lng, accuracy: Math.round(p.coords.accuracy), addr });
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    );
+  });
+
   // ── photo ──────────────────────────────────────────────────────
   function stampPhoto(ctx: CanvasRenderingContext2D, w: number, h: number) {
     const now = new Date();
@@ -374,7 +397,11 @@ export default function VisitPage() {
     if (!attendance) return;
     setBusy(true); setErr('');
     try {
-      const fix = gpsRef.current;
+      // Re-fetch at check-out time. Reusing gpsRef.current stamped the check-in
+      // location (or null, if the check-in fix failed) onto check-out. A fresh
+      // one-shot fix reflects where the staff actually is when they leave; a
+      // denial/timeout resolves null and check-out still proceeds.
+      const fix = await getFixOnce();
       const r = await fetch('/api/attendance?id=' + attendance.id, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, address: fix ? fix.addr : null }),
