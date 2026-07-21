@@ -166,8 +166,13 @@ export async function POST(request: NextRequest) {
 
     let qty_base: number;
     const packs = body.packs != null && body.packs !== '' ? Number(body.packs) : null;
+    // Damage is written off in oranges: whole boxes + loose pieces. `pcs` applies
+    // to damage_warehouse only — every other movement stays boxes-only.
+    const pcs = movement_type === 'damage_warehouse' && body.pcs != null && body.pcs !== '' ? Number(body.pcs) : 0;
     if (body.qty_base != null && body.qty_base !== '') {
       qty_base = Number(body.qty_base);
+    } else if (movement_type === 'damage_warehouse') {
+      qty_base = (packs || 0) * Number(item.pack_size || 1) + (pcs || 0);
     } else if (packs != null) {
       qty_base = packs * Number(item.pack_size || 1);
     } else {

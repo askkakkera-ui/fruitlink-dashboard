@@ -28,6 +28,16 @@ type Movement = {
   machine_id?: string; note?: string; created_at: string; created_by_name?: string; challan_no?: string;
 };
 
+// "N boxes + M pcs" for a damage write-off. Pieces are derived, not stored:
+// pcs = |qty_base| − boxes × box_size (matches how the server composes the total).
+function damageParts(qtyBaseAbs: number, boxes: number, packSize: number, packLabel = 'box'): string {
+  const pieces = qtyBaseAbs - (boxes || 0) * (packSize || 1);
+  const parts: string[] = [];
+  if (boxes > 0) parts.push(`${boxes} ${packLabel}${boxes !== 1 ? 'es' : ''}`);
+  if (pieces > 0) parts.push(`${pieces} pc${pieces !== 1 ? 's' : ''}`);
+  return parts.join(' + ');
+}
+
 export default function WarehouseSection({ role = 'operator', permissions = {} }: { role?: string; permissions?: Record<string, boolean> }) {
   const isSuper = role === 'super_admin' || role === 'staff';
   const canManage = role === 'super_admin' || permissions.can_manage_warehouse === true;
@@ -42,6 +52,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
 
   const [itemId, setItemId] = useState('');
   const [packs, setPacks] = useState('');
+  const [pcs, setPcs] = useState(''); // damage only: loose pieces (oranges)
   const [machineId, setMachineId] = useState('');
   const [note, setNote] = useState('');
   const [operators, setOperators] = useState<{id:string;name:string;company_name?:string;billing_address?:string;gstin?:string;pincode?:string;phone?:string}[]>([]);
@@ -99,6 +110,8 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const machineLabel = (m?: Machine) => m ? (m.display_name || m.sn || m.id.slice(0, 6)) : '';
   const selItem = itemById(itemId);
   const previewBase = selItem && packs ? Number(packs) * selItem.pack_size : 0;
+  // Damage total in oranges: whole boxes × box_size + loose pieces.
+  const damageOranges = selItem ? (Number(packs) || 0) * selItem.pack_size + (Number(pcs) || 0) : 0;
   const taxable = packs && rate ? Number(packs) * Number(rate) : 0;
   // Warehouse stock is sold from the Indian entity and invoiced in INR; there is
   // no per-sale currency column. Rate is typed in major units, so it is scaled
@@ -118,7 +131,9 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   async function record(movement_type: 'receive' | 'dispatch' | 'sale' | 'damage_warehouse') {
     setErr(''); setMsg('');
     if (!itemId) { setErr('Pick an item'); return; }
-    if (!packs || Number(packs) <= 0) { setErr('Enter a quantity'); return; }
+    if (movement_type === 'damage_warehouse') {
+      if (damageOranges <= 0) { setErr('Enter boxes and/or pieces to write off'); return; }
+    } else if (!packs || Number(packs) <= 0) { setErr('Enter a quantity'); return; }
     if (movement_type === 'dispatch' && !machineId) { setErr('Pick a machine'); return; }
     if (movement_type === 'sale') {
       if (!soldToOp && !soldToName.trim()) { setErr('Pick a buyer or type a name'); return; }
@@ -129,7 +144,8 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
     }
     setSaving(true);
     try {
-      const body: any = { item_id: itemId, movement_type, packs: Number(packs), note: note.trim() || null };
+      const body: any = { item_id: itemId, movement_type, packs: Number(packs) || 0, note: note.trim() || null };
+      if (movement_type === 'damage_warehouse') body.pcs = Number(pcs) || 0;
       if (movement_type === 'dispatch') body.machine_id = machineId;
       if (movement_type === 'sale') {
         if (soldToOp) body.sold_to_operator_id = soldToOp; else body.sold_to_name = soldToName.trim();
@@ -143,14 +159,19 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
       const d = await r.json();
       if (!r.ok || d.error) { setErr(d.error || 'Failed'); setPacks(''); setSaving(false); return; }
       const it = itemById(itemId);
-      const base = Number(packs) * (it ? it.pack_size : 1);
-      const verb = movement_type === 'receive' ? 'Received'
-        : movement_type === 'dispatch' ? 'Dispatched'
-        : movement_type === 'sale' ? 'Sold'
-        : movement_type === 'damage_warehouse' ? 'Wrote off'
-        : 'Recorded';
-      setMsg(`${verb} ${packs} ${it?.pack_label || ''}${Number(packs) > 1 ? 's' : ''} = ${base} ${it?.base_unit || ''}${base > 1 ? 's' : ''}.`);
-      setPacks(''); setNote(''); setSoldToOp(''); setSoldToName(''); setRate(''); setBuyerCompany(''); setBuyerAddress(''); setBuyerGstin(''); setBuyerContact('');
+      if (movement_type === 'damage_warehouse') {
+        const total = (Number(packs) || 0) * (it ? it.pack_size : 1) + (Number(pcs) || 0);
+        const breakdown = damageParts(total, Number(packs) || 0, it ? it.pack_size : 1, it?.pack_label || 'box');
+        setMsg(`Wrote off ${breakdown} = ${total} ${it?.base_unit || ''}${total !== 1 ? 's' : ''}.`);
+      } else {
+        const base = Number(packs) * (it ? it.pack_size : 1);
+        const verb = movement_type === 'receive' ? 'Received'
+          : movement_type === 'dispatch' ? 'Dispatched'
+          : movement_type === 'sale' ? 'Sold'
+          : 'Recorded';
+        setMsg(`${verb} ${packs} ${it?.pack_label || ''}${Number(packs) > 1 ? 's' : ''} = ${base} ${it?.base_unit || ''}${base > 1 ? 's' : ''}.`);
+      }
+      setPacks(''); setPcs(''); setNote(''); setSoldToOp(''); setSoldToName(''); setRate(''); setBuyerCompany(''); setBuyerAddress(''); setBuyerGstin(''); setBuyerContact('');
       await loadOnhand(); await loadLog();
     } catch { setErr('Network problem'); }
     setSaving(false);
@@ -273,9 +294,20 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                     : <select style={inp} value={machineId} onChange={e => setMachineId(e.target.value)}>{machines.map(m => <option key={m.id} value={m.id}>{machineLabel(m)}</option>)}</select>}
                 </Field>
               )}
-              <Field label={`Quantity (${selItem?.pack_label || 'unit'}s)`} hint={qtyHint} hintColor={tab === 'damage' ? C.dangerDeep : C.orange} span2>
-                <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
-              </Field>
+              {tab === 'damage' ? (
+                <>
+                  <Field label={`Boxes (${selItem?.pack_label || 'box'}s)`} hint={selItem ? `× ${selItem.pack_size} ${selItem.base_unit}s each` : ''} hintColor={C.dangerDeep}>
+                    <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Whole ${selItem.pack_label}s` : ''} />
+                  </Field>
+                  <Field label={`Pieces (${selItem?.base_unit || 'orange'}s)`} hint={damageOranges ? `= ${damageOranges} ${selItem?.base_unit || 'orange'}s total` : ''} hintColor={C.dangerDeep}>
+                    <input style={inp} type="number" inputMode="numeric" value={pcs} onChange={e => setPcs(e.target.value)} placeholder={`Loose ${selItem?.base_unit || 'orange'}s`} />
+                  </Field>
+                </>
+              ) : (
+                <Field label={`Quantity (${selItem?.pack_label || 'unit'}s)`} hint={qtyHint} hintColor={C.orange} span2>
+                  <input style={inp} type="number" inputMode="numeric" value={packs} onChange={e => setPacks(e.target.value)} placeholder={selItem ? `Number of ${selItem.pack_label}s` : ''} />
+                </Field>
+              )}
             </FormGroup>
 
             <FormGroup label={tab === 'damage' ? 'Reason' : 'Reference'} isMobile={isMobile}>
@@ -297,11 +329,16 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
               {tab === 'dispatch' && machines.length > 0 && <RailRow label="Destination" value={machineLabel(machines.find(m => m.id === machineId))} />}
               <RailRow
                 label={tab === 'damage' ? 'Writing off' : tab === 'receive' ? 'Adding' : 'Removing'}
-                value={previewBase ? `${previewBase} ${selItem?.base_unit}s` : '—'}
+                value={(tab === 'damage' ? damageOranges : previewBase) ? `${tab === 'damage' ? damageOranges : previewBase} ${selItem?.base_unit}s` : '—'}
                 color={tab === 'receive' ? C.green : tab === 'damage' ? C.dangerDeep : C.blue}
                 big
               />
-              {selItem && <div style={{ marginTop: 12, fontSize: 12, color: C.text3, lineHeight: 1.5 }}>1 {selItem.pack_label} = {selItem.pack_size} {selItem.base_unit}s. Enter whole {selItem.pack_label}s; the warehouse tracks {selItem.base_unit}s.</div>}
+              {tab === 'damage' && damageOranges > 0 && selItem && (
+                <RailRow label="Breakdown" value={damageParts(damageOranges, Number(packs) || 0, selItem.pack_size, selItem.pack_label) || '—'} />
+              )}
+              {selItem && <div style={{ marginTop: 12, fontSize: 12, color: C.text3, lineHeight: 1.5 }}>{tab === 'damage'
+                ? `1 ${selItem.pack_label} = ${selItem.pack_size} ${selItem.base_unit}s. Enter whole ${selItem.pack_label}s and/or loose ${selItem.base_unit}s; total = boxes × ${selItem.pack_size} + pieces.`
+                : `1 ${selItem.pack_label} = ${selItem.pack_size} ${selItem.base_unit}s. Enter whole ${selItem.pack_label}s; the warehouse tracks ${selItem.base_unit}s.`}</div>}
             </SummaryRail>
           )}
         </div>
@@ -385,7 +422,12 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                     <tr key={m.id}>
                       <td style={{ ...td, color: C.text2, whiteSpace: 'nowrap' }}>{new Date(m.created_at).toLocaleString('en-IN')}</td>
                       <td style={td}><MovementBadge type={m.movement_type} /></td>
-                      <td style={td}>{it ? it.name : m.item_id.slice(0, 6)}</td>
+                      <td style={td}>{it ? it.name : m.item_id.slice(0, 6)}
+                        {m.movement_type === 'damage_warehouse' && it && (() => {
+                          const bd = damageParts(Math.abs(m.qty_base), m.packs || 0, it.pack_size, it.pack_label);
+                          return bd ? <div style={{ fontSize: 11, color: C.text3, fontWeight: 400 }}>{bd}</div> : null;
+                        })()}
+                      </td>
                       <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: m.qty_base >= 0 ? C.green : C.blue }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</td>
                       <td style={{ ...td, color: C.text2 }}>{mac ? machineLabel(mac) : '—'}</td>
                       <td style={{ ...td, color: C.text2 }}>{m.created_by_name || '—'}</td>
@@ -413,6 +455,10 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                       <div>
                         <MovementBadge type={m.movement_type} solid />
                         <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginTop: 8 }}>{it ? it.name : m.item_id.slice(0, 6)}</div>
+                        {m.movement_type === 'damage_warehouse' && it && (() => {
+                          const bd = damageParts(Math.abs(m.qty_base), m.packs || 0, it.pack_size, it.pack_label);
+                          return bd ? <div style={{ fontSize: 12, color: C.text3, marginTop: 3 }}>{bd}</div> : null;
+                        })()}
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 22, fontWeight: 700, color: accent, lineHeight: 1 }}>{m.qty_base >= 0 ? '+' : ''}{m.qty_base}</div>
