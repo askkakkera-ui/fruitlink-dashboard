@@ -426,7 +426,14 @@ const stats = [
         <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Viewing</span>
           <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
-            style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
+            style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none',
+              // A <select> sizes to its widest option; a long location string
+              // ("… Kukatpally, Hyderabad") otherwise blows the box past the
+              // viewport and scrolls the page. minWidth:0 lets the flex child
+              // shrink below its content; maxWidth caps it; ellipsis truncates
+              // the shown value. Full-width on its own row on phones.
+              minWidth: 0, maxWidth: '100%', width: isMobile ? '100%' : undefined,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' as const }}>
             <option value="all">All machines</option>
             {machines.filter((m: any) => m && m.id).map((m: any) => (
               <option key={m.id} value={m.id}>{m.display_name || m.sn}{m.location ? ' — ' + m.location : ''}</option>
