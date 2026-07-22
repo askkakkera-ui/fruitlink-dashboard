@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { formatMoney } from './lib/dashboard-shared';
+import { formatMoney, useIsMobile } from './lib/dashboard-shared';
 
 // Dashboard-native Warehouse section — redesigned.
 // Grouped, eyebrow-labelled field sections in a 2-column form + sticky summary
@@ -46,7 +46,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const [machines, setMachines] = useState<Machine[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
@@ -97,13 +97,6 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
 
   useEffect(() => {
     (async () => { setLoading(true); await loadOnhand(); await loadMachines(); await loadOperators(); await loadLog(); setLoading(false); })();
-  }, []);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 720);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
   }, []);
 
   const itemById = (id: string) => items.find(i => i.id === id);
@@ -215,7 +208,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
 
       {/* KPI strip */}
       {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: isMobile ? 10 : 14, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0,1fr))' : 'repeat(4, minmax(0,1fr))', gap: isMobile ? 10 : 14, marginBottom: 18 }}>
           <StatCard label="Oranges on hand" value={totalOranges.toLocaleString('en-IN')} sub={`${totalBoxes} boxes`} icon="🍊" color={C.orange} />
           <StatCard label="Consumables" value={String(cons.length)} sub={consLow ? `${consLow} low` : 'all stocked'} icon="📦" color={C.blue} />
           <StatCard label="Machines" value={String(machines.length)} sub={isSuper ? 'fleet' : 'you service'} icon="▣" color={C.green} />
