@@ -22,6 +22,13 @@ function countryToTz(country?: unknown): string {
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
 
+// Platform-owner super_admin. Fruitlink internal staff (role='staff') hang off
+// this id — it is their owner_id, the same value MyStaffSection stamps on the
+// Fruitlink Team page (its SUPER_ADMIN_ID). Kept here so no write path can mint
+// or leave an ownerless staff row: an ownerless staff account matches no
+// owner-scoped query and sees zero data everywhere.
+const PLATFORM_SUPER_ADMIN_ID = '0c1bd083-682a-4913-ac37-08c85ef94b41';
+
 // Write permissions now live in WRITE_RULES below (deny-by-default allowlist);
 // operators/machines/machine_operators stay super_admin-only there.
 const SOFT_DELETE_TABLES = ['operators'];
@@ -298,6 +305,16 @@ async function campaignOwner(campaignId: string): Promise<string | null> {
   return Array.isArray(rows) && rows[0] ? String(rows[0].operator_id || '') : null;
 }
 
+// Fetch an operator's current role by id, to decide whether a PATCH would orphan
+// an internal account (see the owner_id guard below). Server-side, service key.
+async function operatorRoleById(operatorId: string): Promise<string> {
+  const url = SB_URL + '/rest/v1/operators?select=role&id=eq.' + encodeURIComponent(operatorId) + '&limit=1';
+  const res = await fetch(url, { headers: sbHeaders() });
+  if (!res.ok) return '';
+  const rows = await res.json();
+  return Array.isArray(rows) && rows[0] ? String(rows[0].role || '') : '';
+}
+
 // Pull the id from a PostgREST filter like ?id=eq.<uuid> (used for PATCH/DELETE).
 function idEqOf(path: string): string {
   const m = path.match(/[?&]id=eq\.([^&]+)/);
@@ -418,12 +435,37 @@ async function guardWrite(request: NextRequest, method: string) {
           row.operator_code = await generateOperatorCode(company, issued);
           issued = sequenceOf(row.operator_code);
           row.timezone = countryToTz(row.country);
+        } else if (row.role === 'staff') {
+          // Fruitlink internal staff belong to the platform super_admin. The
+          // Fruitlink Team page stamps owner_id already; stamp it here too so no
+          // path (or a hand-crafted request) can create an ownerless staff row
+          // that would see zero data everywhere. Default staff_type so the row
+          // is never left untyped.
+          if (row.owner_id == null || String(row.owner_id).trim() === '') row.owner_id = PLATFORM_SUPER_ADMIN_ID;
+          if (row.staff_type == null || String(row.staff_type).trim() === '') row.staff_type = 'office';
         }
         continue;
       }
 
-      // PATCH: only act when this edit lands the row on role='operator'. A body
-      // without `role` isn't a promotion, so it's left alone.
+      // PATCH — pending security fix #8: a routine edit must never orphan an
+      // internal account. The Operators page edit form sends owner_id:null for
+      // every role outside NEEDS_PARENT (staff, super_admin), so editing a
+      // Fruitlink staff member there would strip their owner and leave them
+      // seeing zero data everywhere. When a PATCH body carries a null/empty
+      // owner_id on a staff or super_admin row, strip the field so the stored
+      // owner is left untouched. (owner_id = null is only ever legitimate for
+      // role='operator', which has no parent.) The role is read from the DB when
+      // the body omits it, so a hand-crafted request can't dodge the guard.
+      if ('owner_id' in row && (row.owner_id == null || String(row.owner_id).trim() === '')) {
+        const targetId = idEqOf(rawPath);
+        const effectiveRole = typeof row.role === 'string' && row.role
+          ? row.role
+          : (targetId ? await operatorRoleById(targetId) : '');
+        if (effectiveRole === 'staff' || effectiveRole === 'super_admin') delete row.owner_id;
+      }
+
+      // Operator-code minting only applies when this edit lands the row on
+      // role='operator'. A body without `role` isn't a promotion, so it's left alone.
       if (row.role !== 'operator') continue;
       const targetId = idEqOf(rawPath);
       if (!targetId) continue;
