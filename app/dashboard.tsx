@@ -6,6 +6,7 @@ import MyStaffSection from './MyStaffSection'
 import ReportsSection from './ReportsSection'
 import FieldStaffSection from './FieldStaffSection'
 import AttendanceSection from './AttendanceSection'
+import InternalAttendanceSection from './InternalAttendanceSection'
 import { C, SB_KEY, getCookie, useIsMobile, Badge, ErrorBoundary } from './lib/dashboard-shared'
 import { SettingsPage } from './SettingsPage'
 import { OperatorsPage, MyTeamPage } from './OperatorsPage'
@@ -364,6 +365,9 @@ export default function Dashboard() {
     reports: <ReportsSection />,
     mystaff: role === 'super_admin'
       ? <MyStaffSection />
+      : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
+    teamattendance: role === 'super_admin'
+      ? <InternalAttendanceSection />
       : <div style={{ padding: '60px', textAlign: 'center', color: C.text3 }}>Access restricted to Super Admins only.</div>,
     fieldstaff: (role === 'super_admin' || permissions.can_view_field_staff)
       ? <FieldStaffSection />
