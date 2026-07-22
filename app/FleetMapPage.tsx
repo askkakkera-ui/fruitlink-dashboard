@@ -1,9 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { C, Pill } from './lib/dashboard-shared'
+import { C, Pill, useIsMobile } from './lib/dashboard-shared'
 
 export function FleetMapPage({ machines }: { machines: any[] }) {
   const mapRef = useRef<HTMLDivElement>(null)
+  const mapObjRef = useRef<any>(null)
+  const isMobile = useIsMobile()
   const [scriptLoaded, setScriptLoaded] = useState(false)
   // Coordinates pulled straight from Supabase by serial number (no VPS dependency).
   const [dbCoords, setDbCoords] = useState<Record<string, {lat: number, lng: number}>>({})
@@ -59,6 +61,11 @@ export function FleetMapPage({ machines }: { machines: any[] }) {
     const mgl = (window as any).mapboxgl
     mgl.accessToken = MB
     const map = new mgl.Map({ container: mapRef.current, style: 'mapbox://styles/mapbox/light-v11', center: [78.44438079543997, 17.442822793310572], zoom: 10.5 })
+    mapObjRef.current = map
+    // Mapbox measures the container at init; if it wasn't at final width yet
+    // (e.g. the mobile stack hadn't laid out), it renders at 0/wrong size until
+    // told to re-measure. Resize once the style loads.
+    map.on('load', () => map.resize())
     const esc = (s: any) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
     machines.forEach((m: any) => {
       const co = getCoords(m); if (!co) return
@@ -74,8 +81,12 @@ export function FleetMapPage({ machines }: { machines: any[] }) {
       new mgl.Marker({ element: el }).setLngLat([co.lng, co.lat]).setPopup(popup).addTo(map)
     })
     map.addControl(new mgl.NavigationControl(), 'bottom-right')
-    return () => map.remove()
+    return () => { map.remove(); mapObjRef.current = null }
   }, [scriptLoaded, machines, dbCoords])
+  // The desktop [map | list] grid collapses to a stack on mobile, so the map
+  // container's width changes without the map being re-created. Re-measure when
+  // the layout switches, or the map keeps the old (crushed) width.
+  useEffect(() => { mapObjRef.current?.resize() }, [isMobile])
   const fmtTime = (t: string) => { if (!t) return '--'; const mins = Math.floor((Date.now() - new Date(t).getTime()) / 60000); if (mins < 60) return mins + 'm ago'; if (mins < 1440) return Math.floor(mins/60) + 'h ago'; return Math.floor(mins/1440) + 'd ago' }
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -83,10 +94,10 @@ export function FleetMapPage({ machines }: { machines: any[] }) {
         <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>Fleet Map</div>
         <div style={{ fontSize: 13, color: C.text2 }}>{machines.length} machines registered</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
-        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', minHeight: 500, position: 'relative' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: 16 }}>
+        <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 16, overflow: 'hidden', minHeight: isMobile ? 260 : 500, height: isMobile ? 260 : undefined, position: 'relative' }}>
           {!scriptLoaded && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface2, flexDirection: 'column', gap: 12, zIndex: 10 }}><div style={{ fontSize: 32 }}>🗺</div><div style={{ fontSize: 13, fontWeight: 600, color: C.text3 }}>Loading Map...</div><div style={{ fontSize: 11, color: C.text3 }}>Powered by Mapbox</div></div>}
-          <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: 500 }} />
+          <div ref={mapRef} style={{ width: '100%', height: isMobile ? 260 : '100%', minHeight: isMobile ? 260 : 500 }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {machines.map((m: any) => {
