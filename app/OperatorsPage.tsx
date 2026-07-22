@@ -815,31 +815,48 @@ function TenantCard({ group, open, onToggle, onAction, isMobile, canRemove }: an
   const people = [...group.sub_operators, ...group.field_staff]
   const title = tenant.company_name || tenant.name || tenant.email
   const region = [tenant.state, tenant.country].filter(Boolean).join(', ')
+
+  // Header pieces, shared between the desktop row and the mobile stacked layout
+  // so the badges never diverge. On mobile they move to their own wrapped row
+  // below the identity, so the operator_code / Unverified / member-count badges
+  // can't overlap the company name + location (the crowding bug).
+  const chevron = <span style={{ fontSize: 13, color: C.text3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}>▸</span>
+  const avatar = <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: OP_ROLES.operator.color, background: OP_ROLES.operator.bg, border: '1px solid ' + a22(OP_ROLES.operator.color) }}>{opInitial(title)}</div>
+  const identity = (
+    <div style={{ minWidth: 0, flex: 1 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: C.text, ...(isMobile ? {} : { whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' as const }) }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: C.text2, marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+        <span style={{ fontWeight: 700 }}>{tenant.name || tenant.email}</span>
+        {region && <span style={{ color: C.text3 }}>{region}</span>}
+      </div>
+    </div>
+  )
+  const badges = (<>
+    {tenant.operator_code && (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: C.text, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontFamily: 'monospace', whiteSpace: 'nowrap' as const }}>{tenant.operator_code}</span>
+    )}
+    {/* Display-only. payment_verified is written by nothing today and gates
+        nothing — a future payment integration verifies against the code. */}
+    <span title="Payment verification is a future integration — this flag gates nothing today"
+      style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 999, color: tenant.payment_verified ? C.green : C.text3, background: tenant.payment_verified ? C.greenBg : C.surface2, border: '1px solid ' + C.border, whiteSpace: 'nowrap' as const }}>
+      {tenant.payment_verified ? '✓ Paid' : 'Unverified'}
+    </span>
+    <span style={opPill(C.text2)}>👥 {staffCount + 1}</span>
+  </>)
+
   return (
     <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: SHADOW_CARD, border: '1px solid ' + (open ? C.border2 : C.border), marginBottom: 14, background: C.surface }}>
-      <div onClick={onToggle} style={{ padding: isMobile ? '13px 15px' : '15px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, background: open ? '#fffaf6' : C.surface, flexWrap: 'wrap' as const }}>
-        <span style={{ fontSize: 13, color: C.text3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}>▸</span>
-        <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: OP_ROLES.operator.color, background: OP_ROLES.operator.bg, border: '1px solid ' + a22(OP_ROLES.operator.color) }}>{opInitial(title)}</div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' as const }}>{title}</div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
-            <span style={{ fontWeight: 700 }}>{tenant.name || tenant.email}</span>
-            {region && <span style={{ color: C.text3 }}>{region}</span>}
-          </div>
+      {isMobile ? (
+        <div onClick={onToggle} style={{ padding: '13px 15px', cursor: 'pointer', display: 'flex', flexDirection: 'column' as const, gap: 10, background: open ? '#fffaf6' : C.surface }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>{chevron}{avatar}{identity}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>{badges}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
-          {tenant.operator_code && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: C.text, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '4px 10px', fontFamily: 'monospace', whiteSpace: 'nowrap' as const }}>{tenant.operator_code}</span>
-          )}
-          {/* Display-only. payment_verified is written by nothing today and gates
-              nothing — a future payment integration verifies against the code. */}
-          <span title="Payment verification is a future integration — this flag gates nothing today"
-            style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 999, color: tenant.payment_verified ? C.green : C.text3, background: tenant.payment_verified ? C.greenBg : C.surface2, border: '1px solid ' + C.border, whiteSpace: 'nowrap' as const }}>
-            {tenant.payment_verified ? '✓ Paid' : 'Unverified'}
-          </span>
-          <span style={opPill(C.text2)}>👥 {staffCount + 1}</span>
+      ) : (
+        <div onClick={onToggle} style={{ padding: '15px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, background: open ? '#fffaf6' : C.surface, flexWrap: 'wrap' as const }}>
+          {chevron}{avatar}{identity}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>{badges}</div>
         </div>
-      </div>
+      )}
       {open && (
         <div>
           {/* Operator identity strip — the tenant owner + operator actions */}
