@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useIsMobile } from './lib/dashboard-shared';
 
 // Fruitlink INTERNAL-team attendance page. Structurally a sibling of
 // AttendanceSection: same _ds tokens, same primitives (StatCardA / RecordRow /
@@ -56,17 +57,6 @@ function timeLabel(t?: string, tz = 'Asia/Kolkata') {
 function initialA(s?: string) { return (s || '?').charAt(0).toUpperCase(); }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function daysAgoISO(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
-
-function useIsMobile(bp = 860) {
-  const [m, setM] = useState(false);
-  useEffect(() => {
-    const check = () => setM(window.innerWidth < bp);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, [bp]);
-  return m;
-}
 
 function loadJsPDF(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -222,7 +212,7 @@ function chipStyle(active: boolean): React.CSSProperties {
 }
 
 export default function InternalAttendanceSection() {
-  const isMobile = useIsMobile(860);
+  const isMobile = useIsMobile();
   const [records, setRecords] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [machines, setMachines] = useState<any[]>([]);
