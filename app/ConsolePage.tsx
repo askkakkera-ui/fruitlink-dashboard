@@ -380,6 +380,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
 
 // ─── Console Page ────────────────────────────────────────────────
 export function ConsolePage({ machines, alerts, loading }: any) {
+  const isMobile = useIsMobile()
 const [stockData, setStockData] = useState<any[]>([])
   const [fleetOpen, setFleetOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
@@ -422,7 +423,7 @@ const stats = [
     <div style={{ padding: '24px 28px' }}>
       {/* Machine Picker */}
       {machines.length > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Viewing</span>
           <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
             style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
@@ -444,8 +445,12 @@ const stats = [
           )}
         </div>
       )}
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
+      {/* Stats — 2-col grid on phones so the cards fit without horizontal
+          overflow; 3-col on desktop. minmax(0,1fr) lets tracks shrink below the
+          cards' min-content instead of overflowing the row. The minmax spelling
+          also intentionally avoids the global [style*="repeat(3,1fr)"] matcher,
+          so this isMobile branch is the single authority here. */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0,1fr))' : 'repeat(3, minmax(0,1fr))', gap: isMobile ? 10 : 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
       <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={scopedStock} />

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { C, Pill, useIsMobile } from './lib/dashboard-shared'
+import { C, Pill, useIsMobile, PersonRow as PersonRowShell } from './lib/dashboard-shared'
 import { groupOperatorsByTenant } from './lib/operator-grouping'
 
 // ─── Operators Page (super_admin only) ───────────────────────────
@@ -745,22 +745,21 @@ function OpActionBtns({ person, onAction, canRemove }: any) {
 function PersonRow({ person, onAction, isMobile, canRemove, actions }: any) {
   const actionNode = actions !== undefined ? actions : <OpActionBtns person={person} onAction={onAction} canRemove={canRemove} />
   if (isMobile) {
+    // Mobile stack now lives in the shared PersonRow (single source). Desktop
+    // below keeps its aligned 5-column grid, which is specific to this page.
     return (
-      <div style={{ borderTop: '1px solid ' + C.border, padding: '13px 15px', background: C.surface, display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
-        <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
-          <OpAvatar person={person} />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{person.name || '—'}</div>
-            <div style={{ fontSize: 12, color: C.text2, wordBreak: 'break-all' as const }}>{person.email}</div>
-            <div style={{ marginTop: 6 }}><OpRoleBadge role={person.role} /></div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+      <PersonRowShell
+        isMobile
+        avatar={<OpAvatar person={person} />}
+        title={person.name || '—'}
+        subtitle={person.email}
+        badges={<OpRoleBadge role={person.role} />}
+        meta={<>
           <PermSummary perms={person.permissions} />
           <span style={{ fontSize: 11, color: C.text3, fontWeight: 600 }}>Joined {joinedStr(person.created_at)}</span>
-        </div>
-        {actionNode}
-      </div>
+        </>}
+        actions={actionNode}
+      />
     )
   }
   return (

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useIsMobile, PersonRow } from './lib/dashboard-shared';
 
 // My Staff — super_admin manages internal employees (role='staff') with designations.
 // These are Fruitlink's own team (office, technicians, managers) — NOT tenant field staff.
@@ -24,6 +25,7 @@ export default function MyStaffSection() {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
   const [permsFor, setPermsFor] = useState<Staff | null>(null);
+  const isMobile = useIsMobile();
 
   // Form state
   const [fName, setFName] = useState('');
@@ -125,26 +127,33 @@ export default function MyStaffSection() {
         </div>
       ) : (
         <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 14, overflow: 'hidden', marginTop: 16 }}>
-          {staff.map((s, i) => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < staff.length - 1 ? '1px solid ' + C.border : 'none' }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.purpleBg, color: C.purple, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
-                {(s.name || s.email || '?').slice(0, 2).toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {s.name || '—'}
+          {staff.map((s, i) => {
+            // Actions: ≥44px tap targets on mobile, and each fills its share of
+            // the stacked row (flex:1) so the buttons don't crowd the text.
+            const actBtn = (bg: string, brd: string, color: string, fw: number): React.CSSProperties => ({
+              background: bg, border: brd, borderRadius: 8, cursor: 'pointer', color, fontSize: 13, fontWeight: fw,
+              padding: isMobile ? '11px 14px' : '6px 12px', minHeight: isMobile ? 44 : undefined, flex: isMobile ? 1 : undefined,
+            });
+            return (
+              <PersonRow
+                key={s.id}
+                isMobile={isMobile}
+                divider={i > 0}
+                avatar={<div style={{ width: 40, height: 40, borderRadius: '50%', background: C.purpleBg, color: C.purple, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15, flexShrink: 0 }}>{(s.name || s.email || '?').slice(0, 2).toUpperCase()}</div>}
+                title={s.name || '—'}
+                subtitle={`${s.email}${s.designation ? ' · ' + s.designation : ''}`}
+                badges={<>
                   {s.employee_id && <span style={{ fontSize: 11, fontWeight: 700, color: C.text3, background: C.surface2, padding: '2px 8px', borderRadius: 6, border: '1px solid ' + C.border }}>{s.employee_id}</span>}
-                </div>
-                <div style={{ fontSize: 13, color: C.text3 }}>{s.email}{s.designation ? ' · ' + s.designation : ''}</div>
-              </div>
-              {s.staff_type && (
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', color: C.purple, background: C.purpleBg, padding: '4px 12px', borderRadius: 20, flexShrink: 0 }}>{s.staff_type}</span>
-              )}
-              <button onClick={() => setPermsFor(s)} style={{ background: C.purpleBg, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>🔑 Perms</button>
-              <button onClick={() => openEdit(s)} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.text2, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Edit</button>
-              <button onClick={() => remove(s)} style={{ background: C.redBg, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.red, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>Del</button>
-            </div>
-          ))}
+                  {s.staff_type && <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'capitalize', color: C.purple, background: C.purpleBg, padding: '4px 12px', borderRadius: 20 }}>{s.staff_type}</span>}
+                </>}
+                actions={<>
+                  <button onClick={() => setPermsFor(s)} style={actBtn(C.purpleBg, 'none', C.purple, 700)}>🔑 Perms</button>
+                  <button onClick={() => openEdit(s)} style={actBtn(C.surface2, '1px solid ' + C.border, C.text2, 600)}>Edit</button>
+                  <button onClick={() => remove(s)} style={actBtn(C.redBg, 'none', C.red, 600)}>Del</button>
+                </>}
+              />
+            );
+          })}
         </div>
       )}
 
