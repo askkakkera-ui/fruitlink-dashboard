@@ -718,6 +718,11 @@ function PermSummary({ perms }: any) {
 // field_staff rows, where they'd open an empty owner_id. Perms/Edit/Del on all.
 function OpActionBtns({ person, onAction, canRemove }: any) {
   const isOp = person.role === 'operator'
+  // Internal Fruitlink accounts (staff / super_admin) are view-only here: the
+  // Fruitlink Team page is the single edit path for them. Editing a staff row
+  // here also tripped the owner_id-nulling trap (the Role select had no matching
+  // option once "Fruitlink Staff" was removed), so the Edit button is hidden.
+  const isInternal = person.role === 'staff' || person.role === 'super_admin'
   const delOk = !canRemove || canRemove(person)
   const btn = (key: string, label: string, color: string, bg: string) => (
     <button key={key} onClick={() => onAction(key, person)} style={{ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: bg ? 'none' : '1px solid ' + C.border2, borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color, background: bg || C.surface, whiteSpace: 'nowrap' as const }}>{label}</button>
@@ -727,7 +732,7 @@ function OpActionBtns({ person, onAction, canRemove }: any) {
       {isOp && btn('machines', '🖥 Machines', C.blue, C.blueBg)}
       {btn('perms', '🔐 Perms', PURPLE, PURPLEBG)}
       {isOp && btn('locations', '📍 Locations', C.green, C.greenBg)}
-      {btn('edit', '✏️ Edit', C.text2, C.surface2)}
+      {!isInternal && btn('edit', '✏️ Edit', C.text2, C.surface2)}
       {delOk
         ? btn('del', '🗑 Del', C.red, C.redBg)
         : <button key="del" disabled title="Protected: you can't remove your own account or the last remaining Super Admin" style={{ font: 'inherit', fontSize: 11.5, fontWeight: 700, border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'not-allowed', color: C.text3, background: C.surface2, whiteSpace: 'nowrap' as const, opacity: 0.6 }}>🔒 Del</button>}
@@ -1155,7 +1160,6 @@ export function OperatorsPage({ myId }: any) {
                   <option value="operator">Operator</option>
                   <option value="sub_operator">Sub-Operator</option>
                   <option value="field_staff">Field Staff</option>
-                  <option value="staff">Fruitlink Staff</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </div>
