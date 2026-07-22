@@ -239,7 +239,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
         <div style={card}>
           <div style={{ height: 3, background: 'linear-gradient(90deg,' + C.orange + ',' + IND + ')' }} />
           <div style={{ padding: '18px 22px' }}>
-            <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: '215px 1fr', gap: 22 }}>
+            <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: 'minmax(0,215px) 1fr', gap: 22 }}>
               <div style={{ marginBottom: isMobile ? 16 : 0 }}>
                 <div style={{ ...lbl, marginBottom: 14, justifyContent: 'space-between' }}>
                   <span>Today's Sales</span>
@@ -469,7 +469,7 @@ const stats = [
       {fleetOpen && (loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (machineSel === 'all' ? 'repeat(2, minmax(0,1fr))' : '1fr'), gap: 16, marginBottom: 22 }}>
           {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={scopedStock.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       ))}
@@ -495,7 +495,7 @@ const stats = [
           const m = getMachine(a.machine_id)
           return (
             <div key={a.id} style={{
-              display: 'grid', gridTemplateColumns: '120px 1fr auto',
+              display: 'grid', gridTemplateColumns: '120px minmax(0,1fr) auto',
               gap: 16, padding: '14px 20px', alignItems: 'center',
               borderBottom: i < Math.min(activeAlerts.length, 5) - 1 ? `1px solid ${C.border}` : 'none',
               background: i % 2 === 0 ? C.surface : C.surface2,
