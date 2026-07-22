@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useIsMobile, PersonRow } from './lib/dashboard-shared';
 
 // Field Staff — view field_staff members and their visit activity (photos, GPS, oranges).
 // Data: operators (role=field_staff) + their visits. Super-admin only.
@@ -45,6 +46,7 @@ export default function FieldStaffSection() {
   const [visitsByStaff, setVisitsByStaff] = useState<Record<string, Visit[]>>({});
   const [visitLoading, setVisitLoading] = useState<Record<string, boolean>>({});
   const [lightbox, setLightbox] = useState<Visit | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     (async () => {
@@ -123,23 +125,18 @@ export default function FieldStaffSection() {
             const visits = visitsByStaff[s.id] || [];
             return (
               <div key={s.id} style={{ ...card, overflow: 'hidden' }}>
-                {/* Staff header */}
-                <div onClick={() => toggleStaff(s.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', cursor: 'pointer', userSelect: 'none' as const, background: isOpen ? C.surface2 : '#fff' }}>
-                  <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg,' + C.orange + ',#ff8f4d)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
-                    {initials(s.name, s.email)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{s.name || s.email}</div>
-                    <div style={{ fontSize: 12.5, color: C.text2, marginTop: 2 }}>
-                      {s.email}{s.phone ? ' · ' + s.phone : ''}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ background: C.blueBg, color: C.blue, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>Field Staff</span>
-                    <span style={{ fontSize: 16, color: C.text3, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>
-                  </div>
-                </div>
+                {/* Staff header — shared responsive PersonRow (collapsible) */}
+                <PersonRow
+                  isMobile={isMobile}
+                  divider={false}
+                  onClick={() => toggleStaff(s.id)}
+                  background={isOpen ? C.surface2 : '#fff'}
+                  avatar={<div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg,' + C.orange + ',#ff8f4d)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>{initials(s.name, s.email)}</div>}
+                  title={s.name || s.email}
+                  subtitle={`${s.email}${s.phone ? ' · ' + s.phone : ''}`}
+                  badges={<span style={{ background: C.blueBg, color: C.blue, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>Field Staff</span>}
+                  trailing={<span style={{ fontSize: 16, color: C.text3, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▾</span>}
+                />
 
                 {/* Visits */}
                 {isOpen && (

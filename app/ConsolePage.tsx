@@ -239,7 +239,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
         <div style={card}>
           <div style={{ height: 3, background: 'linear-gradient(90deg,' + C.orange + ',' + IND + ')' }} />
           <div style={{ padding: '18px 22px' }}>
-            <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: '215px 1fr', gap: 22 }}>
+            <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: 'minmax(0,215px) 1fr', gap: 22 }}>
               <div style={{ marginBottom: isMobile ? 16 : 0 }}>
                 <div style={{ ...lbl, marginBottom: 14, justifyContent: 'space-between' }}>
                   <span>Today's Sales</span>
@@ -380,6 +380,7 @@ export function ConsoleInsights({ machines, lackingCard, machineSel, setMachineS
 
 // ─── Console Page ────────────────────────────────────────────────
 export function ConsolePage({ machines, alerts, loading }: any) {
+  const isMobile = useIsMobile()
 const [stockData, setStockData] = useState<any[]>([])
   const [fleetOpen, setFleetOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
@@ -422,7 +423,7 @@ const stats = [
     <div style={{ padding: '24px 28px' }}>
       {/* Machine Picker */}
       {machines.length > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: 12, marginBottom: 20, background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, padding: '12px 18px' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.text2, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Viewing</span>
           <select value={machineSel} onChange={e => setMachineSel(e.target.value)}
             style={{ fontSize: 14, fontWeight: 700, border: '2px solid ' + (machineSel !== 'all' ? C.orange : C.border), borderRadius: 10, padding: '6px 14px', color: machineSel !== 'all' ? C.orange : C.text, background: C.surface, cursor: 'pointer', outline: 'none' }}>
@@ -444,8 +445,12 @@ const stats = [
           )}
         </div>
       )}
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 14 }}>
+      {/* Stats — 2-col grid on phones so the cards fit without horizontal
+          overflow; 3-col on desktop. minmax(0,1fr) lets tracks shrink below the
+          cards' min-content instead of overflowing the row. The minmax spelling
+          also intentionally avoids the global [style*="repeat(3,1fr)"] matcher,
+          so this isMobile branch is the single authority here. */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0,1fr))' : 'repeat(3, minmax(0,1fr))', gap: isMobile ? 10 : 14, marginBottom: 14 }}>
         {stats.slice(0, 3).map(s => <StatCard key={s.label} {...s} />)}
       </div>
       <ConsoleInsights machines={machines} lackingCard={stats[3]} machineSel={machineSel} setMachineSel={setMachineSel} stockData={scopedStock} />
@@ -464,7 +469,7 @@ const stats = [
       {fleetOpen && (loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.text3 }}>Loading fleet data...</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: machineSel === 'all' ? 'repeat(2,1fr)' : '1fr', gap: 16, marginBottom: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (machineSel === 'all' ? 'repeat(2, minmax(0,1fr))' : '1fr'), gap: 16, marginBottom: 22 }}>
           {scopedMachines.map((m: any) => <MachineCard key={m.id} machine={m} stock={scopedStock.find((s: any) => s.machine_id === m.id)} />)}
         </div>
       ))}
@@ -490,7 +495,7 @@ const stats = [
           const m = getMachine(a.machine_id)
           return (
             <div key={a.id} style={{
-              display: 'grid', gridTemplateColumns: '120px 1fr auto',
+              display: 'grid', gridTemplateColumns: '120px minmax(0,1fr) auto',
               gap: 16, padding: '14px 20px', alignItems: 'center',
               borderBottom: i < Math.min(activeAlerts.length, 5) - 1 ? `1px solid ${C.border}` : 'none',
               background: i % 2 === 0 ? C.surface : C.surface2,

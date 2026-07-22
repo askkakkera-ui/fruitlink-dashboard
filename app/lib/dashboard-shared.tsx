@@ -97,6 +97,73 @@ export function Pill({ children, color, bg }: any) {
   )
 }
 
+// ─── PersonRow — the single responsive person/entity row ─────────────
+// One source of truth for the avatar + name/email + badges + actions row used
+// on Operators, Fruitlink Team and Field Staff. Content is passed as slots so
+// each page keeps its own pills/buttons; the SHELL owns the responsive layout.
+//
+// The mobile branch STACKS everything vertically (identity, then badges, then a
+// meta row, then actions) — no flex-nowrap crushing the name and no pills
+// overlapping text, which was the ~390px bug. On desktop it lays out as a flex
+// row (callers needing an aligned multi-column grid — e.g. OperatorsPage — keep
+// their own desktop layout and delegate only the mobile branch here).
+//
+// Slots: avatar, title, subtitle, badges (pills under the name), meta (a row
+// below, e.g. "Joined …"), actions (buttons), trailing (right-edge node such as
+// a chevron/count). `onClick` makes the whole row tappable (Field Staff
+// collapsible header); `divider` draws a top border for stacked list items;
+// `background` overrides the row background (e.g. an expanded header).
+export function PersonRow({
+  avatar, title, subtitle, badges, meta, actions, trailing,
+  isMobile, onClick, divider = true, background,
+}: {
+  avatar?: React.ReactNode; title?: React.ReactNode; subtitle?: React.ReactNode;
+  badges?: React.ReactNode; meta?: React.ReactNode; actions?: React.ReactNode;
+  trailing?: React.ReactNode; isMobile?: boolean; onClick?: () => void;
+  divider?: boolean; background?: string;
+}) {
+  const clickable = typeof onClick === 'function'
+  const base: React.CSSProperties = {
+    background: background || C.surface,
+    ...(divider ? { borderTop: '1px solid ' + C.border } : {}),
+    ...(clickable ? { cursor: 'pointer', userSelect: 'none' as const } : {}),
+  }
+
+  if (isMobile) {
+    return (
+      <div onClick={onClick} style={{ ...base, padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+          {avatar}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{title || '—'}</div>
+            {subtitle != null && subtitle !== '' && <div style={{ fontSize: 12, color: C.text2, wordBreak: 'break-word' }}>{subtitle}</div>}
+            {badges && <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>{badges}</div>}
+          </div>
+          {trailing && <div style={{ flexShrink: 0 }}>{trailing}</div>}
+        </div>
+        {meta && <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{meta}</div>}
+        {actions && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{actions}</div>}
+      </div>
+    )
+  }
+
+  // Desktop: single flex row. Identity grows; badges/meta/actions/trailing keep
+  // their intrinsic width and never wrap (flexShrink: 0).
+  return (
+    <div onClick={onClick} style={{ ...base, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+      {avatar}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title || '—'}</div>
+        {subtitle != null && subtitle !== '' && <div style={{ fontSize: 12.5, color: C.text2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>}
+      </div>
+      {badges && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{badges}</div>}
+      {meta && <div style={{ flexShrink: 0 }}>{meta}</div>}
+      {actions && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{actions}</div>}
+      {trailing && <div style={{ flexShrink: 0 }}>{trailing}</div>}
+    </div>
+  )
+}
+
 export function SectionLabel({ children }: any) {
   return (
     <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.07em', color: '#3a3560', padding: '14px 16px 5px', textTransform: 'uppercase' as const }}>{children}</div>

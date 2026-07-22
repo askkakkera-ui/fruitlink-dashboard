@@ -4,7 +4,7 @@
 // Bump this on any release that changes app behaviour. The old value was never
 // changed, so cache-first script entries could survive a deploy and keep serving
 // stale code to a phone that had already loaded the app once.
-const CACHE = 'fruitlink-v3';
+const CACHE = 'fruitlink-v4';
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
