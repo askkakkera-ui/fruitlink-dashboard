@@ -138,7 +138,7 @@ So **the account seeing 0 does not own the machines** — the operator account s
 - [ ] Route fixes (§3, the 7 role-without-owner_id sites + the 3 in §10), one at a time, diff stat each. **#1 (`machine-control` fault_clear) done.**
 - [ ] **TRACKED — visit-form validation (two fixes, §8):** (a) require an orange count when `visit_type='loading'`; (b) reject fully-blank visits (minimum-content check). Corollary: give load-count and absolute calibration-count a **structured field**, so the true number stops landing in free-text notes (see stock-model doc UPDATE 23 Jul — it has happened twice on F4).
 - [ ] **§7 — give field_staff a Visit/check-in entry** in the dashboard, or don't route them off `/visit` (the `cec8b13` regression).
-- [ ] **TRACKED — no self-service password rotation (§13):** no authenticated change-password form exists anywhere; the only reset path is the token-gated email flow, which is dead while the Resend key is invalid. Restore the Resend key **or** build `/api/change-password` + a form. Until then no user can privately rotate their own password.
+- [ ] **TRACKED — no self-service password rotation (§13):** no authenticated change-password form exists anywhere; the only reset path is the token-gated email flow, and it fails *silently* (§13). Its key (`RESEND_API_KEY`, Vercel) is **separate** from machine-api's proven-dead `RESEND_KEY` and its validity is unconfirmed — verify via the Resend dashboard. Build `/api/change-password` + a form **and/or** confirm/rotate the reset key. Until then no user can privately rotate their own password.
 - [ ] **FIELD TASK — not code:** Ashok physically recounts F4 on-site, then a calibration row. This is the **blocking input** for the F4 / −349 reconciliation; no query or code change can produce it. Flagged so it doesn't sit waiting on a coding session that can't do it. (~176 of the ~519 is accounted for by null-load visits; the rest needs the recount.)
 - [ ] Consider a distinct tenant-staff role to end the `role='staff'` overload (durable fix vs. the `owner_id` stopgap).
 - [ ] Consider per-user session revocation (session-version column checked on verify, or deny-list) to remove the 7-day live-token gap.
@@ -197,7 +197,7 @@ security hole; both are recorded so they aren't rediscovered cold.
   the next audit doesn't repeat the gap — a complete tenant/scope review must
   cover `operator`/`sub_operator` rows too, not just the staff/super_admin set.
 
-## 13. A corrupted `password_hash` is invisible — it reads as an ordinary 401 — 2026-07-23
+## 13. Failures that look normal and leave no log line — corrupted `password_hash`, silent reset send, mislabelled alerts — 2026-07-23
 
 **Incident.** A bad `UPDATE` wrote a literal placeholder (the text `"<new bcrypt
 hash>"`, 17 chars) into `anish@fruitlinktech.in`'s `password_hash`
@@ -226,7 +226,41 @@ corruption. Fix the data, not the code.
 **no authenticated self-service change-password form** anywhere: dashboard
 `SettingsPage` is machine/threshold/notification/cooldown/stock/billing only, `/visit`
 has none, and `reset-password` is fully token-gated (depends on the `forgot-password`
-Resend email, whose key is currently invalid). The only email-independent rotation is
+Resend email — see the send-path note below). The only email-independent rotation is
 admin-mediated (super_admin `OperatorsPage` "New Password", or operator `MyStaffSection`
 for their staff) — which still leaks the new plaintext to the admin. Net: today no user
 can privately rotate their own password.
+
+**Same class — a silent reset send and a mislabelled alert send.** The email side belongs
+right next to the diagnosis rule above, because it fails the *same way*: a normal-looking
+response and no honest log line.
+
+- **`forgot-password` is fully silent.** It fires the Resend send with `await fetch(...)`
+  but **never checks the response** and logs nothing about it, then always returns the
+  generic `"If an account exists with that email, a reset link has been sent."` (uniform by
+  design, so it can't be used to probe which addresses are registered). So a user gets a
+  reassuring message **whether or not the email actually sent**, and there is **no
+  server-side record either way**. That is exactly how a broken reset stayed invisible:
+  nobody — user or operator — could tell a working reset from a broken one, from either end.
+  (The token *is* stored before the send, so a valid key still delivers.)
+
+- **Two separate Resend keys — correction to the clause above.** Password reset uses
+  **`RESEND_API_KEY`** (Vercel env; created ~Jul 19; validity unconfirmed). Machine alerts
+  (`alert.js`) and refund notifications (`refund.js`) use a *different* var,
+  **`RESEND_KEY`** (`machine-api/.env`), which **is** proven invalid — Resend answers
+  `"API key is invalid"` (logged 401s on `POST /emails` Jul 20–22; last success Jul 17
+  07:19). The earlier "the reset key is invalid" framing conflated the two; only
+  `machine-api`'s key is confirmed dead. Blast radius of *that*: alert emails (Telegram is a
+  separate channel, so alerting is degraded, not dark) and refund-notification emails (the
+  PayU refund still processes; only the email record is lost).
+
+- **`alert.js` mislabels failures as success.** `sendEmail` logs
+  `console.log('Email sent:', d.id || JSON.stringify(d))` **without checking `res.ok`**, so
+  a 401 is written under the literal string `Email sent:` with the error body inline — a log
+  line that *reads* like a success.
+
+**The pattern across §13.** A destroyed hash, a silent reset send, and a mislabelled alert
+send share one signature: **a normal-looking response and no honest log line.** Diagnosis
+rule generalised — when "it should have worked and there's no error," do **not** treat the
+absence of a log as evidence of success; check the actual downstream result (the stored row,
+the Resend HTTP status, the delivered email).
