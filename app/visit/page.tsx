@@ -98,6 +98,7 @@ export default function VisitPage() {
   useEffect(() => { gpsRef.current = gps; }, [gps]);
 
   const [locations, setLocations] = useState<Loc[]>([]);
+  const [diag, setDiag] = useState<string>('');
   const [loc, setLoc] = useState<Loc | null>(null);
   const [reason, setReason] = useState('');
 
@@ -181,9 +182,12 @@ export default function VisitPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fix ? { lat: fix.lat, lng: fix.lng, accuracy: Math.round(fix.accuracy) } : {}),
       });
+      if (!r.ok) { setLocations([]); setDiag('H' + r.status); return; }
       const d = await r.json();
-      setLocations(Array.isArray(d.locations) ? d.locations : []);
-    } catch { setLocations([]); }
+      if (!Array.isArray(d.locations)) { setLocations([]); setDiag('SHAPE'); return; }
+      setLocations(d.locations);
+      setDiag(d.locations.length ? '' : 'EMPTY');
+    } catch { setLocations([]); setDiag('NET'); }
   }, []);
 
   // GPS is requested on demand — never on page load. Android blocks silent asks.
@@ -548,7 +552,18 @@ export default function VisitPage() {
     const list = only === 'office' ? locations.filter((l) => l.is_office)
       : only === 'machine' ? locations.filter((l) => !l.is_office)
         : locations;
-    if (!list.length) return <div style={{ fontSize: 13, color: C.text3, padding: 16, textAlign: 'center' as const }}>No locations found for your account.</div>;
+    if (!list.length) {
+      const code = locations.length ? 'FILTER' : (diag || 'EMPTY');
+      const t = new Date().toTimeString().slice(0, 8);
+      return (
+        <div style={{ fontSize: 13, color: C.text3, padding: 16, textAlign: 'center' as const }}>
+          No locations found for your account.
+          <div style={{ marginTop: 6, fontSize: 11, color: C.text3, fontFamily: 'monospace' }}>
+            E-{code} · {t}
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
         {list.map((l) => {
