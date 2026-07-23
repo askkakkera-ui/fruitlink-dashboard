@@ -138,6 +138,7 @@ So **the account seeing 0 does not own the machines** — the operator account s
 - [ ] Route fixes (§3, the 7 role-without-owner_id sites + the 3 in §10), one at a time, diff stat each. **#1 (`machine-control` fault_clear) done.**
 - [ ] **TRACKED — visit-form validation (two fixes, §8):** (a) require an orange count when `visit_type='loading'`; (b) reject fully-blank visits (minimum-content check). Corollary: give load-count and absolute calibration-count a **structured field**, so the true number stops landing in free-text notes (see stock-model doc UPDATE 23 Jul — it has happened twice on F4).
 - [ ] **§7 — give field_staff a Visit/check-in entry** in the dashboard, or don't route them off `/visit` (the `cec8b13` regression).
+- [ ] **TRACKED — no self-service password rotation (§13):** no authenticated change-password form exists anywhere; the only reset path is the token-gated email flow, which is dead while the Resend key is invalid. Restore the Resend key **or** build `/api/change-password` + a form. Until then no user can privately rotate their own password.
 - [ ] **FIELD TASK — not code:** Ashok physically recounts F4 on-site, then a calibration row. This is the **blocking input** for the F4 / −349 reconciliation; no query or code change can produce it. Flagged so it doesn't sit waiting on a coding session that can't do it. (~176 of the ~519 is accounted for by null-load visits; the rest needs the recount.)
 - [ ] Consider a distinct tenant-staff role to end the `role='staff'` overload (durable fix vs. the `owner_id` stopgap).
 - [ ] Consider per-user session revocation (session-version column checked on verify, or deny-list) to remove the 7-day live-token gap.
@@ -195,3 +196,37 @@ security hole; both are recorded so they aren't rediscovered cold.
   are a *separate role class* (`operator`) from the staff audit. Stating it so
   the next audit doesn't repeat the gap — a complete tenant/scope review must
   cover `operator`/`sub_operator` rows too, not just the staff/super_admin set.
+
+## 13. A corrupted `password_hash` is invisible — it reads as an ordinary 401 — 2026-07-23
+
+**Incident.** A bad `UPDATE` wrote a literal placeholder (the text `"<new bcrypt
+hash>"`, 17 chars) into `anish@fruitlinktech.in`'s `password_hash`
+(id `d95f496b…`); the original is unrecoverable. Recovered by overwriting with a
+fresh **bcryptjs cost-10** hash (the cost every hash-creation route uses —
+`register`, `hash-password`, `reset-password`) via `UPDATE … WHERE id AND email`.
+
+**The trap worth knowing.** `bcrypt.compare` (bcryptjs 3.0.3) returns **`false` on a
+malformed hash without throwing** — verified async *and* sync. The **only** reader of
+the stored hash is `/api/login:22` (`bcrypt.compare(password, operator.password_hash)`);
+nothing else reads it (`machine-api` doesn't password-auth operators at all, and
+`my-team`'s bcrypt-regex check is on *incoming* writes, not the stored value). So a
+corrupted hash is **indistinguishable from a wrong password**: every attempt —
+including the *correct* password — returns the normal `401 {error:'Invalid email or
+password'}`. No 500 (the route's `catch` returns 500, but there is no throw to catch),
+no distinct log line, no changed status. Someone could burn an afternoon debugging the
+login route when the row is the problem.
+
+**Diagnosis rule.** One user "can't log in with the right password," nobody else
+affected → **don't debug the login route.** Run
+`SELECT length(password_hash), left(password_hash,4) FROM operators WHERE email=…`.
+A valid bcrypt hash is **60 chars** and starts `$2a$`/`$2b$`; anything else is
+corruption. Fix the data, not the code.
+
+**Gap it exposed (see §9).** Recovery required an admin-side overwrite because there is
+**no authenticated self-service change-password form** anywhere: dashboard
+`SettingsPage` is machine/threshold/notification/cooldown/stock/billing only, `/visit`
+has none, and `reset-password` is fully token-gated (depends on the `forgot-password`
+Resend email, whose key is currently invalid). The only email-independent rotation is
+admin-mediated (super_admin `OperatorsPage` "New Password", or operator `MyStaffSection`
+for their staff) — which still leaks the new plaintext to the admin. Net: today no user
+can privately rotate their own password.
