@@ -3,6 +3,12 @@ import { verifySession, SESSION_COOKIE } from '@/lib/session';
 const SB_URL = process.env.SB_URL || process.env.NEXT_PUBLIC_SB_URL || 'https://fpwvutdvwnvrunviporz.supabase.co';
 const SB_KEY = process.env.SB_KEY || '';
 const NO_STORE = { 'Cache-Control': 'no-store' };
+// Fruitlink internal team — the EXACT set /api/attendance-internal serves
+// (role∈INTERNAL_ROLES & owner_id=Fruitlink). The super_admin tenant-facing
+// report below excludes this set so internal staff show only on Team Attendance.
+// Kept byte-identical to attendance-internal so the two never drift.
+const FRUITLINK_OWNER_ID = process.env.FRUITLINK_OWNER_ID || '0c1bd083-682a-4913-ac37-08c85ef94b41';
+const INTERNAL_ROLES = ['super_admin', 'staff'];
 function sbHeaders() {
   return { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 }
@@ -127,6 +133,24 @@ export async function GET(request: NextRequest) {
         const tenant = session.owner_id ? String(session.owner_id) : String(session.sub || '');
         if (!tenant) return NextResponse.json([], { headers: NO_STORE });
         url += '&owner_id=eq.' + encodeURIComponent(tenant);
+      } else if (session.role === 'super_admin') {
+        // Tenant-only: this page is Operator Management → Attendance. Exclude the
+        // Fruitlink internal team — they belong on Team Attendance only. This is
+        // the exact mirror of /api/attendance-internal: resolve the SAME
+        // internalIds (role∈INTERNAL_ROLES & owner_id=Fruitlink) and negate with
+        // not.in. PURE mirror — the super_admin's own row is NOT special-cased;
+        // if it isn't in internalIds (e.g. owner_id != Fruitlink) it stays
+        // visible here, exactly as it would be absent from Team Attendance.
+        // Empty internal set → nothing to exclude, so no filter is added.
+        const internalRes = await fetch(
+          SB_URL + '/rest/v1/operators?select=id&role=in.(' + INTERNAL_ROLES.join(',') + ')&owner_id=eq.' + encodeURIComponent(FRUITLINK_OWNER_ID),
+          { headers: sbHeaders() },
+        );
+        const internalRows = internalRes.ok ? await internalRes.json() : [];
+        const internalIds = Array.isArray(internalRows) ? internalRows.map((o: any) => o.id).filter(Boolean) : [];
+        if (internalIds.length) {
+          url += '&staff_id=not.in.(' + internalIds.map(encodeURIComponent).join(',') + ')';
+        }
       }
       const res = await fetch(url, { headers: sbHeaders() });
       const rows = await res.json();

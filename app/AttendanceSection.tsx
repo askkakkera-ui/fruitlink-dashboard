@@ -2,6 +2,12 @@
 import { useState, useEffect } from 'react';
 import { useIsMobile } from './lib/dashboard-shared';
 
+// Fruitlink internal team — mirrors /api/attendance-internal exactly. The Staff
+// picker on this tenant-facing page drops anyone in this set (role∈INTERNAL_ROLES
+// & owner_id=Fruitlink) so it never lists names that can never match a row here.
+const FRUITLINK_OWNER_ID = '0c1bd083-682a-4913-ac37-08c85ef94b41';
+const INTERNAL_ROLES = ['super_admin', 'staff'];
+
 // Tokens mirror _ds/tokens/colors.css (ground truth: dashboard.tsx `C`).
 const C = {
   bg: '#f4f5f9', surface: '#ffffff', surface2: '#f7f8fb', border: '#e8eaf0', border2: '#dcdfe9',
@@ -215,8 +221,9 @@ export default function AttendanceSection() {
   const [quick, setQuick] = useState('7');
   const [exporting, setExporting] = useState(false);
 
-  // Fetch + data source unchanged: server-scoped by owner_id (super_admin=all,
-  // operator=own tenant, staff=fleet). No client-side tenant filtering added.
+  // Server-scoped by role: super_admin = all TENANTS (Fruitlink internal team
+  // excluded — they live on Team Attendance), operator = own tenant, staff = own
+  // rows. The Staff picker is filtered to the same tenant-only set below.
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -225,11 +232,16 @@ export default function AttendanceSection() {
       if (machineFilter !== 'all') url += '&machine_id=' + machineFilter;
       const [rRes, sRes, mRes] = await Promise.all([
         fetch(url),
-        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,designation&role=in.(field_staff,sub_operator,staff)&order=name.asc')),
+        fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?select=id,name,email,role,designation,owner_id&role=in.(field_staff,sub_operator,staff)&order=name.asc')),
         fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/machines?select=id,display_name&order=display_name.asc')),
       ]);
       const r = await rRes.json(); setRecords(Array.isArray(r) ? r : []);
-      const s = await sRes.json(); setStaff(Array.isArray(s) ? s : []);
+      // Tenant-only picker: drop the Fruitlink internal team, the exact set the
+      // server now excludes from the rows (role∈INTERNAL_ROLES & owner=Fruitlink).
+      const s = await sRes.json();
+      setStaff((Array.isArray(s) ? s : []).filter(
+        (o: any) => !(INTERNAL_ROLES.includes(o.role) && o.owner_id === FRUITLINK_OWNER_ID)
+      ));
       const m = await mRes.json(); setMachines(Array.isArray(m) ? m : []);
     } catch { setRecords([]); }
     setLoading(false);
