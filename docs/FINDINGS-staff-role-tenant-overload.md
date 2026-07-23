@@ -135,10 +135,41 @@ So **the account seeing 0 does not own the machines** — the operator account s
 
 ## 9. Open items
 
-- [ ] Route fixes (§3, the 7 role-without-owner_id sites + the 3 in §4), one at a time, diff stat each. **#1 (`machine-control` fault_clear) done.**
+- [ ] Route fixes (§3, the 7 role-without-owner_id sites + the 3 in §10), one at a time, diff stat each. **#1 (`machine-control` fault_clear) done.**
 - [ ] **TRACKED — visit-form validation (two fixes, §8):** (a) require an orange count when `visit_type='loading'`; (b) reject fully-blank visits (minimum-content check). Corollary: give load-count and absolute calibration-count a **structured field**, so the true number stops landing in free-text notes (see stock-model doc UPDATE 23 Jul — it has happened twice on F4).
 - [ ] **§7 — give field_staff a Visit/check-in entry** in the dashboard, or don't route them off `/visit` (the `cec8b13` regression).
 - [ ] **FIELD TASK — not code:** Ashok physically recounts F4 on-site, then a calibration row. This is the **blocking input** for the F4 / −349 reconciliation; no query or code change can produce it. Flagged so it doesn't sit waiting on a coding session that can't do it. (~176 of the ~519 is accounted for by null-load visits; the rest needs the recount.)
 - [ ] Consider a distinct tenant-staff role to end the `role='staff'` overload (durable fix vs. the `owner_id` stopgap).
 - [ ] Consider per-user session revocation (session-version column checked on verify, or deny-list) to remove the 7-day live-token gap.
 - [ ] Consider read-side audit coverage for `/api/sb` cross-tenant access.
+
+## 10. Wider role-without-owner_id net — 3 more sites (beyond the original 7)
+
+Found by sweep, cross-checked; the original 7 are §2/§3. **Staged, not fixed.**
+
+| Sev | Site | Condition | Impact |
+|---|---|---|---|
+| **High — tenant-exploitable today** | `locations/route.ts:141→162` (PATCH) — *verified* | ownership/permission checked only for `role==='operator'`; `sub_operator` + `staff` fall through unscoped | edit **any** tenant's location by id — name/address/**lat/lng/geofence/is_office**. Geofence feeds `/api/attendance/verify-gps`. `sub_operator` is always tenant-owned → no mis-owned row needed |
+| Med — cross-tenant read | `visit/route.ts:150-157` (`?report=1`) | owner filter applied only for operator/sub_operator; "staff: no filter" | a tenant-owned `staff` reads every tenant's visit history |
+| Low — permission bypass | `locations/route.ts:83` (POST) | `can_manage_locations` checked only for `role==='operator'` | `sub_operator`/`staff` create locations without the permission — but row is self-owned (`owner_id = session.sub`), **not** cross-tenant |
+
+**Staged fix for locations PATCH (route-fix #2, not implemented):** replace the operator-only block at `:141` with a tenant check for every non-super_admin — `tenant = role==='operator' ? session.sub : session.owner_id`; require `loc.owner_id === tenant`, then the existing `can_manage_locations`/`can_edit_office_location` check. Scopes operator→own, sub_operator→parent, staff→Fruitlink. **Zero overlap with `/api/warehouse`**, so it cannot re-break Receive. Needs a deploy to bite.
+
+**Lesson — role demotion is not containment when the destination role has its own holes.** On 2026-07-23 wh.flq was demoted `staff → sub_operator` to close fleet-wide reach. That closed the **staff-gated reads** (incl. `visit ?report=1`, now Fruitlinq-scoped) — but `sub_operator` is itself exposed on `locations` PATCH, the *same* reach wh.flq already had as `staff` (both fall through the operator-only check at `:141`). Concrete live target: the one Fruitlink-owned location ("Fruitlonq-1", owner `0c1bd083`). So containment moved wh.flq **sideways on this vector**, not out. Low practical risk (needs a target UUID + intent; no UI exposes it) and it needs a deploy to matter — but the principle stands: check the destination role's own surface before treating a demotion as containment.
+
+## 11. Session handoff — 2026-07-23
+
+**SHAs / branches**
+- `origin/main = c635297` — **deployed**. Contains none of this session's fixes.
+- `origin/fix/machine-control-fault-clear-owner-scope = f3f9995` (local == origin) — fault_clear fix (#1, tested) + this findings doc. **Not deployed.**
+- `local main = 6a292e0` — one commit ahead of `origin/main`: the elapsed-time-amber attendance change, **unverified + unpushed. local-only.**
+- `Fruitlink_Stock_Model_16Jul.md` lives at `/root/fruitlink/` — **outside the repo**, updated on disk, not version-controlled.
+
+**Blocking-on matrix**
+- *On you (decisions/verify):* A-vs-B routing call; whether locations-PATCH ships with the fix branch or separately; verify + push (or drop) `6a292e0`.
+- *On a deploy:* every route fix is inert until the fix branch is deployed — fault_clear #1 (done, tested) and locations-PATCH #2 (staged) both need it. wh.flq's locations-PATCH reach persists until then.
+- *On Ashok (field task):* F4 physical recount → calibration row; the blocking input to reconcile −349 (~176 accounted for).
+
+**Open decisions**
+1. **Routing A vs B** — A: revert `cec8b13` field_staff routing (always `/visit`; reopens nothing, disables the dashboard-grant feature) vs B: add a field_staff Visit entry (keeps both; more work). Two accounts affected (Ashok self-serves via shortcut, Sai Kiran needs the URL).
+2. **locations PATCH ship** — as route-fix #2 on the existing fix branch (deploys with fault_clear #1) vs a separate branch/deploy.
