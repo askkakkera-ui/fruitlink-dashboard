@@ -173,3 +173,25 @@ Found by sweep, cross-checked; the original 7 are §2/§3. **Staged, not fixed.*
 **Open decisions**
 1. **Routing A vs B** — A: revert `cec8b13` field_staff routing (always `/visit`; reopens nothing, disables the dashboard-grant feature) vs B: add a field_staff Visit entry (keeps both; more work). Two accounts affected (Ashok self-serves via shortcut, Sai Kiran needs the URL).
 2. **locations PATCH ship** — as route-fix #2 on the existing fix branch (deploys with fault_clear #1) vs a separate branch/deploy.
+
+---
+
+## 12. Data-hygiene / audit-scope notes — 2026-07-23 (log only, not acted on)
+
+Two observations surfaced while staging the locations-PATCH fix. Neither is a
+security hole; both are recorded so they aren't rediscovered cold.
+
+- **Stray typo'd machine — cleanup item.** `"Fruitlonq-1"` (id `e6c18d18`) is
+  owned by `0c1bd083` — **Fruitlink**, not Fruitlinq. The name is a typo
+  ("Fruitl**o**nq"); the ownership says it's a Fruitlink-side stray left over
+  from setup, not a tenant asset. No scope impact (owner is the platform owner
+  either way). Rename or delete during the next data-hygiene pass.
+
+- **Tenant owners are outside the staff audit's role scope.** `b3a5c89d` is
+  `askkakkera@gmail.com`, `role=operator` — the **Fruitlinq owner** (the tenant
+  `owner_id` that wh.flq's row points at, see §1/§5). It never appeared in this
+  morning's audit because that audit filtered `role in ('staff','super_admin')`
+  and **operator was out of scope**. This is expected, not a miss: tenant owners
+  are a *separate role class* (`operator`) from the staff audit. Stating it so
+  the next audit doesn't repeat the gap — a complete tenant/scope review must
+  cover `operator`/`sub_operator` rows too, not just the staff/super_admin set.
