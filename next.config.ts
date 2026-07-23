@@ -1,5 +1,30 @@
 import type { NextConfig } from "next";
+import { execSync } from "node:child_process";
+
+// Build stamp shown in the /visit footer (short commit sha · build date), computed
+// at build time and inlined into the client bundle via the `env` key below — so it
+// can NEVER go stale by hand the way the old `const BUILD = '2026-07-09-a'` did.
+// Lets us ask a field-staff user over WhatsApp "what does the footer say?" and tell
+// at a glance whether their PWA is on a stale cache. The date is when THIS bundle
+// was built (India time) — the staleness signal — not the commit's authored date.
+function buildStamp(): string {
+  let id = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7);
+  if (!id) {
+    // Local/dev build has no Vercel sha — fall back to the local git short sha, else 'dev'.
+    try { id = execSync("git rev-parse --short=7 HEAD").toString().trim(); }
+    catch { id = "dev"; }
+  }
+  let date = "";
+  try { date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }); }
+  catch { /* no ICU in the build image — omit the date rather than fail the build */ }
+  return date ? `${id} · ${date}` : id;
+}
+
 const nextConfig: NextConfig = {
+  env: {
+    // Inlined at build time; read in app/visit/page.tsx as process.env.NEXT_PUBLIC_BUILD.
+    NEXT_PUBLIC_BUILD: buildStamp(),
+  },
   images: {
     unoptimized: true,
     remotePatterns: [
