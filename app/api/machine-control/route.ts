@@ -18,6 +18,11 @@ const MACHINE_API = process.env.MACHINE_API_URL || 'https://api.fruitlinktech.in
 const MACHINE_KEY = process.env.MACHINE_KEY || '';
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
+// fault_clear is a fleet-wide device-control action. "Internal" = super_admin, or
+// staff owned by the platform (owner_id = Fruitlink) — never a tenant's own staff.
+// Mirrors attendance-internal/route.ts: internal is role AND owner, never role alone.
+const FRUITLINK_OWNER_ID = process.env.FRUITLINK_OWNER_ID || '0c1bd083-682a-4913-ac37-08c85ef94b41';
+
 export const runtime = 'nodejs';
 
 async function getSession(req: NextRequest) {
@@ -101,7 +106,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'fault_clear') {
-      if (session.role !== 'super_admin' && session.role !== 'staff') {
+      const isFruitlinkInternal =
+        session.role === 'super_admin' ||
+        (session.role === 'staff' && String(session.owner_id || '') === FRUITLINK_OWNER_ID);
+      if (!isFruitlinkInternal) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       }
       const sn = String(body.sn || '');
