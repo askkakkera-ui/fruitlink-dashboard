@@ -65,34 +65,44 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
   const [buyerContact, setBuyerContact] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // fetch() only rejects on a network failure — an HTTP 403/401 resolves fine, so
+  // a permission failure used to slip past `Array.isArray(d)` and leave the state
+  // empty with no error, indistinguishable from "no data". Every loader now treats
+  // a non-2xx as a visible error. loadOnhand owns the primary access message and
+  // runs first; the secondary loaders use setErr(prev => prev || …) so they never
+  // clobber it when the whole warehouse 403s at once (the auth gate is shared).
   async function loadOnhand() {
     try {
       const r = await fetch('/api/warehouse?onhand=1', { cache: 'no-store' });
+      if (!r.ok) { setErr("Couldn't load items — you may not have warehouse access."); return; }
       const d = await r.json();
       if (Array.isArray(d)) { setItems(d); if (!itemId && d[0]) setItemId(d[0].id); }
-    } catch { setErr('Could not load stock'); }
+    } catch { setErr("Couldn't load items — check your connection and retry."); }
   }
   async function loadMachines() {
     try {
       const r = await fetch('/api/warehouse?dispatchable=1', { cache: 'no-store' });
+      if (!r.ok) { setErr(prev => prev || "Couldn't load machines for dispatch."); return; }
       const d = await r.json();
       if (Array.isArray(d)) { setMachines(d); if (!machineId && d[0]) setMachineId(d[0].id); }
-    } catch { /* ignore */ }
+    } catch { setErr(prev => prev || "Couldn't load machines for dispatch."); }
   }
   async function loadOperators() {
     try {
       const r = await fetch('/api/warehouse?buyers=1', { cache: 'no-store' });
+      if (!r.ok) { setErr(prev => prev || "Couldn't load the buyer list."); return; }
       const d = await r.json();
       const arr = Array.isArray(d) ? d : [];
       setOperators(arr.map((o:any)=>({id:o.id,name:o.name||o.email,company_name:o.company_name||'',billing_address:o.billing_address||'',gstin:o.gstin||'',pincode:o.pincode||'',phone:o.phone||''})));
-    } catch { /* ignore */ }
+    } catch { setErr(prev => prev || "Couldn't load the buyer list."); }
   }
   async function loadLog() {
     try {
       const r = await fetch('/api/warehouse?movements=1', { cache: 'no-store' });
+      if (!r.ok) { setErr(prev => prev || "Couldn't load the movement log."); return; }
       const d = await r.json();
       if (Array.isArray(d)) setMovements(d);
-    } catch { /* ignore */ }
+    } catch { setErr(prev => prev || "Couldn't load the movement log."); }
   }
 
   useEffect(() => {
@@ -172,11 +182,17 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
 
   const fruit = items.filter(i => i.category === 'fruit');
   const cons = items.filter(i => i.category === 'consumable');
+  // Anything that is neither fruit nor consumable (a new/typo/null category). These
+  // used to fall through every filter — invisible in the picker AND absent from the
+  // On-hand tables and KPIs. An owned item must never silently vanish from stock, so
+  // it is surfaced in all three (only when non-empty, so the normal case is unchanged).
+  const other = items.filter(i => i.category !== 'fruit' && i.category !== 'consumable');
 
   // ---- derived KPI figures ----
   const totalOranges = fruit.reduce((s, i) => s + (i.on_hand ?? 0), 0);
   const totalBoxes = fruit.reduce((s, i) => s + (i.boxes_equiv ?? 0), 0);
   const consLow = cons.filter(i => (i.on_hand ?? 0) <= i.pack_size * 2).length;
+  const totalOther = other.reduce((s, i) => s + (i.on_hand ?? 0), 0);
   const today = new Date().toDateString();
   const movesToday = movements.filter(m => new Date(m.created_at).toDateString() === today).length;
 
@@ -195,6 +211,7 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
     <select style={inp} value={value} onChange={e => onChange(e.target.value)}>
       <optgroup label="Fruit">{fruit.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
       <optgroup label="Consumables">{cons.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>
+      {other.length > 0 && <optgroup label="Other">{other.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>}
     </select>
   );
 
@@ -213,6 +230,9 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
           <StatCard label="Consumables" value={String(cons.length)} sub={consLow ? `${consLow} low` : 'all stocked'} icon="📦" color={C.blue} />
           <StatCard label="Machines" value={String(machines.length)} sub={isSuper ? 'fleet' : 'you service'} icon="▣" color={C.green} />
           <StatCard label="Movements today" value={String(movesToday)} sub={`${movements.length} total`} icon="🔁" color={C.indigo} />
+          {other.length > 0 && (
+            <StatCard label="Other items" value={String(other.length)} sub={`${totalOther.toLocaleString('en-IN')} on hand · check category`} icon="❓" color={C.amber} />
+          )}
         </div>
       )}
 
@@ -267,6 +287,23 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
               </tbody>
             </table>
           </div>
+          {other.length > 0 && (
+            <div style={{ ...card, borderTop: `3px solid ${C.amber}`, gridColumn: isMobile ? 'auto' : '1 / -1' }}>
+              <div style={cardTitle}>❓ Other <span style={{ fontWeight: 400, fontSize: 12, color: C.text3 }}>— uncategorised, check item setup</span></div>
+              <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th><th style={th}>Category</th></tr></thead>
+                <tbody>
+                  {other.map(i => (
+                    <tr key={i.id}>
+                      <td data-label="Item" style={td}>{i.name}</td>
+                      <td data-label="On hand" style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')} <span style={{ color: C.text3, fontWeight: 400, fontSize: 12 }}>{i.base_unit}s</span></td>
+                      <td data-label="Category" style={{ ...td, color: C.text2 }}>{i.category || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -361,12 +398,20 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                   if (id) {
                     setSoldToName('');
                     const op = operators.find(o => o.id === id);
-                    if (op) {
-                      setBuyerCompany(op.company_name || op.name || '');
-                      setBuyerAddress([op.billing_address, op.pincode].filter(Boolean).join(' - '));
-                      setBuyerGstin(op.gstin || '');
-                      setBuyerContact(op.phone || '');
-                    }
+                    // Re-fill from the newly selected operator; clear if it can't be
+                    // found so we never leave a previous operator's details behind.
+                    setBuyerCompany(op ? (op.company_name || op.name || '') : '');
+                    setBuyerAddress(op ? [op.billing_address, op.pincode].filter(Boolean).join(' - ') : '');
+                    setBuyerGstin(op?.gstin || '');
+                    setBuyerContact(op?.phone || '');
+                  } else {
+                    // "Other buyer" / none — clear the operator-derived fields so a
+                    // non-operator sale starts blank and can't inherit a previous
+                    // operator's company / address / GSTIN / contact on the challan.
+                    setBuyerCompany('');
+                    setBuyerAddress('');
+                    setBuyerGstin('');
+                    setBuyerContact('');
                   }
                 }}>
                   <option value="">— Other buyer (type below) —</option>
