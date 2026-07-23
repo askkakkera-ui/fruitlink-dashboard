@@ -100,7 +100,7 @@ export function LoyaltyPage() {
         </div>
       ) : (
         <div style={{ background: C.surface, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: C.surface2, borderBottom: '2px solid ' + C.border }}>
                 {['Customer', 'Phone', 'Points', 'Status', 'Actions'].map(h => (
@@ -113,21 +113,21 @@ export function LoyaltyPage() {
                 const eligible = c.points >= config.redeem_threshold
                 return (
                   <tr key={c.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 === 0 ? C.surface : C.surface2 }}>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-label="Customer" style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 32, height: 32, borderRadius: '50%', background: C.orangeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: C.orange }}>{(c.name || 'C')[0].toUpperCase()}</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{c.name || 'Customer'}</div>
                       </div>
                     </td>
-                    <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: 12, color: C.text2 }}>{c.phone}</td>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-label="Phone" style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: 12, color: C.text2 }}>{c.phone}</td>
+                    <td data-label="Points" style={{ padding: '12px 16px' }}>
                       <div style={{ fontSize: 18, fontWeight: 800, color: eligible ? C.green : C.text }}>{c.points || 0}</div>
                       <div style={{ fontSize: 12, color: C.text3 }}>pts</div>
                     </td>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-label="Status" style={{ padding: '12px 16px' }}>
                       <Pill color={eligible ? C.green : C.amber} bg={eligible ? C.greenBg : C.amberBg}>{eligible ? 'Eligible to redeem' : (config.redeem_threshold - (c.points || 0)) + ' pts to go'}</Pill>
                     </td>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-label="Actions" style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => addPoints(c.id, c.points, config.points_per_cup)} style={{ background: C.orangeBg, color: C.orange, border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>+{config.points_per_cup}</button>
                         {eligible && <button onClick={() => addPoints(c.id, c.points, -config.redeem_threshold)} style={{ background: C.greenBg, color: C.green, border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>Redeem</button>}

@@ -258,7 +258,7 @@ export function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                 {/* Alert rows */}
                 {isOpen && (
                   <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
+                    <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 500 }}>
                       <thead>
                         <tr style={{ background: C.surface2, borderBottom: `1px solid ${C.border}` }}>
                           {['Severity', 'Alert', 'Time', 'Status'].map((h, i) => (
@@ -269,15 +269,15 @@ export function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                       <tbody>
                         {machAlerts.map((a: any, i: number) => (
                           <tr key={a.id} style={{ borderBottom: i < machAlerts.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? C.surface : C.surface2 }}>
-                            <td style={{ padding: '12px 16px' }}>
+                            <td data-label="Severity" style={{ padding: '12px 16px' }}>
                               <Pill color={SEVERITY_COLOR[a.severity] || C.text2} bg={SEVERITY_BG[a.severity] || C.surface2}>{a.severity}</Pill>
                             </td>
-                            <td style={{ padding: '12px 16px' }}>
+                            <td data-label="Alert" style={{ padding: '12px 16px' }}>
                               <div style={{ display: 'inline-block', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 5, padding: '1px 7px', fontSize: 12, fontFamily: 'monospace', color: C.text2, marginBottom: 4 }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{ALERT_LABELS[a.alert_type] || a.alert_type}</div>
                               <div style={{ fontSize: 11, color: C.text2, marginTop: 2 }}>{a.message}</div>
                             </td>
-                            <td style={{ padding: '12px 16px' }}>
+                            <td data-label="Time" style={{ padding: '12px 16px' }}>
                               <div style={{ fontSize: 11, color: C.text3, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>Opened</div>
                               <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{new Date(alertStartMs(a)).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
                               {a.resolved_at ? (
@@ -289,7 +289,7 @@ export function AlertsPage({ machines, alerts, loading, fetchAlerts }: any) {
                                 <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{fmtAgo(new Date(alertStartMs(a)).toISOString())}</div>
                               )}
                             </td>
-                           <td style={{ padding: '12px 16px' }}>
+                           <td data-label="Status" style={{ padding: '12px 16px' }}>
                               {!a.resolved_at ? (
                                 <>
                                   <Pill color={C.red} bg={C.redBg}><Dot color={C.red} pulse size={5} /> Active</Pill>
