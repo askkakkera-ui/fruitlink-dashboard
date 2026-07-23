@@ -136,7 +136,7 @@ export function FaultLogPage({ machines }: { machines: any[] }) {
       ) : (
         <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 800 }}>
+          <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 800 }}>
             <thead>
               <tr style={{ background: C.surface2 }}>
                 <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: C.text, fontSize: 11, whiteSpace: 'nowrap' as const }}>Machine</th>
@@ -154,15 +154,15 @@ export function FaultLogPage({ machines }: { machines: any[] }) {
             <tbody>
               {paged.map((e, i) => (
                 <tr key={e.id || i} style={{ background: !e.cleared_at ? '#FFF4E5' : i % 2 ? C.surface2 : C.surface, borderBottom: '1px solid ' + C.border }}>
-                  <td style={{ padding: '8px 10px', fontWeight: 700, fontSize: 12 }}>{machineMap[e.machine_id] || '?'}</td>
-                  <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 700, color: C.orange, fontSize: 12 }}>{e.fault_code}</td>
-                  <td style={{ padding: '10px 12px' }}>{e.fault_name || '—'}</td>
-                  <td style={{ padding: '10px 12px' }}><span style={{ fontWeight: 700, color: sevColor(e.severity), fontSize: 12, textTransform: 'uppercase' as const }}>{e.severity}</span></td>
-                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{fmtTime(e.opened_at)}</td>
-                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.cleared_at ? fmtTime(e.cleared_at) : <span style={{ color: '#E53935', fontWeight: 700 }}>ACTIVE</span>}</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{e.cleared_at ? fmtDur(e.duration_s) : '—'}</td>
-                  <td style={{ padding: '10px 12px', fontSize: 12 }}>{e.resolution || '—'}</td>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.text3 }}>{e.order_code || '—'}</td>
+                  <td data-label="Machine" style={{ padding: '8px 10px', fontWeight: 700, fontSize: 12, color: C.text }}>{machineMap[e.machine_id] || '?'}</td>
+                  <td data-label="Code" style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 700, color: C.orange, fontSize: 12 }}>{e.fault_code}</td>
+                  <td data-label="Fault" style={{ padding: '10px 12px', color: C.text }}>{e.fault_name || '—'}</td>
+                  <td data-label="Severity" style={{ padding: '10px 12px' }}><span style={{ fontWeight: 700, color: sevColor(e.severity), fontSize: 12, textTransform: 'uppercase' as const }}>{e.severity}</span></td>
+                  <td data-label="Opened" style={{ padding: '10px 12px', fontSize: 12, color: C.text }}>{fmtTime(e.opened_at)}</td>
+                  <td data-label="Cleared" style={{ padding: '10px 12px', fontSize: 12, color: C.text }}>{e.cleared_at ? fmtTime(e.cleared_at) : <span style={{ color: '#E53935', fontWeight: 700 }}>ACTIVE</span>}</td>
+                  <td data-label="Duration" style={{ padding: '10px 12px', fontWeight: 600, color: C.text }}>{e.cleared_at ? fmtDur(e.duration_s) : '—'}</td>
+                  <td data-label="Resolution" style={{ padding: '10px 12px', fontSize: 12, color: C.text }}>{e.resolution || '—'}</td>
+                  <td data-label="Order" style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 11, color: C.text3 }}>{e.order_code || '—'}</td>
                   <td style={{ padding: '10px 12px' }}>{!e.cleared_at && <button onClick={() => resolveFault(e.machine_id, e.fault_code)} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: C.orange, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Resolve</button>}</td>
                 </tr>
               ))}

@@ -602,7 +602,7 @@ export function CommandHistory({ machines, compact = false }: { machines: any[];
 
   return (
     <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+      <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
         <thead>
           <tr style={{ background: C.surface2 }}>
             {['Command', 'Machine', 'Status', 'Created', 'Sent', 'Executed', 'Result', 'By'].map(h =>
@@ -613,14 +613,14 @@ export function CommandHistory({ machines, compact = false }: { machines: any[];
         <tbody>
           {cmds.map((c: any, i: number) => (
             <tr key={c.id || i} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? C.surface2 : C.surface }}>
-              <td style={{ padding: '8px 10px', fontWeight: 700 }}>{cmdIcon[c.command] || '⚡'} {c.command}</td>
-              <td style={{ padding: '8px 10px' }}>{machineMap[c.machine_id] || '?'}</td>
-              <td style={{ padding: '8px 10px' }}><span style={statusBadge(c.status)}>{c.status}</span></td>
-              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.created_at)}</td>
-              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.sent_at)}</td>
-              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.executed_at)}</td>
-              <td style={{ padding: '8px 10px', fontSize: 11, fontFamily: 'monospace', color: C.text3 }}>{c.result || '—'}</td>
-              <td style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{c.created_by || '—'}</td>
+              <td data-label="Command" style={{ padding: '8px 10px', fontWeight: 700 }}>{cmdIcon[c.command] || '⚡'} {c.command}</td>
+              <td data-label="Machine" style={{ padding: '8px 10px' }}>{machineMap[c.machine_id] || '?'}</td>
+              <td data-label="Status" style={{ padding: '8px 10px' }}><span style={statusBadge(c.status)}>{c.status}</span></td>
+              <td data-label="Created" style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.created_at)}</td>
+              <td data-label="Sent" style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.sent_at)}</td>
+              <td data-label="Executed" style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{fmtTime(c.executed_at)}</td>
+              <td data-label="Result" style={{ padding: '8px 10px', fontSize: 11, fontFamily: 'monospace', color: C.text3 }}>{c.result || '—'}</td>
+              <td data-label="By" style={{ padding: '8px 10px', fontSize: 11, color: C.text2 }}>{c.created_by || '—'}</td>
             </tr>
           ))}
         </tbody>

@@ -234,14 +234,14 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'start' }}>
           <div style={{ ...card, borderTop: `3px solid ${C.green}` }}>
             <div style={cardTitle}>🍊 Fruit</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th><th style={{ ...th, textAlign: 'right' }}>Boxes</th></tr></thead>
               <tbody>
                 {fruit.map(i => (
                   <tr key={i.id}>
-                    <td style={td}>{i.name}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')}</td>
-                    <td style={{ ...td, textAlign: 'right', color: C.text2 }}>{i.boxes_equiv ?? 0}</td>
+                    <td data-label="Item" style={td}>{i.name}</td>
+                    <td data-label="On hand" style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')}</td>
+                    <td data-label="Boxes" style={{ ...td, textAlign: 'right', color: C.text2 }}>{i.boxes_equiv ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -249,16 +249,16 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
           </div>
           <div style={{ ...card, borderTop: `3px solid ${C.blue}` }}>
             <div style={cardTitle}>📦 Consumables</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="fl-stack" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr><th style={th}>Item</th><th style={{ ...th, textAlign: 'right' }}>On hand</th><th style={{ ...th, textAlign: 'right' }}></th></tr></thead>
               <tbody>
                 {cons.map(i => {
                   const low = (i.on_hand ?? 0) <= i.pack_size * 2;
                   return (
                     <tr key={i.id}>
-                      <td style={td}>{i.name}{i.machine_type && i.machine_type !== 'common' ? <span style={{ color: C.text3, fontSize: 12 }}> ({i.machine_type})</span> : ''}</td>
-                      <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')} <span style={{ color: C.text3, fontWeight: 400, fontSize: 12 }}>{i.base_unit}s</span></td>
-                      <td style={{ ...td, textAlign: 'right' }}>
+                      <td data-label="Item" style={td}>{i.name}{i.machine_type && i.machine_type !== 'common' ? <span style={{ color: C.text3, fontSize: 12 }}> ({i.machine_type})</span> : ''}</td>
+                      <td data-label="On hand" style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{(i.on_hand ?? 0).toLocaleString('en-IN')} <span style={{ color: C.text3, fontWeight: 400, fontSize: 12 }}>{i.base_unit}s</span></td>
+                      <td data-label="Status" style={{ ...td, textAlign: 'right' }}>
                         <Pill color={low ? C.red : C.green} bg={low ? C.redBg : C.greenBg}>{low ? 'Low' : 'OK'}</Pill>
                       </td>
                     </tr>
