@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useIsMobile } from './lib/dashboard-shared';
 
 // Fruitlink internal team — mirrors /api/attendance-internal exactly. The Staff
@@ -49,6 +49,20 @@ function timeLabel(t?: string, tz = 'Asia/Kolkata') {
   if (!t) return '—';
   try { return new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: tz }); } catch { return '—'; }
 }
+// Sortable calendar day in the SAME tz used by dayLabel — parallel derivation
+// of the grouping key, never the group key itself (that must stay byte-identical
+// to the DATE cell = dayLabel). 'en-CA' yields YYYY-MM-DD, lexicographically sortable.
+function isoDay(t?: string, tz = 'Asia/Kolkata'): string {
+  if (!t) return '';
+  try { return new Date(t).toLocaleDateString('en-CA', { timeZone: tz }); } catch { return ''; }
+}
+// Whole-day difference between two YYYY-MM-DD strings (b - a). Used for the "+Nd"
+// check-out marker so a 01:58 am next-day check-out can't read as before a 15:16 in.
+function dayDiff(isoA: string, isoB: string): number {
+  if (!isoA || !isoB) return 0;
+  return Math.round((Date.parse(isoB + 'T00:00:00Z') - Date.parse(isoA + 'T00:00:00Z')) / 86400000);
+}
+const LONG_SHIFT_MS = 12 * 3600e3; // >12h → amber, flags likely-unclosed sessions
 function initialA(s?: string) { return (s || '?').charAt(0).toUpperCase(); }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function daysAgoISO(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
@@ -88,9 +102,17 @@ function AvatarA({ name }: { name?: string }) {
   return <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: C.orange, background: C.orangeBg, border: '1px solid color-mix(in srgb, ' + C.orange + ' 22%, transparent)' }}>{initialA(name)}</div>;
 }
 
-function StatusBadge({ active }: { active: boolean }) {
+function StatusBadge({ active, durMs }: { active: boolean; durMs?: number | null }) {
   if (active) return <Pill color={C.orange} bg={C.orangeBg} dot pulse style={{ fontWeight: 800 }}>Active</Pill>;
+  // >12h almost always means an unclosed session (check-out == next check-in), so
+  // surface it in amber rather than a reassuring green "Done" or a bogus day-total.
+  if (durMs != null && durMs > LONG_SHIFT_MS) return <Pill color={C.amber} bg={C.amberBg} style={{ fontWeight: 800 }}>⚠ {durLabel(durMs)}</Pill>;
   return <Pill color={C.green} bg={C.greenBg} style={{ fontWeight: 800 }}>✓ Done</Pill>;
+}
+
+// "+Nd" marker when a check-out lands on a later calendar day than its group.
+function PlusDay({ n }: { n: number }) {
+  return <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 800, color: C.amber, background: C.amberBg, borderRadius: 5, padding: '1px 5px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>+{n}d</span>;
 }
 
 // Two-population signal: Fruitlink internal (purple) vs tenant operator (blue).
@@ -126,10 +148,13 @@ function StatCardA({ label, value, sub, color, icon, live = false }: { label: st
   );
 }
 
-function RecordRow({ r, zebra }: { r: any; zebra: boolean }) {
+// groupIso = the group's YYYY-MM-DD (check-in day). Rendered inside an open group,
+// so the DATE column is dropped (redundant under the header).
+function RecordRow({ r, zebra, groupIso }: { r: any; zebra: boolean; groupIso: string }) {
   const active = !r.check_out_at;
   const durMs = durationMs(r.check_in_at, r.check_out_at);
   const tz = r.tenant_timezone || 'Asia/Kolkata';
+  const outDiff = !active && r.check_out_at ? dayDiff(groupIso, isoDay(r.check_out_at, tz)) : 0;
   const td: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
   return (
     <tr style={{ borderBottom: '1px solid ' + C.border, background: zebra ? C.surface2 : C.surface }}>
@@ -147,25 +172,26 @@ function RecordRow({ r, zebra }: { r: any; zebra: boolean }) {
       </td>
       <td style={td}><TeamPill team={r.team_name} /></td>
       <td style={td}><span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: C.blue }}>{r.machine_name || 'Office'}</span></td>
-      <td style={{ ...td, fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>{dayLabel(r.check_in_at, tz)}</td>
       <td style={{ ...td, fontSize: 13, color: C.text, fontWeight: 700, whiteSpace: 'nowrap' }}>{timeLabel(r.check_in_at, tz)}</td>
-      <td style={{ ...td, whiteSpace: 'nowrap' }}>{active ? <span style={{ fontSize: 12.5, fontWeight: 800, color: C.orange }}>Still in</span> : <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{timeLabel(r.check_out_at, tz)}</span>}</td>
-      <td style={{ ...td, fontSize: 13, fontWeight: 800, color: durMs == null ? C.text3 : C.text, whiteSpace: 'nowrap' }}>{durLabel(durMs)}</td>
+      <td style={{ ...td, whiteSpace: 'nowrap' }}>{active ? <span style={{ fontSize: 12.5, fontWeight: 800, color: C.orange }}>Still in</span> : <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{timeLabel(r.check_out_at, tz)}{outDiff > 0 && <PlusDay n={outDiff} />}</span>}</td>
+      <td style={{ ...td, fontSize: 13, fontWeight: 800, color: durMs == null ? C.text3 : durMs > LONG_SHIFT_MS ? C.amber : C.text, whiteSpace: 'nowrap' }}>{durLabel(durMs)}</td>
       <td style={td}><GpsLink lat={r.check_in_lat} lng={r.check_in_lng} /></td>
       <td style={td}><GpsLink lat={r.check_out_lat} lng={r.check_out_lng} /></td>
-      <td style={td}><StatusBadge active={active} /></td>
+      <td style={td}><StatusBadge active={active} durMs={durMs} /></td>
     </tr>
   );
 }
 
-function RecordCardM({ r }: { r: any }) {
+function RecordCardM({ r, groupIso }: { r: any; groupIso: string }) {
   const active = !r.check_out_at;
   const durMs = durationMs(r.check_in_at, r.check_out_at);
   const tz = r.tenant_timezone || 'Asia/Kolkata';
-  const tiles: [string, string, string][] = [
-    ['Check In', timeLabel(r.check_in_at, tz), C.text],
-    ['Check Out', active ? 'Still in' : timeLabel(r.check_out_at, tz), active ? C.orange : C.text],
-    ['Duration', durLabel(durMs), durMs == null ? C.text3 : C.text],
+  const outDiff = !active && r.check_out_at ? dayDiff(groupIso, isoDay(r.check_out_at, tz)) : 0;
+  // Date subtitle dropped — the group header already carries the day (redundant here).
+  const tiles: { l: string; v: string; c: string; plus: number }[] = [
+    { l: 'Check In', v: timeLabel(r.check_in_at, tz), c: C.text, plus: 0 },
+    { l: 'Check Out', v: active ? 'Still in' : timeLabel(r.check_out_at, tz), c: active ? C.orange : C.text, plus: outDiff },
+    { l: 'Duration', v: durLabel(durMs), c: durMs == null ? C.text3 : durMs > LONG_SHIFT_MS ? C.amber : C.text, plus: 0 },
   ];
   return (
     <div style={{ ...cardStyle, borderRadius: 13, overflow: 'hidden' }}>
@@ -175,20 +201,20 @@ function RecordCardM({ r }: { r: any }) {
             <AvatarA name={r.staff_name} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>{r.staff_name || '—'}</div>
-              <div style={{ fontSize: 12, color: C.text3 }}>{dayLabel(r.check_in_at, tz)}</div>
+              {r.staff_designation && <div style={{ fontSize: 12, color: C.text3 }}>{r.staff_designation}</div>}
             </div>
           </div>
-          <StatusBadge active={active} />
+          <StatusBadge active={active} durMs={durMs} />
         </div>
         <div style={{ fontSize: 12.5, color: C.text2, fontWeight: 600, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <TeamPill team={r.team_name} />
           <span style={{ color: C.blue, fontFamily: MONO, fontWeight: 700 }}>{r.machine_name || 'Office'}</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-          {tiles.map(([l, v, c]) => (
-            <div key={l} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 9, padding: '8px 10px' }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text3, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>{l}</div>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: c }}>{v}</div>
+          {tiles.map(t => (
+            <div key={t.l} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 9, padding: '8px 10px' }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.text3, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>{t.l}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: t.c }}>{t.v}{t.plus > 0 && <PlusDay n={t.plus} />}</div>
             </div>
           ))}
         </div>
@@ -220,6 +246,51 @@ export default function AttendanceSection() {
   const [machineFilter, setMachineFilter] = useState('all');
   const [quick, setQuick] = useState('7');
   const [exporting, setExporting] = useState(false);
+  // undefined = user hasn't chosen → show the derived default (today, else newest).
+  // A concrete string|null means the user explicitly opened / closed a group.
+  const [openKey, setOpenKey] = useState<string | null | undefined>(undefined);
+
+  // Client-side day grouping. Key is byte-identical to the DATE cell
+  // (dayLabel(check_in_at, tz)) so grouping moves zero rows. `iso` is a parallel
+  // YYYY-MM-DD (same tz) used only for sorting + the "+Nd" check-out diff.
+  const groups = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const r of records) {
+      const tz = r.tenant_timezone || 'Asia/Kolkata';
+      const key = dayLabel(r.check_in_at, tz);
+      const bucket = map.get(key);
+      if (bucket) bucket.push(r); else map.set(key, [r]);
+    }
+    return Array.from(map.entries())
+      .map(([key, rows]) => {
+        const tz = rows[0].tenant_timezone || 'Asia/Kolkata';
+        let weekday = '';
+        try { weekday = new Date(rows[0].check_in_at).toLocaleDateString('en-IN', { weekday: 'short', timeZone: tz }); } catch {}
+        return { key, rows, iso: isoDay(rows[0].check_in_at, tz), tz, label: weekday ? weekday + ', ' + key : key };
+      })
+      .sort((a, b) => b.iso.localeCompare(a.iso)); // newest day first
+  }, [records]);
+
+  // Signature of the day-set — changes only when the set of days changes.
+  const groupSig = useMemo(() => groups.map(g => g.key).join('|'), [groups]);
+
+  // Default open group, DERIVED during render so it can't be missed by effect
+  // timing: today's group if in range, else the newest. Pure fn of the day-set.
+  const defaultOpenKey = useMemo(() => {
+    if (groups.length === 0) return null;
+    const todayKey = dayLabel(new Date().toISOString(), groups[0].tz);
+    return groups.some(g => g.key === todayKey) ? todayKey : groups[0].key;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupSig]);
+
+  // When the day-set changes (new fetch / filter / quick-range Generate), drop the
+  // user's manual choice so the default takes over again. On mount openKey is already
+  // undefined, so the default shows immediately — no post-fetch setState required.
+  useEffect(() => { setOpenKey(undefined); }, [groupSig]);
+
+  const openGroup = openKey === undefined ? defaultOpenKey : openKey;
+  const toggleGroup = (key: string) =>
+    setOpenKey(prev => ((prev === undefined ? defaultOpenKey : prev) === key ? null : key));
 
   // Server-scoped by role: super_admin = all TENANTS (Fruitlink internal team
   // excluded — they live on Team Attendance), operator = own tenant, staff = own
@@ -341,7 +412,8 @@ export default function AttendanceSection() {
   const checkedOut = records.filter(r => r.check_out_at).length;
   const stillIn = records.filter(r => !r.check_out_at).length;
   const pdfDisabled = exporting || records.length === 0;
-  const cols = ['Staff', 'Team', 'Machine', 'Date', 'Check In', 'Check Out', 'Duration', 'Check-in GPS', 'Check-out GPS', 'Status'];
+  // Date column dropped from the grouped table — the group header carries the day.
+  const cols = ['Staff', 'Team', 'Machine', 'Check In', 'Check Out', 'Duration', 'Check-in GPS', 'Check-out GPS', 'Status'];
 
   return (
     <div style={{ padding: isMobile ? '18px 16px 40px' : '24px 28px 40px', background: C.bg, minHeight: '100%' }}>
@@ -414,20 +486,37 @@ export default function AttendanceSection() {
               <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>No attendance records</div>
               <div style={{ fontSize: 13, color: C.text3, marginTop: 6 }}>Adjust the date range or filters, then Generate.</div>
             </div>
-          : isMobile
-            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{records.map(r => <RecordCardM key={r.id} r={r} />)}</div>
-            : <div style={{ ...cardStyle, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 900 }}>
-                    <thead>
-                      <tr style={{ background: C.surface2, borderBottom: '1px solid ' + C.border }}>
-                        {cols.map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 800, color: C.text3, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>{records.map((r, i) => <RecordRow key={r.id} r={r} zebra={i % 2 === 1} />)}</tbody>
-                  </table>
-                </div>
-              </div>}
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {groups.map(g => {
+                const open = openGroup === g.key;
+                return (
+                  <div key={g.key} style={{ ...cardStyle, overflow: 'hidden' }}>
+                    {/* Whole header row is the click target */}
+                    <div role="button" tabIndex={0} aria-expanded={open}
+                      onClick={() => toggleGroup(g.key)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroup(g.key); } }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: 'pointer', userSelect: 'none', background: open ? C.surface2 : C.surface, borderBottom: open ? '1px solid ' + C.border : 'none' }}>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' }}>{g.label}</span>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text2, background: C.surface2, border: '1px solid ' + C.border, borderRadius: 20, padding: '2px 10px', whiteSpace: 'nowrap' }}>{g.rows.length} record{g.rows.length !== 1 ? 's' : ''}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12, color: C.text3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▸</span>
+                    </div>
+                    {open && (isMobile
+                      ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 14px' }}>{g.rows.map(r => <RecordCardM key={r.id} r={r} groupIso={g.iso} />)}</div>
+                      : <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 820 }}>
+                            <thead>
+                              <tr style={{ background: C.surface2, borderBottom: '1px solid ' + C.border }}>
+                                {cols.map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 800, color: C.text3, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>{g.rows.map((r, i) => <RecordRow key={r.id} r={r} zebra={i % 2 === 1} groupIso={g.iso} />)}</tbody>
+                          </table>
+                        </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>}
     </div>
   );
 }
