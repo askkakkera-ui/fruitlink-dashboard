@@ -136,9 +136,9 @@ So **the account seeing 0 does not own the machines** — the operator account s
 ## 9. Open items
 
 - [ ] Route fixes (§3, the 7 role-without-owner_id sites + the 3 in §4), one at a time, diff stat each. **#1 (`machine-control` fault_clear) done.**
-- [ ] **§8 — add loading-visit validation:** require an orange count for `visit_type='loading'`; reject fully-blank visits (min content).
+- [ ] **TRACKED — visit-form validation (two fixes, §8):** (a) require an orange count when `visit_type='loading'`; (b) reject fully-blank visits (minimum-content check). Corollary: give load-count and absolute calibration-count a **structured field**, so the true number stops landing in free-text notes (see stock-model doc UPDATE 23 Jul — it has happened twice on F4).
 - [ ] **§7 — give field_staff a Visit/check-in entry** in the dashboard, or don't route them off `/visit` (the `cec8b13` regression).
-- [ ] Reconcile F4 stock via physical recount; the null-load factor is quantified (~176 confirmed) but does not explain the full ~519.
+- [ ] **FIELD TASK — not code:** Ashok physically recounts F4 on-site, then a calibration row. This is the **blocking input** for the F4 / −349 reconciliation; no query or code change can produce it. Flagged so it doesn't sit waiting on a coding session that can't do it. (~176 of the ~519 is accounted for by null-load visits; the rest needs the recount.)
 - [ ] Consider a distinct tenant-staff role to end the `role='staff'` overload (durable fix vs. the `owner_id` stopgap).
 - [ ] Consider per-user session revocation (session-version column checked on verify, or deny-list) to remove the 7-day live-token gap.
 - [ ] Consider read-side audit coverage for `/api/sb` cross-tenant access.
