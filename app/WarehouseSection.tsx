@@ -398,12 +398,20 @@ export default function WarehouseSection({ role = 'operator', permissions = {} }
                   if (id) {
                     setSoldToName('');
                     const op = operators.find(o => o.id === id);
-                    if (op) {
-                      setBuyerCompany(op.company_name || op.name || '');
-                      setBuyerAddress([op.billing_address, op.pincode].filter(Boolean).join(' - '));
-                      setBuyerGstin(op.gstin || '');
-                      setBuyerContact(op.phone || '');
-                    }
+                    // Re-fill from the newly selected operator; clear if it can't be
+                    // found so we never leave a previous operator's details behind.
+                    setBuyerCompany(op ? (op.company_name || op.name || '') : '');
+                    setBuyerAddress(op ? [op.billing_address, op.pincode].filter(Boolean).join(' - ') : '');
+                    setBuyerGstin(op?.gstin || '');
+                    setBuyerContact(op?.phone || '');
+                  } else {
+                    // "Other buyer" / none — clear the operator-derived fields so a
+                    // non-operator sale starts blank and can't inherit a previous
+                    // operator's company / address / GSTIN / contact on the challan.
+                    setBuyerCompany('');
+                    setBuyerAddress('');
+                    setBuyerGstin('');
+                    setBuyerContact('');
                   }
                 }}>
                   <option value="">— Other buyer (type below) —</option>
