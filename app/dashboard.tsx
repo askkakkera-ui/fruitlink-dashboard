@@ -467,12 +467,21 @@ export default function Dashboard() {
           }
           table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
 
-          /* Operators & data tables: stack each row as a card on phones */
-          table.fl-stack { white-space: normal; }
+          /* Operators & data tables: stack each row as a card on phones.
+             Each <td> carries data-label; ::before renders it so rows read as
+             labelled cards with no horizontal scroll. Overrides the block/
+             overflow + inline min-width that the generic table rule imposes. */
+          table.fl-stack { display: block; white-space: normal; overflow-x: visible; min-width: 0 !important; }
           table.fl-stack thead { display: none; }
+          table.fl-stack tbody { display: block; }
           table.fl-stack tr { display: block; margin-bottom: 12px; border: 1px solid ${C.border}; border-radius: 12px; overflow: hidden; }
-          table.fl-stack td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px !important; border-bottom: 1px solid ${C.border}; }
-          table.fl-stack td:last-child { border-bottom: none; }
+          /* Separators as border-top so the last *visible* cell never trails a
+             line (the empty Action cell on resolved rows is display:none, so a
+             border-bottom on it would still paint a stray rule). */
+          table.fl-stack td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px !important; border-top: 1px solid ${C.border}; text-align: right; }
+          table.fl-stack td:empty { display: none; }
+          table.fl-stack td:first-child { border-top: none; }
+          table.fl-stack td::before { content: attr(data-label); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: ${C.text3}; text-align: left; flex-shrink: 0; }
         }
       `}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' }}>
