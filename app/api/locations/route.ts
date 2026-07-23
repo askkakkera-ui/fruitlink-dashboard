@@ -92,10 +92,14 @@ export async function POST(request: NextRequest) {
     const name = String(body.name || '').trim();
     if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400, headers: NO_STORE });
 
-    // Determine owner_id
-    let owner_id = String(session.sub);
-    if (session.role === 'super_admin' && body.owner_id) {
-      owner_id = String(body.owner_id);
+    // Determine owner_id — mirror GET tenant scoping
+    let owner_id: string;
+    if (session.role === 'super_admin') {
+      owner_id = body.owner_id ? String(body.owner_id) : String(session.sub);
+    } else if (session.role === 'sub_operator') {
+      owner_id = String(session.owner_id || session.sub);
+    } else {
+      owner_id = String(session.sub);
     }
 
     const row = {
@@ -137,9 +141,18 @@ export async function PATCH(request: NextRequest) {
     if (!Array.isArray(locs) || !locs[0]) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: NO_STORE });
     const loc = locs[0];
 
-    // Operators can only edit their own locations if they have permission
+    // Tenant scope: every non-super_admin may only touch locations in their own tenant
+    if (session.role !== 'super_admin') {
+      const tenantId = session.role === 'sub_operator'
+        ? String(session.owner_id || session.sub)
+        : String(session.sub);
+      if (String(loc.owner_id) !== tenantId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
+      }
+    }
+
+    // Operators additionally need the relevant manage/edit permission
     if (session.role === 'operator') {
-      if (loc.owner_id !== session.sub) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       // Check if editing office location (special permission)
       const permField = loc.is_office ? 'can_edit_office_location' : 'can_manage_locations';
       const permRes = await fetch(SB_URL + '/rest/v1/operator_permissions?select=' + permField + '&operator_id=eq.' + encodeURIComponent(session.sub) + '&limit=1', { headers: sbH() });

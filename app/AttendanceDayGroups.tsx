@@ -82,8 +82,15 @@ function AvatarA({ name }: { name?: string }) {
   return <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: C.orange, background: C.orangeBg, border: '1px solid color-mix(in srgb, ' + C.orange + ' 22%, transparent)' }}>{initialA(name)}</div>;
 }
 
-function StatusBadge({ active, durMs }: { active: boolean; durMs?: number | null }) {
-  if (active) return <Pill color={C.orange} bg={C.orangeBg} dot pulse style={{ fontWeight: 800 }}>Active</Pill>;
+function StatusBadge({ active, durMs, elapsedMs }: { active: boolean; durMs?: number | null; elapsedMs?: number | null }) {
+  if (active) {
+    // An open session past the same >12h bar is a data problem (forgotten check-out).
+    // Static amber + elapsed time — no pulse: a 7-day-open row would pulse forever on
+    // every load, and motion is noise, not signal. Distinct from the closed "⚠ <dur>"
+    // badge via colour + the "open" suffix.
+    if (elapsedMs != null && elapsedMs > LONG_SHIFT_MS) return <Pill color={C.amber} bg={C.amberBg} style={{ fontWeight: 800 }}>{durLabel(elapsedMs)} open</Pill>;
+    return <Pill color={C.orange} bg={C.orangeBg} dot pulse style={{ fontWeight: 800 }}>Active</Pill>;
+  }
   // >12h almost always means an unclosed session (check-out == next check-in), so
   // surface it in amber rather than a reassuring green "Done" or a bogus day-total.
   if (durMs != null && durMs > LONG_SHIFT_MS) return <Pill color={C.amber} bg={C.amberBg} style={{ fontWeight: 800 }}>⚠ {durLabel(durMs)}</Pill>;
@@ -111,11 +118,15 @@ function GpsLink({ lat, lng }: { lat?: number | null; lng?: number | null }) {
 
 // groupIso = the group's YYYY-MM-DD (check-in day). Rendered inside an open group,
 // so the DATE column is dropped (redundant under the header).
-function RecordRow({ r, zebra, groupIso }: { r: any; zebra: boolean; groupIso: string }) {
+function RecordRow({ r, zebra, groupIso, now }: { r: any; zebra: boolean; groupIso: string; now: number }) {
   const active = !r.check_out_at;
   const durMs = durationMs(r.check_in_at, r.check_out_at);
   const tz = r.tenant_timezone || 'Asia/Kolkata';
   const outDiff = !active && r.check_out_at ? dayDiff(groupIso, isoDay(r.check_out_at, tz)) : 0;
+  // Open session: elapsed = now - check-in. Past the >12h bar it's a stale/forgotten
+  // check-out (a data problem), flagged amber like the closed-row treatment.
+  const elapsedMs = active && r.check_in_at ? now - new Date(r.check_in_at).getTime() : null;
+  const staleOpen = elapsedMs != null && elapsedMs > LONG_SHIFT_MS;
   const td: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
   return (
     <tr style={{ borderBottom: '1px solid ' + C.border, background: zebra ? C.surface2 : C.surface }}>
@@ -134,25 +145,28 @@ function RecordRow({ r, zebra, groupIso }: { r: any; zebra: boolean; groupIso: s
       <td style={td}><TeamPill team={r.team_name} /></td>
       <td style={td}><span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: C.blue }}>{r.machine_name || 'Office'}</span></td>
       <td style={{ ...td, fontSize: 13, color: C.text, fontWeight: 700, whiteSpace: 'nowrap' }}>{timeLabel(r.check_in_at, tz)}</td>
-      <td style={{ ...td, whiteSpace: 'nowrap' }}>{active ? <span style={{ fontSize: 12.5, fontWeight: 800, color: C.orange }}>Still in</span> : <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{timeLabel(r.check_out_at, tz)}{outDiff > 0 && <PlusDay n={outDiff} />}</span>}</td>
-      <td style={{ ...td, fontSize: 13, fontWeight: 800, color: durMs == null ? C.text3 : durMs > LONG_SHIFT_MS ? C.amber : C.text, whiteSpace: 'nowrap' }}>{durLabel(durMs)}</td>
+      <td style={{ ...td, whiteSpace: 'nowrap' }}>{active ? <span style={{ fontSize: 12.5, fontWeight: 800, color: staleOpen ? C.amber : C.orange }}>Still in</span> : <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{timeLabel(r.check_out_at, tz)}{outDiff > 0 && <PlusDay n={outDiff} />}</span>}</td>
+      <td style={{ ...td, fontSize: 13, fontWeight: 800, color: active ? (staleOpen ? C.amber : C.text3) : durMs == null ? C.text3 : durMs > LONG_SHIFT_MS ? C.amber : C.text, whiteSpace: 'nowrap' }}>{active ? (staleOpen ? durLabel(elapsedMs) : '—') : durLabel(durMs)}</td>
       <td style={td}><GpsLink lat={r.check_in_lat} lng={r.check_in_lng} /></td>
       <td style={td}><GpsLink lat={r.check_out_lat} lng={r.check_out_lng} /></td>
-      <td style={td}><StatusBadge active={active} durMs={durMs} /></td>
+      <td style={td}><StatusBadge active={active} durMs={durMs} elapsedMs={elapsedMs} /></td>
     </tr>
   );
 }
 
-function RecordCardM({ r, groupIso }: { r: any; groupIso: string }) {
+function RecordCardM({ r, groupIso, now }: { r: any; groupIso: string; now: number }) {
   const active = !r.check_out_at;
   const durMs = durationMs(r.check_in_at, r.check_out_at);
   const tz = r.tenant_timezone || 'Asia/Kolkata';
   const outDiff = !active && r.check_out_at ? dayDiff(groupIso, isoDay(r.check_out_at, tz)) : 0;
+  // Open session: elapsed = now - check-in; amber past the >12h bar (forgotten check-out).
+  const elapsedMs = active && r.check_in_at ? now - new Date(r.check_in_at).getTime() : null;
+  const staleOpen = elapsedMs != null && elapsedMs > LONG_SHIFT_MS;
   // Date subtitle dropped — the group header already carries the day (redundant here).
   const tiles: { l: string; v: string; c: string; plus: number }[] = [
     { l: 'Check In', v: timeLabel(r.check_in_at, tz), c: C.text, plus: 0 },
-    { l: 'Check Out', v: active ? 'Still in' : timeLabel(r.check_out_at, tz), c: active ? C.orange : C.text, plus: outDiff },
-    { l: 'Duration', v: durLabel(durMs), c: durMs == null ? C.text3 : durMs > LONG_SHIFT_MS ? C.amber : C.text, plus: 0 },
+    { l: 'Check Out', v: active ? 'Still in' : timeLabel(r.check_out_at, tz), c: active ? (staleOpen ? C.amber : C.orange) : C.text, plus: outDiff },
+    { l: 'Duration', v: active ? (staleOpen ? durLabel(elapsedMs) : '—') : durLabel(durMs), c: active ? (staleOpen ? C.amber : C.text3) : durMs == null ? C.text3 : durMs > LONG_SHIFT_MS ? C.amber : C.text, plus: 0 },
   ];
   return (
     <div style={{ ...cardStyle, borderRadius: 13, overflow: 'hidden' }}>
@@ -165,7 +179,7 @@ function RecordCardM({ r, groupIso }: { r: any; groupIso: string }) {
               {r.staff_designation && <div style={{ fontSize: 12, color: C.text3 }}>{r.staff_designation}</div>}
             </div>
           </div>
-          <StatusBadge active={active} durMs={durMs} />
+          <StatusBadge active={active} durMs={durMs} elapsedMs={elapsedMs} />
         </div>
         <div style={{ fontSize: 12.5, color: C.text2, fontWeight: 600, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <TeamPill team={r.team_name} />
@@ -194,6 +208,11 @@ const COLS = ['Staff', 'Team', 'Machine', 'Check In', 'Check Out', 'Duration', '
 
 export default function AttendanceDayGroups({ records }: { records: any[] }) {
   const isMobile = useIsMobile();
+
+  // Single "now" per render for open-session elapsed time. No ticking interval —
+  // elapsed is allowed to be slightly stale on a page left open; it refreshes on any
+  // re-render this page already does (accordion toggle, filter / Generate, reload).
+  const now = Date.now();
 
   // Client-side day grouping. Key is byte-identical to the DATE cell
   // (dayLabel(check_in_at, tz)) so grouping moves zero rows. `iso` is a parallel
@@ -257,7 +276,7 @@ export default function AttendanceDayGroups({ records }: { records: any[] }) {
               <span style={{ marginLeft: 'auto', fontSize: 12, color: C.text3, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▸</span>
             </div>
             {open && (isMobile
-              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 14px' }}>{g.rows.map(r => <RecordCardM key={r.id} r={r} groupIso={g.iso} />)}</div>
+              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 14px' }}>{g.rows.map(r => <RecordCardM key={r.id} r={r} groupIso={g.iso} now={now} />)}</div>
               : <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 820 }}>
                     <thead>
@@ -265,7 +284,7 @@ export default function AttendanceDayGroups({ records }: { records: any[] }) {
                         {COLS.map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 800, color: C.text3, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>)}
                       </tr>
                     </thead>
-                    <tbody>{g.rows.map((r, i) => <RecordRow key={r.id} r={r} zebra={i % 2 === 1} groupIso={g.iso} />)}</tbody>
+                    <tbody>{g.rows.map((r, i) => <RecordRow key={r.id} r={r} zebra={i % 2 === 1} groupIso={g.iso} now={now} />)}</tbody>
                   </table>
                 </div>
             )}
