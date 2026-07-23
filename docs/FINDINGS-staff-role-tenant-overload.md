@@ -106,9 +106,39 @@ The durable fix is to stop overloading the value — introduce a distinct tenant
 
 ---
 
-## 7. Open items
+## 7. field_staff on the dashboard: Machine List = 0 (not a data-path bug)
 
-- [ ] Route fixes #1–#7 (§3), one at a time, diff stat each. **Not yet started.**
+**Symptom:** Fruitlinq field_staff (Ashok, Sai Kiran) see Machine List 0/0/0 and Console tiles 0 on the dashboard — even after a fresh PWA install + login with a correct `owner_id` in the token. Stale-session was ruled out.
+
+**Root — verified live with minted tokens, not inference:** `/api/machines:48-49` returns `[]` for any role that isn't super_admin/operator/sub_operator, re-derived from the **JWT** (`:26-27` strips the client `id` filter; `:31` keys on JWT role). The 5 machines are owned by `machine_operators.operator_id = b3a5c89d` (the **operator** account).
+
+| Token | `/api/machines` | note |
+|---|---|---|
+| operator `b3a5c89d` (owns the 5) | **5** | even with `&id=eq.none` — server ignores the client filter |
+| field_staff Ashok | **0** | even with the real machine ids in the query |
+| field_staff Ashok → `/api/visit?machines=1` | **5** | check-in path is owner-scoped (`visit/route.ts:141-146`) |
+
+So **the account seeing 0 does not own the machines** — the operator account sees all 5. This is the `cec8b13` routing consequence (field_staff dropped into a dashboard section that returns `[]` for their role), not a broken tenant data path.
+
+**Cosmetic amplifier:** dashboard identity + scoping read client-writable, non-httpOnly cookies — `dashboard.tsx:138` `fl_role || 'operator'`, `:139` `fl_operator_name || 'Admin'`, `:140` `fl_operator_id || ''`. On a fresh PWA where those cookies don't persist, a field_staff session renders as operator **"Admin"** with a My Team + Settings nav and 0 machines — mislabeling the account. No data leak (server re-derives from the JWT), but "Admin" is a fallback string, not an account.
+
+## 8. Loading visits accept null orange counts (data-integrity gap)
+
+**No validation, client or server.** `visit/route.ts:253` stores `oranges_loaded = null` when blank; client `visit/page.tsx:445-446` omits it when empty; Submit (`:770`) is gated only on `busy`. Photo is the only hard requirement (`:234`). Worse, a loading visit can be submitted **fully blank** (no oranges, no consumables, no note — photo + GPS only): two such exist on F4 (10 Jul 13:06, 17 Jul 08:05), each minutes-to-an-hour before a real load at the same spot — the shape of an accidental first submit. So there is a **second gap**: no minimum-content check.
+
+**F4 data (`sn 3A6C8FFB69`, as of 23 Jul):** 5 of 51 loading visits have `oranges_loaded` NULL, all F4, 2026-07-10 → 2026-07-23. Content, not count, is the story:
+- 10 Jul 13:09 — *"Filled 88c 2 boxes"*, consumables present → **one genuine uncounted load ≈ 176** (count in the note, field blank).
+- 10 Jul 13:06 & 17 Jul 08:05 — blank everything → accidental/empty submits (~0).
+- 10 Jul 14:04 & 23 Jul 07:43 — `{straws:20}` only → consumables restock or uncounted; ambiguous (~0 each).
+
+**Arithmetic — corrects the "5 × ~90 ≈ 450" reading:** confirmed uncounted ≈ **176** (one load); at most ~350 if both straws-only rows were real loads. F4's gap is ~519 (reads −349 while physically holding ~170). So these visits are a **real, previously-unknown contributor (~⅓, at most ~⅔) — NOT the primary cause.** The stock model's OPC 5-vs-4 over-consumption and dispatch-vs-rack factors remain in play. Reconciling −349 needs a **physical recount at F4** (Ashok), not a query. See `Fruitlink_Stock_Model_16Jul.md` (UPDATE 23 Jul) — the two docs are kept in agreement on ~176.
+
+## 9. Open items
+
+- [ ] Route fixes (§3, the 7 role-without-owner_id sites + the 3 in §4), one at a time, diff stat each. **#1 (`machine-control` fault_clear) done.**
+- [ ] **§8 — add loading-visit validation:** require an orange count for `visit_type='loading'`; reject fully-blank visits (min content).
+- [ ] **§7 — give field_staff a Visit/check-in entry** in the dashboard, or don't route them off `/visit` (the `cec8b13` regression).
+- [ ] Reconcile F4 stock via physical recount; the null-load factor is quantified (~176 confirmed) but does not explain the full ~519.
 - [ ] Consider a distinct tenant-staff role to end the `role='staff'` overload (durable fix vs. the `owner_id` stopgap).
 - [ ] Consider per-user session revocation (session-version column checked on verify, or deny-list) to remove the 7-day live-token gap.
 - [ ] Consider read-side audit coverage for `/api/sb` cross-tenant access.
