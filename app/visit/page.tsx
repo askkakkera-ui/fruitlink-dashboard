@@ -3,9 +3,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const LOGO = 'https://fpwvutdvwnvrunviporz.supabase.co/storage/v1/object/public/logos/logo.png';
 
-// Bump on every visit-page change. Shown on the mode screen so a stale cached
-// build can be identified in one glance instead of three rounds of guessing.
-const BUILD = '2026-07-09-a';
+// Build stamp (short commit sha · build date), injected at build time from
+// next.config.ts (env.NEXT_PUBLIC_BUILD) so it can never go stale by hand. Shown on
+// the mode screen so a stale cached PWA build is identifiable in one glance — ask a
+// field-staff user "what does the footer say?" and compare against the live deploy.
+const BUILD = process.env.NEXT_PUBLIC_BUILD || 'dev';
 
 type Machine = { id: string; display_name?: string; sn?: string; location?: string; location_id?: string };
 type Verdict = 'inside' | 'outside' | 'uncertain' | 'unknown';
