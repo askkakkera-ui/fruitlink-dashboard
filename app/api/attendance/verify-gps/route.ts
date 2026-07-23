@@ -59,10 +59,16 @@ function scopeOwnerId(session: any): Scope {
  * endpoint never returns a refusal — a caller who is 5km away still gets
  * a 200 with verdict:'outside', and the UI asks them why.
  */
+const dbg = (why: string, extra: Record<string, unknown> = {}) =>
+  console.error('[verify-gps-debug]', JSON.stringify({ why, ...extra }));
+
 export async function POST(request: NextRequest) {
   try {
     const session = await verifySession(request.cookies.get(SESSION_COOKIE)?.value);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
+    if (!session) {
+      dbg('no-session', { cookie: request.cookies.get(SESSION_COOKIE) ? 'present' : 'absent' });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
+    }
 
     const body = await request.json().catch(() => ({}));
     const lat = Number(body.lat);
@@ -73,7 +79,10 @@ export async function POST(request: NextRequest) {
     const hasFix = Number.isFinite(lat) && Number.isFinite(lng);
 
     const scope = scopeOwnerId(session);
-    if (scope.kind === 'none') return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
+    if (scope.kind === 'none') {
+      dbg('scope-none', { role: session.role, sub: String(session.sub), owner_id: session.owner_id ?? null });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE });
+    }
     let url = SB_URL + '/rest/v1/locations?select=id,name,address,lat,lng,geofence_radius_m,is_office&active=eq.true&order=name.asc';
     if (scope.kind === 'owner') url += '&owner_id=eq.' + encodeURIComponent(scope.id);
 
@@ -86,6 +95,7 @@ export async function POST(request: NextRequest) {
       // status + body so we see the actual failure instead of inferring it. The key
       // lives in headers, not the URL, so nothing secret is logged.
       console.error('[verify-gps-debug]', JSON.stringify({
+        why: 'non-array',
         status: res.status,
         ok: res.ok,
         role: session.role,
@@ -100,6 +110,7 @@ export async function POST(request: NextRequest) {
         { headers: NO_STORE }
       );
     }
+    if (rows.length === 0) dbg('empty-array', { status: res.status, role: session.role, sub: String(session.sub), scope, url });
 
     const annotated = rows.map((l: any) => {
       const hasCoords = l.lat != null && l.lng != null;
@@ -144,6 +155,7 @@ export async function POST(request: NextRequest) {
       { headers: NO_STORE }
     );
   } catch (e: any) {
+    dbg('threw', { name: e?.name ?? null, message: e?.message ?? null });
     return NextResponse.json({ error: e.message }, { status: 500, headers: NO_STORE });
   }
 }
