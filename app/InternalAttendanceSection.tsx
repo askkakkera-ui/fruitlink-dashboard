@@ -1,10 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useIsMobile } from './lib/dashboard-shared';
+import AttendanceDayGroups from './AttendanceDayGroups';
 
 // Fruitlink INTERNAL-team attendance page. Structurally a sibling of
-// AttendanceSection: same _ds tokens, same primitives (StatCardA / RecordRow /
-// RecordCardM / TeamPill …), same layout — only the data source differs. It
+// AttendanceSection: same _ds tokens, same chrome (StatCardA / filters / PDF),
+// and the same grouped body — both pages render <AttendanceDayGroups> for the
+// day-grouped accordion (header, +1d, amber >12h). Only the data source differs. It
 // reads /api/attendance-internal (super_admin-only, internal-scoped server-side)
 // so tenant field-staff rows never reach this component. The existing
 // Operator-Management Attendance page and its route are left untouched.
@@ -26,7 +28,6 @@ const C = {
 // vars aren't defined in this app, so inline the literals. --font-mono IS defined.
 const SHADOW_CARD = '0 1px 3px rgba(0,0,0,0.04)';
 const SHADOW_BRAND = '0 2px 8px rgba(254,101,5,0.28)';
-const MONO = 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)';
 const cardStyle: React.CSSProperties = { background: C.surface, borderRadius: 14, border: '1px solid ' + C.border, boxShadow: SHADOW_CARD };
 
 // ── formatting helpers ────────────────────────────────────────────────
@@ -37,24 +38,6 @@ function fmtDuration(inT?: string, outT?: string) {
   const h = Math.floor(mins / 60), m = mins % 60;
   return h + 'h ' + (m > 0 ? m + 'm' : '');
 }
-function durationMs(inT?: string, outT?: string): number | null {
-  if (!inT || !outT) return null;
-  return new Date(outT).getTime() - new Date(inT).getTime();
-}
-function durLabel(ms: number | null) {
-  if (ms == null) return '—';
-  const h = Math.floor(ms / 3600e3), m = Math.round((ms % 3600e3) / 60e3);
-  return (h > 0 ? h + 'h ' : '') + m + 'm';
-}
-function dayLabel(t?: string, tz = 'Asia/Kolkata') {
-  if (!t) return '—';
-  try { return new Date(t).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: tz }); } catch { return '—'; }
-}
-function timeLabel(t?: string, tz = 'Asia/Kolkata') {
-  if (!t) return '—';
-  try { return new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: tz }); } catch { return '—'; }
-}
-function initialA(s?: string) { return (s || '?').charAt(0).toUpperCase(); }
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function daysAgoISO(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
 
@@ -69,7 +52,7 @@ function loadJsPDF(): Promise<any> {
   });
 }
 
-// ── DS primitives (ported from _ds_bundle.js: StatusDot + Pill) ───────
+// ── DS primitive (StatusDot; Pill + row/badge primitives now live in AttendanceDayGroups) ──
 function StatusDot({ color = C.green, size = 7, pulse = false, style }: { color?: string; size?: number; pulse?: boolean; style?: React.CSSProperties }) {
   return (
     <>
@@ -78,38 +61,6 @@ function StatusDot({ color = C.green, size = 7, pulse = false, style }: { color?
     </>
   );
 }
-function Pill({ children, color = C.green, bg, dot = false, pulse = false, style }: { children: React.ReactNode; color?: string; bg?: string; dot?: boolean; pulse?: boolean; style?: React.CSSProperties }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: bg || 'color-mix(in srgb, ' + color + ' 12%, transparent)', color, border: '1px solid color-mix(in srgb, ' + color + ' 30%, transparent)', ...style }}>
-      {dot && <StatusDot color={color} size={5} pulse={pulse} />}
-      {children}
-    </span>
-  );
-}
-
-function AvatarA({ name }: { name?: string }) {
-  return <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: C.orange, background: C.orangeBg, border: '1px solid color-mix(in srgb, ' + C.orange + ' 22%, transparent)' }}>{initialA(name)}</div>;
-}
-
-function StatusBadge({ active }: { active: boolean }) {
-  if (active) return <Pill color={C.orange} bg={C.orangeBg} dot pulse style={{ fontWeight: 800 }}>Active</Pill>;
-  return <Pill color={C.green} bg={C.greenBg} style={{ fontWeight: 800 }}>✓ Done</Pill>;
-}
-
-// Two-population signal: Fruitlink internal (purple) vs tenant operator (blue).
-// team_name is already resolved server-side; nothing here filters, only colours.
-function TeamPill({ team }: { team?: string }) {
-  const isFL = team === 'Fruitlink';
-  return <Pill color={isFL ? C.purple : C.blue} bg={isFL ? C.purpleBg : C.blueBg} style={{ fontWeight: 700 }}>{team || '—'}</Pill>;
-}
-
-// Older attendance rows predate check-out GPS capture, so lat/lng are null on
-// most of them — render an em dash, never a pin that links nowhere.
-function GpsLink({ lat, lng }: { lat?: number | null; lng?: number | null }) {
-  if (lat == null || lng == null) return <span style={{ fontSize: 12, color: C.text3 }}>—</span>;
-  return <a href={'https://www.google.com/maps?q=' + lat + ',' + lng} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 700, color: C.blue, textDecoration: 'none' }}>📍 View</a>;
-}
-
 function StatCardA({ label, value, sub, color, icon, live = false }: { label: string; value: number; sub: string; color: string; icon: string; live?: boolean }) {
   return (
     <div style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 12, boxShadow: SHADOW_CARD, overflow: 'hidden' }}>
@@ -124,82 +75,6 @@ function StatCardA({ label, value, sub, color, icon, live = false }: { label: st
           <span style={{ fontSize: 30, fontWeight: 800, color: C.text, letterSpacing: '-.02em', lineHeight: 1 }}>{value}</span>
         </div>
         <div style={{ fontSize: 12, color: C.text2, marginTop: 7, fontWeight: 600 }}>{sub}</div>
-      </div>
-    </div>
-  );
-}
-
-function RecordRow({ r, zebra }: { r: any; zebra: boolean }) {
-  const active = !r.check_out_at;
-  const durMs = durationMs(r.check_in_at, r.check_out_at);
-  const tz = r.tenant_timezone || 'Asia/Kolkata';
-  const td: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
-  return (
-    <tr style={{ borderBottom: '1px solid ' + C.border, background: zebra ? C.surface2 : C.surface }}>
-      <td style={td}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
-          <AvatarA name={r.staff_name} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 800, color: C.text, whiteSpace: 'nowrap' }}>{r.staff_name || '—'}</span>
-              {r.staff_employee_id && <span style={{ fontSize: 10, color: C.text3, fontWeight: 700, background: C.surface2, padding: '1px 6px', borderRadius: 5 }}>{r.staff_employee_id}</span>}
-            </div>
-            {r.staff_designation && <div style={{ fontSize: 11, color: C.text3 }}>{r.staff_designation}</div>}
-          </div>
-        </div>
-      </td>
-      <td style={td}><TeamPill team={r.team_name} /></td>
-      <td style={td}><span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: C.blue }}>{r.machine_name || 'Office'}</span></td>
-      <td style={{ ...td, fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>{dayLabel(r.check_in_at, tz)}</td>
-      <td style={{ ...td, fontSize: 13, color: C.text, fontWeight: 700, whiteSpace: 'nowrap' }}>{timeLabel(r.check_in_at, tz)}</td>
-      <td style={{ ...td, whiteSpace: 'nowrap' }}>{active ? <span style={{ fontSize: 12.5, fontWeight: 800, color: C.orange }}>Still in</span> : <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{timeLabel(r.check_out_at, tz)}</span>}</td>
-      <td style={{ ...td, fontSize: 13, fontWeight: 800, color: durMs == null ? C.text3 : C.text, whiteSpace: 'nowrap' }}>{durLabel(durMs)}</td>
-      <td style={td}><GpsLink lat={r.check_in_lat} lng={r.check_in_lng} /></td>
-      <td style={td}><GpsLink lat={r.check_out_lat} lng={r.check_out_lng} /></td>
-      <td style={td}><StatusBadge active={active} /></td>
-    </tr>
-  );
-}
-
-function RecordCardM({ r }: { r: any }) {
-  const active = !r.check_out_at;
-  const durMs = durationMs(r.check_in_at, r.check_out_at);
-  const tz = r.tenant_timezone || 'Asia/Kolkata';
-  const tiles: [string, string, string][] = [
-    ['Check In', timeLabel(r.check_in_at, tz), C.text],
-    ['Check Out', active ? 'Still in' : timeLabel(r.check_out_at, tz), active ? C.orange : C.text],
-    ['Duration', durLabel(durMs), durMs == null ? C.text3 : C.text],
-  ];
-  return (
-    <div style={{ ...cardStyle, borderRadius: 13, overflow: 'hidden' }}>
-      <div style={{ padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 11, alignItems: 'center', minWidth: 0 }}>
-            <AvatarA name={r.staff_name} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>{r.staff_name || '—'}</div>
-              <div style={{ fontSize: 12, color: C.text3 }}>{dayLabel(r.check_in_at, tz)}</div>
-            </div>
-          </div>
-          <StatusBadge active={active} />
-        </div>
-        <div style={{ fontSize: 12.5, color: C.text2, fontWeight: 600, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <TeamPill team={r.team_name} />
-          <span style={{ color: C.blue, fontFamily: MONO, fontWeight: 700 }}>{r.machine_name || 'Office'}</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-          {tiles.map(([l, v, c]) => (
-            <div key={l} style={{ background: C.surface2, border: '1px solid ' + C.border, borderRadius: 9, padding: '8px 10px' }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.text3, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>{l}</div>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: c }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <span style={{ fontSize: 11.5, color: C.text3, fontWeight: 700 }}>GPS:</span>
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 11.5, color: C.text3 }}>In <GpsLink lat={r.check_in_lat} lng={r.check_in_lng} /></span>
-          <span style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 11.5, color: C.text3 }}>Out <GpsLink lat={r.check_out_lat} lng={r.check_out_lng} /></span>
-        </div>
       </div>
     </div>
   );
@@ -340,7 +215,6 @@ export default function InternalAttendanceSection() {
   const checkedOut = records.filter(r => r.check_out_at).length;
   const stillIn = records.filter(r => !r.check_out_at).length;
   const pdfDisabled = exporting || records.length === 0;
-  const cols = ['Staff', 'Team', 'Machine', 'Date', 'Check In', 'Check Out', 'Duration', 'Check-in GPS', 'Check-out GPS', 'Status'];
 
   return (
     <div style={{ padding: isMobile ? '18px 16px 40px' : '24px 28px 40px', background: C.bg, minHeight: '100%' }}>
@@ -413,20 +287,7 @@ export default function InternalAttendanceSection() {
               <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>No attendance records</div>
               <div style={{ fontSize: 13, color: C.text3, marginTop: 6 }}>Adjust the date range or filters, then Generate.</div>
             </div>
-          : isMobile
-            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{records.map(r => <RecordCardM key={r.id} r={r} />)}</div>
-            : <div style={{ ...cardStyle, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 900 }}>
-                    <thead>
-                      <tr style={{ background: C.surface2, borderBottom: '1px solid ' + C.border }}>
-                        {cols.map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 800, color: C.text3, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em', whiteSpace: 'nowrap' }}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>{records.map((r, i) => <RecordRow key={r.id} r={r} zebra={i % 2 === 1} />)}</tbody>
-                  </table>
-                </div>
-              </div>}
+          : <AttendanceDayGroups records={records} />}
     </div>
   );
 }
