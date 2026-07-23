@@ -79,7 +79,27 @@ export async function POST(request: NextRequest) {
 
     const res = await fetch(url, { headers: sbH() });
     const rows = await res.json();
-    if (!Array.isArray(rows)) return NextResponse.json({ locations: [], target: null }, { headers: NO_STORE });
+    if (!Array.isArray(rows)) {
+      // TEMP INSTRUMENTATION (remove after diagnosis, 2026-07-23): the Supabase read
+      // returned a non-array (error object) and :82 was silently swallowing it into an
+      // empty location list — indistinguishable from "no locations". Surface the real
+      // status + body so we see the actual failure instead of inferring it. The key
+      // lives in headers, not the URL, so nothing secret is logged.
+      console.error('[verify-gps-debug]', JSON.stringify({
+        status: res.status,
+        ok: res.ok,
+        role: session.role,
+        sub: String(session.sub),
+        owner_id: session.owner_id ?? null,
+        scope,
+        url,
+        body: typeof rows === 'string' ? rows.slice(0, 500) : rows,
+      }));
+      return NextResponse.json(
+        { locations: [], target: null, _debug: { status: res.status, ok: res.ok, body: rows } },
+        { headers: NO_STORE }
+      );
+    }
 
     const annotated = rows.map((l: any) => {
       const hasCoords = l.lat != null && l.lng != null;
