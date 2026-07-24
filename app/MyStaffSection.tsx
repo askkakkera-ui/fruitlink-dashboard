@@ -70,6 +70,12 @@ export default function MyStaffSection() {
       if (editing) {
         // Update existing
         const body: any = { name: fName.trim(), email: fEmail.trim(), phone: fPhone.trim() || null, designation: fDesignation.trim() || null, employee_id: fEmployeeId.trim() || null, staff_type: fStaffType };
+        if (fPassword.trim()) {
+          const hashRes = await fetch('/api/hash-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: fPassword }) });
+          if (!hashRes.ok) { setFormMsg('Error: could not hash password'); setSaving(false); return; }
+          const { hash } = await hashRes.json();
+          body.password_hash = hash;
+        }
         const r = await fetch('/api/sb?path=' + encodeURIComponent('/rest/v1/operators?id=eq.' + editing.id), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
           body: JSON.stringify(body),
@@ -197,12 +203,10 @@ export default function MyStaffSection() {
                   </select>
                 </div>
               </div>
-              {!editing && (
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>Password *</label>
-                  <input type="password" value={fPassword} onChange={e => setFPassword(e.target.value)} placeholder="Login password" style={inp} />
-                </div>
-              )}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 4 }}>{editing ? 'New Password (blank = keep)' : 'Password *'}</label>
+                <input type="password" value={fPassword} onChange={e => setFPassword(e.target.value)} placeholder={editing ? '••••••••' : 'Login password'} style={inp} />
+              </div>
             </div>
 
             {formMsg && <div style={{ marginTop: 14, padding: '8px 12px', borderRadius: 8, background: formMsg.startsWith('✓') ? C.greenBg : C.redBg, color: formMsg.startsWith('✓') ? C.green : C.red, fontSize: 13, fontWeight: 600 }}>{formMsg}</div>}
