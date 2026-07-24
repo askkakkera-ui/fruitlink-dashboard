@@ -250,8 +250,10 @@ export async function POST(request: NextRequest) {
       const rows = await r.json();
       ownerId = Array.isArray(rows) && rows[0] ? String(rows[0].operator_id) : ownerId;
     }
-    const loaded = body.oranges_loaded != null ? parseInt(body.oranges_loaded) : null;
-    const damaged = body.oranges_damaged != null ? parseInt(body.oranges_damaged) : null;
+    const loaded = body.oranges_loaded != null && !isNaN(parseInt(body.oranges_loaded))
+      ? parseInt(body.oranges_loaded) : null;
+    const damaged = body.oranges_damaged != null && !isNaN(parseInt(body.oranges_damaged))
+      ? parseInt(body.oranges_damaged) : null;
     const net = (loaded != null && damaged != null) ? (loaded - damaged) : (loaded != null ? loaded : null);
     // The fruit size loaded on THIS visit. Oranges-per-cup follows the fruit, not
     // the machine: F4 was configured count 100 (5/cup) while holding 88s (4/cup),
@@ -260,6 +262,14 @@ export async function POST(request: NextRequest) {
     // for visits that did not record one.
     const fruitCount = body.fruit_count != null && !isNaN(parseInt(body.fruit_count))
       ? parseInt(body.fruit_count) : null;
+
+    // A loading visit with no orange count is indistinguishable from a
+    // consumables top-up, and the stock balance silently loses the load.
+    // Five such visits on F4 between 10 and 23 Jul; one held a real ~176
+    // load recorded only in the note. 0 is valid — the machine was full.
+    if (visit_type === 'loading' && loaded == null) {
+      return NextResponse.json({ error: 'oranges_required' }, { status: 400, headers: NO_STORE });
+    }
 
     const row = {
       machine_id,

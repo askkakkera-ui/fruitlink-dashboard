@@ -430,6 +430,10 @@ export default function VisitPage() {
   async function submitVisit() {
     if (!machineId) { setErr('Choose a machine.'); return; }
     if (!photoBlob) { setErr('A photo is required.'); return; }
+    if (visitType === 'loading' && loaded === '') {
+      setErr('Enter how many oranges you loaded. Enter 0 if you did not load any.');
+      return;
+    }
     setBusy(true); setErr(''); setUploadFailed(false);
     try {
       let photo_url = '';
@@ -463,6 +467,7 @@ export default function VisitPage() {
         setErr(
           d.error === 'not_checked_in' ? 'You are not checked in. Go back and check in first.'
           : d.error === 'photo_required' ? 'A photo is required.'
+          : d.error === 'oranges_required' ? 'Enter how many oranges you loaded. Enter 0 if you did not load any.'
           : (d.message || d.error || 'Could not save visit.')
         );
         setBusy(false); return;
@@ -743,7 +748,7 @@ export default function VisitPage() {
                 {visitType === 'loading' && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                     <div>
-                      <label style={{ fontSize: 11, fontWeight: 700, color: C.text2 }}>Oranges loaded</label>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: C.text2 }}>Oranges loaded *</label>
                       <input value={loaded} onChange={(e) => setLoaded(e.target.value)} type="number" inputMode="numeric" style={{ ...inputStyle, marginTop: 5 }} />
                     </div>
                     <div>
