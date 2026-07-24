@@ -43,8 +43,10 @@ export default function Login() {
         setLoading(false);
         return;
       }
-      // "Remember me": 30 days when ticked, 24h otherwise. Cookie names/values unchanged.
-      const maxAge = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24;
+      // Cookie lifetime must match the server session (7 days, see
+      // api/login/route.ts:103) or the UI silently loses role/permissions
+      // while the session is still valid. 30 days when "Remember me".
+      const maxAge = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7;
       document.cookie = 'fl_auth=fl_secure_2026; path=/; max-age=' + maxAge;
       document.cookie = 'fl_operator_id=' + data.id + '; path=/; max-age=' + maxAge;
       document.cookie = 'fl_operator_name=' + data.name + '; path=/; max-age=' + maxAge;
